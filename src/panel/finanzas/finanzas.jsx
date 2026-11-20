@@ -1,13 +1,16 @@
-import { useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, BarChart3, CircleDollarSign, Clock, Plus, RefreshCw, Wallet } from "lucide-react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ArrowUpRight, BarChart3, CircleDollarSign, Clock, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { dateKey, kinds, monthRange, ONLYFANS, summarize, usd } from "./finance";
+import { crmTotal, dateKey, financeBreakdown, hasOperatingAmounts, kinds, metricIf, monthRange, ONLYFANS, summarize, usd } from "./finance";
+import Distribution from "./Distribution";
 import "./finanzas.css";
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], rates: [], sync: null };
-const catalog = { platform: "Plataforma", creator: "Modelo", member: "Integrante" };
+const FinanceCharts = lazy(() => import("./FinanceCharts"));
+
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], rates: [], distributionSales: [], distributionPlans: [], sync: null };
+const catalog = { platform: "Plataforma", creator: "Modelo", member: "Chatter" };
 const catalogTables = { platform: "finance_platforms", creator: "finance_creators", member: "finance_members" };
-const tabs = ["Resumen", "Movimientos", "Comisiones", "Catálogos"];
+const tabs = ["Resumen", "Movimientos", "Comisiones", "Empleados"];
 const categories = ["Operación", "Marketing", "Software", "Producción", "Equipos", "Servicios"];
 const pageSize = 500;
 
@@ -32,18 +35,20 @@ async function loadFinance({ from, to, creator, platform }) {
     return creator ? dates.eq("creator_id", creator) : dates;
   };
   const onlyFans = !platform || platform === ONLYFANS;
-  const [movements, sales, commissions, creators, platforms, members, rates, sync] =
+  const [movements, distributionSales, commissions, creators, platforms, members, rates, sync, distributionPlans] =
     await Promise.all([
       readRows("finance_movements", ["day", "id"], (query) => platform ? inPeriod(query).eq("platform_id", platform) : inPeriod(query)),
-      onlyFans ? readRows("finance_agencykey_sales", ["day", "creator_id"], inPeriod) : [],
+      readRows("finance_agencykey_sales", ["day", "creator_id"], (query) => query.gte("day", from).lte("day", to)),
       onlyFans ? readRows("finance_commissions", ["day", "creator_id", "member_id"], inPeriod) : [],
       readRows("finance_creators", ["name", "id"]),
       readRows("finance_platforms", ["name", "id"]),
       readRows("finance_members", ["name", "id"]),
       readRows("finance_rates", ["effective_on", "member_id"]),
       readRows("finance_sync", ["source"]),
+      readRows("finance_distribution_plans", ["effective_on", "revision"]),
     ]);
-  return { movements, sales, commissions, creators, platforms, members, rates, sync: sync.find((row) => row.source === "agencykey") };
+  const sales = onlyFans ? distributionSales.filter((row) => !creator || row.creator_id === creator) : [];
+  return { movements, sales, commissions, creators, platforms, members, rates, distributionSales, distributionPlans, sync: sync.find((row) => row.source === "agencykey") };
 }
 
 export default function Finanzas() {
@@ -78,7 +83,7 @@ export default function Finanzas() {
   const invalid = !filters.from || !filters.to || filters.from > filters.to;
   const totals = summarize(data);
 
-  return <section className="hf" aria-label="Finanzas">
+  return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
       <div><h1>Finanzas</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
       <div className="hf-sync">
@@ -110,7 +115,12 @@ export default function Finanzas() {
         {tab === "Resumen" && <Overview totals={totals} data={data} onCreate={() => setEditor({ type: "movement" })} />}
         {tab === "Movimientos" && <Movements data={data} onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Comisiones" && <Commissions data={data} onEdit={(row) => setEditor({ type: "rate", row })} />}
-        {tab === "Catálogos" && <Catalogs data={data} onCreate={(type) => setEditor({ type })} />}
+        {tab === "Empleados" && <Employees data={data} onCreate={(type) => setEditor({ type })}
+          onDistributionSaved={(plan) => setData((current) => ({
+            ...current,
+            distributionPlans: [...current.distributionPlans, plan].sort((a, b) =>
+              a.effective_on.localeCompare(b.effective_on) || a.revision - b.revision),
+          }))} />}
       </>}
       {editor && <Editor editor={editor} data={data} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); reload(); }} />}
     </>}
@@ -133,26 +143,59 @@ function Table({ headings, rows, emptyText = "Sin registros para este período" 
 
 const findName = (rows, id) => rows.find((row) => row.id === id)?.name || "—";
 
+function Breakdown({ data, dimension, title, label, catalog }) {
+  const rows = financeBreakdown(data, dimension).map((row) => ({
+    ...row, name: row.id ? findName(catalog, row.id) : "Sin asignar",
+  })).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  return <section className="hf-section">
+    <h2>{title}</h2>
+    <Table headings={[label, "Ingreso agencia", "Gastos", "Total CRM"]}
+      rows={rows.map(({ id, name, income, expenses, crm }) => [id ?? "unassigned", [name, usd(income), usd(expenses), usd(crm)]])} />
+  </section>;
+}
+
 function Overview({ totals, data, onCreate }) {
+  const { movements, sales, commissions } = data;
+  const hasAmounts = (field) => sales.some((row) => row[field] != null) ||
+    movements.some((row) => row.kind === "income" && row[field] != null);
+  const hasOperations = hasOperatingAmounts(data);
+  const investment = metricIf(movements, "investment", totals.investment);
   const cards = [
-    ["Ventas brutas", totals.gross, BarChart3], ["Ventas netas de plataforma", totals.net, ArrowDownLeft],
-    ["Ingreso de la agencia", totals.agency, Wallet], ["Comisiones", totals.commissions, CircleDollarSign],
-    ["Gastos", totals.expense, ArrowUpRight], ["Inversión", totals.investment, ArrowUpRight],
+    ["Ingreso de la agencia", metricIf(movements, "income", totals.agency), Wallet, "income"],
+    ["Gastos", metricIf(movements, "expense", totals.expense), ArrowUpRight, "expenses"],
+    ["Utilidad operativa", hasOperations ? totals.profit : null, CircleDollarSign, "profit"],
+    ["Total del reporte CRM", crmTotal(sales), BarChart3, "sales"],
+  ];
+  const detail = [
+    ["Ventas brutas registradas", hasAmounts("gross") ? totals.gross : null],
+    ["Ventas netas registradas", hasAmounts("net") ? totals.net : null],
+    ["Comisiones calculadas", commissions.some((row) => row.commission != null) ? totals.commissions : null],
+    ["Inversión", investment],
+    ["Resultado después de inversión", hasOperations || investment !== null ? totals.afterInvestment : null],
   ];
   return <>
     <div className="hf-summary-head"><h2>Resumen del período</h2><button type="button" className="hf-primary" onClick={onCreate}><Plus size={16} /> Registrar movimiento</button></div>
-    <div className="hf-kpis">{cards.map(([label, value, Icon]) => <article key={label}>
-      <Icon size={18} aria-hidden="true" /><span>{label}</span><strong>{usd(value)}</strong>
+    <div className="hf-kpis hf-overview-kpis">{cards.map(([label, value, Icon, tone]) => <article key={label} data-tone={tone}>
+      <span className="hf-kpi-label"><Icon size={18} aria-hidden="true" />{label}</span>
+      <strong>{usd(value)}</strong>
+      {tone === "profit" && totals.withoutRate > 0 && <small>Provisional</small>}
     </article>)}</div>
-    <div className="hf-result">
-      <div><h2>Utilidad operativa</h2><strong>{usd(totals.profit)}</strong><p>Ingreso de la agencia − comisiones − gastos</p></div>
-      <div><h2>Resultado después de inversión</h2><strong>{usd(totals.afterInvestment)}</strong><p>Utilidad operativa − inversión</p></div>
-    </div>
     {totals.withoutRate > 0 && <p className="hf-notice">Hay {totals.withoutRate} registros de ventas atribuidas sin porcentaje vigente. La utilidad es provisional</p>}
-    {totals.withoutPlatformAmounts > 0 && <p className="hf-notice">Los totales de plataforma están incompletos. Hay {totals.withoutPlatformAmounts} registros de AgencyKey sin desglose bruto y neto</p>}
+    <Suspense fallback={<p className="hf-notice" role="status">Cargando gráficos…</p>}>
+      <FinanceCharts data={data} />
+    </Suspense>
+    <section className="hf-section">
+      <h2>Detalle financiero</h2>
+      <dl className="hf-financial-detail">{detail.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{usd(value)}</dd></div>)}</dl>
+      {totals.withoutPlatformAmounts > 0 && <p>Hay {totals.withoutPlatformAmounts} registros de AgencyKey sin desglose bruto y neto</p>}
+    </section>
+    <div className="hf-breakdowns">
+      <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
+      <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
+    </div>
     <section className="hf-section"><h2>Ventas importadas de AgencyKey</h2>
       <Table headings={["Fecha", "Modelo", "Bruto", "Neto", "Total del reporte CRM"]} emptyText="Sin ventas importadas en este período"
-        rows={[...data.sales].reverse().map((row) => [`${row.day}-${row.creator_id}`, [row.day, findName(data.creators, row.creator_id), usd(row.gross), usd(row.net), usd(row.crm_total)]])} />
+        rows={[...sales].reverse().map((row) => [`${row.day}-${row.creator_id}`, [row.day, findName(data.creators, row.creator_id), usd(row.gross), usd(row.net), usd(row.crm_total)]])} />
     </section>
   </>;
 }
@@ -185,14 +228,21 @@ function Commissions({ data, onEdit }) {
   </>;
 }
 
-function Catalogs({ data, onCreate }) {
-  return <div className="hf-catalogs">
-    {[[ "creator", "Modelos", data.creators ], ["platform", "Plataformas", data.platforms], ["member", "Integrantes", data.members]].map(([type, label, rows]) =>
-      <section className="hf-section" key={type}>
-        <div className="hf-summary-head"><h2>{label}</h2><button type="button" onClick={() => onCreate(type)}><Plus size={16} /> Agregar</button></div>
-        {rows.length ? <ul>{rows.map((row) => <li key={row.id}>{row.name}{row.agencykey_id && <small>AgencyKey</small>}</li>)}</ul> : <p className="hf-empty">Sin registros</p>}
-      </section>)}
-  </div>;
+function Employees({ data, onCreate, onDistributionSaved }) {
+  return <>
+    <div className="hf-summary-head">
+      <h2>Empleados</h2>
+      <div className="hf-actions">
+        <button type="button" onClick={() => onCreate("member")}><Plus size={16} /> Agregar chatter</button>
+        <button type="button" onClick={() => onCreate("creator")}><Plus size={16} /> Agregar modelo</button>
+      </div>
+    </div>
+    <Distribution data={data} onSaved={onDistributionSaved} />
+    <section className="hf-section">
+      <div className="hf-summary-head"><h2>Plataformas</h2><button type="button" onClick={() => onCreate("platform")}><Plus size={16} /> Agregar plataforma</button></div>
+      <Table headings={["Nombre"]} emptyText="Sin plataformas registradas" rows={data.platforms.map(({ id, name }) => [id, [name]])} />
+    </section>
+  </>;
 }
 
 function Editor({ editor: { type, row }, data, onClose, onSaved }) {
@@ -233,9 +283,9 @@ function Editor({ editor: { type, row }, data, onClose, onSaved }) {
     } finally { setSaving(false); }
   };
 
-  return <dialog className="hf-dialog" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
+  return <dialog className="hf-dialog" aria-labelledby="hf-editor-title" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
     <form onSubmit={save}>
-      <h2>{row ? "Editar" : "Registrar"} {type === "movement" ? "movimiento" : type === "rate" ? "porcentaje" : catalog[type].toLowerCase()}</h2>
+      <h2 id="hf-editor-title">{row ? "Editar" : "Registrar"} {type === "movement" ? "movimiento" : type === "rate" ? "porcentaje" : catalog[type].toLowerCase()}</h2>
       <div className="hf-form">
         {type === "movement" && <>
           {field("Fecha", "day", { type: "date", required: true })}

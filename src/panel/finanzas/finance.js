@@ -40,3 +40,58 @@ export function summarize({ movements, sales, commissions }) {
   totals.afterInvestment = totals.profit - totals.investment;
   return { ...Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, value / 100])), withoutRate, withoutPlatformAmounts };
 }
+
+export function dailyFinance({ movements, sales, commissions }) {
+  const days = new Map();
+  for (const [type, rows] of Object.entries({ movements, sales, commissions })) {
+    for (const row of rows) {
+      if (!days.has(row.day)) days.set(row.day, { movements: [], sales: [], commissions: [] });
+      days.get(row.day)[type].push(row);
+    }
+  }
+  return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([day, rows]) => {
+    const totals = summarize(rows);
+    return {
+      date: Date.parse(day),
+      income: metricIf(rows.movements, "income", totals.agency),
+      expenses: metricIf(rows.movements, "expense", totals.expense),
+      profit: hasOperatingAmounts(rows) ? totals.profit : null,
+      provisional: totals.withoutRate > 0,
+      crm: crmTotal(rows.sales),
+    };
+  });
+}
+
+export function hasOperatingAmounts({ movements, commissions }) {
+  return movements.some((row) => row.kind !== "investment") || commissions.some((row) => row.commission != null);
+}
+
+export function metricIf(rows, kind, value) {
+  return rows.some((row) => row.kind === kind) ? value : null;
+}
+
+export function crmTotal(rows) {
+  const reported = rows.filter((row) => row.crm_total != null);
+  return reported.length ? reported.reduce((sum, row) => sum + cents(row.crm_total), 0) / 100 : null;
+}
+
+export function financeBreakdown({ movements, sales }, dimension) {
+  const group = new Map();
+  const add = (id, metric, value) => {
+    const row = group.get(id) ?? { id, income: null, expenses: null, crm: null };
+    row[metric] = (row[metric] ?? 0) + cents(value);
+    group.set(id, row);
+  };
+  for (const row of movements) {
+    const id = dimension === "model" ? row.creator_id : row.platform_id;
+    if (row.kind === "income") add(id, "income", row.amount);
+    if (row.kind === "expense") add(id, "expenses", row.amount);
+  }
+  for (const row of sales) {
+    if (row.crm_total != null) add(dimension === "model" ? row.creator_id : ONLYFANS, "crm", row.crm_total);
+  }
+  return [...group.values()].map(({ id, income, expenses, crm }) => ({
+    id, income: income == null ? null : income / 100, expenses: expenses == null ? null : expenses / 100,
+    crm: crm == null ? null : crm / 100,
+  }));
+}
