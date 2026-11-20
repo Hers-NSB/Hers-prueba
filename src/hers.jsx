@@ -58,7 +58,6 @@ import {
   supabase,
   APPLICATIONS_TABLE,
   PHOTOS_BUCKET,
-  adminLogin,
   teamLogin,
   modelLogin,
 } from "./lib/supabase";
