@@ -114,7 +114,7 @@ test("importa solo el neto verificado y lo guarda en un lote sin reemplazar atri
     false, Date.parse("2026-11-20T11:00:00Z")), { day: "2026-11-21", future: true });
 });
 
-test("consulta el total explícito cuando el gráfico devuelve una lista y rechaza listas vacías", async () => {
+test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async () => {
   const env = { HERS_INTEGRATIONS_SECRET: Buffer.alloc(32).toString("base64"), SUPABASE_PUBLISHABLE_KEY: "fixture", AGENCYKEY_API_KEY: "fixture" };
   const instant = Date.parse("2026-11-20T11:00:00Z");
   function send(rows) {
@@ -123,6 +123,13 @@ test("consulta el total explícito cuando el gráfico devuelve una lista y recha
         data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
       });
       if (url.includes("/earnings/chart?")) return Response.json(new URL(url).searchParams.has("type") ? rows : []);
+      if (url.includes("/payouts/transactions?")) {
+        const later = new URL(url).searchParams.has("marker");
+        const row = { id: "tx", createdAt: "2026-11-19T20:00:00Z", net: 28, amount: 35, currency: "USD" };
+        if (!rows) return Response.json({ list: [], hasMore: false });
+        return Response.json({ list: later ? [row, { ...row, id: "outside", createdAt: "2026-11-20T04:00:00Z" }] : [row],
+          hasMore: !later, nextMarker: 123 });
+      }
       if (url.includes("/crm/reports/creators?")) return Response.json({ data: [{ creatorId: creator, totalSalesCount: 1 }] });
       assert.equal(JSON.parse(options.body).p_action, "agencykey", "La prueba nunca escribe ventas");
       return Response.json(null);
@@ -130,9 +137,12 @@ test("consulta el total explícito cuando el gráfico devuelve una lista y recha
   }
   const result = await importNet("2026-11-19", env, send([{ type: "total", net: "28.00", gross: 35 }]), true, instant);
   assert.equal(result.creators, 1);
-  await assert.rejects(importNet("2026-11-19", env, send([]), true, instant), (error) => {
+  const fallback = await importNet("2026-11-19", env, send([]), true, instant);
+  assert.equal(fallback.transactionModels, 1);
+  assert.equal(fallback.netTotal, 28);
+  await assert.rejects(importNet("2026-11-19", env, send(null), true, instant), (error) => {
     assert.equal(error.code, "AK-NET-EMPTY");
-    assert.match(error.message, /1 de 1 modelos.*lista vacía.*CRM encontró ventas en 1 modelos/);
+    assert.match(error.message, /1 de 1 modelos.*Día 2026-11-19/);
     return true;
   });
 });

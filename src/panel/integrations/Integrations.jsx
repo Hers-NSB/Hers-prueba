@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { KeyRound, Plus, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import callApi from "./connectorApi";
+import { usd } from "../finanzas/finance";
 import "../finanzas/finanzas.css";
 import "./integrations.css";
 
@@ -37,7 +38,8 @@ export default function Integrations() {
       } else if (operation === "test") {
         const result = await callApi(`/${operation}`, "POST");
         const label = "Conexión correcta";
-        setNotice({ success: `${label} · ${result.day} · ${result.creators} modelos` });
+        const total = typeof result.netTotal === "number" ? ` · Neto ${usd(result.netTotal)}` : "";
+        setNotice({ success: `${label} · ${result.day} · ${result.creators} modelos${total}` });
       }
       setData(await callApi());
     } catch (error) {

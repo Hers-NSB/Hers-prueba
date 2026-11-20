@@ -171,14 +171,50 @@ function readEarningsNet(chart) {
   return null;
 }
 
-function describeEarnings(chart) {
-  const fields = (value) => {
-    if (!value || typeof value !== "object") return value == null ? "ausente" : typeof value;
-    return Object.keys(value).filter((key) => /^[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(key)).slice(0, 8).join(", ") || "objeto vacío";
-  };
-  const list = Array.isArray(chart) ? chart : Array.isArray(chart?.data) ? chart.data : null;
-  if (list) return list.length ? `lista de ${list.length} · campos: ${fields(list[0])}` : "lista vacía";
-  return `raíz: ${fields(chart)} · data: ${fields(chart?.data)} · total: ${fields(chart?.total ?? chart?.data?.total)}`;
+async function readTransactionsNet(key, creatorExternalId, bounds, send) {
+  const { day, fromDate, toDate, params } = bounds;
+  const path = `/v1/onlyfans/${creatorExternalId}/api2/v2/payouts/transactions`;
+  const start = Date.parse(fromDate);
+  const end = Date.parse(toDate);
+  const seen = new Map();
+  const markers = new Set();
+  let marker;
+  for (let page = 0; page < 5; page += 1) {
+    const payload = await queryAgencyKey(key, path, {
+      startDate: params.startDate, endDate: params.endDate, limit: 50,
+      ...(marker ? { marker } : {}),
+    }, send, "AK-NET-TRANSACTIONS", `las transacciones del ${day}`);
+    const result = Array.isArray(payload?.list) ? payload : payload?.data;
+    if (!Array.isArray(result?.list) || typeof result.hasMore !== "boolean") {
+      throw new IntegrationError(502, `Las transacciones del ${day} no tienen el formato esperado`, "AK-NET-TRANSACTIONS-FORMAT");
+    }
+    for (const row of result.list) {
+      const time = Date.parse(row?.createdAt ?? row?.date);
+      if (!Number.isFinite(time)) {
+        throw new IntegrationError(502, `Una transacción de la consulta del ${day} llegó sin fecha válida`, "AK-NET-TRANSACTIONS-DATE");
+      }
+      if (time < start || time > end) continue;
+      const net = money(row.net);
+      const id = row.id;
+      if (net === null || row.currency !== "USD" || (typeof id !== "string" && !Number.isSafeInteger(id)) || id === "") {
+        throw new IntegrationError(502, `Una transacción del ${day} llegó sin neto, moneda o identificador válido`, "AK-NET-TRANSACTIONS-ROW");
+      }
+      const cents = Math.round(net * 100);
+      const previous = seen.get(String(id));
+      if (!Number.isSafeInteger(cents) || (previous !== undefined && previous !== cents)) {
+        throw new IntegrationError(502, `Una transacción del ${day} tiene un importe inconsistente`, "AK-NET-TRANSACTIONS-AMOUNT");
+      }
+      seen.set(String(id), cents);
+    }
+    if (!result.hasMore) {
+      return { count: seen.size, net: [...seen.values()].reduce((sum, cents) => sum + cents, 0) / 100 };
+    }
+    const next = result.nextMarker;
+    if ((typeof next !== "string" && !Number.isSafeInteger(next)) || next === "" || markers.has(String(next))) break;
+    marker = String(next);
+    markers.add(marker);
+  }
+  throw new IntegrationError(502, `La lectura de transacciones del ${day} quedó incompleta`, "AK-NET-TRANSACTIONS-PAGE");
 }
 
 export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
@@ -204,53 +240,45 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   }
   if (!creators.size) throw new IntegrationError(502, "AgencyKey no devolvió modelos accesibles", "AK-MODELS-EMPTY");
 
-  const { fromDate, toDate } = reportPeriod(day, zone);
+  const period = reportPeriod(day, zone);
+  const fromDate = period.fromDate;
+  const toDate = day === currentDay ? new Date(instant).toISOString() : period.toDate;
   const params = { startDate: fromDate.slice(0, 19).replace("T", " "),
-    endDate: (day === currentDay ? new Date(instant).toISOString() : toDate).slice(0, 19).replace("T", " "), withTotal: "true" };
+    endDate: toDate.slice(0, 19).replace("T", " "), withTotal: "true" };
   const sales = [];
-  const invalid = new Map();
+  const empty = [];
+  let transactionModels = 0;
   const entries = [...creators.values()];
   for (let i = 0; i < entries.length; i += 5) {
     const batch = await Promise.all(entries.slice(i, i + 5).map(async (row) => {
       const path = `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`;
-      const chart = await queryAgencyKey(key, path, params, send, "AK-NET-CHART", `el gráfico de ingresos del ${day}`);
+      const chart = await queryAgencyKey(key, path, { ...params, type: "total" }, send, "AK-NET-CHART", `el gráfico de ingresos del ${day}`);
       let net = readEarningsNet(chart);
       if (net === null) {
-        const totalChart = await queryAgencyKey(key, path, { ...params, type: "total" }, send, "AK-NET-TOTAL", `el gráfico total del ${day}`);
-        net = readEarningsNet(totalChart);
-        if (net === null) {
-          const original = describeEarnings(chart);
-          const directed = describeEarnings(totalChart);
-          const format = original === directed ? original : `${original} / total: ${directed}`;
-          invalid.set(format, (invalid.get(format) ?? 0) + 1);
-          return null;
-        }
+        const result = await readTransactionsNet(key, row.creatorExternalId, { day, fromDate, toDate, params }, send);
+        if (result.count === 0) empty.push(row.id);
+        transactionModels += 1;
+        net = result.net;
       }
       return { creator_key: row.id, creator_name: row.name, net };
     }));
-    sales.push(...batch.filter(Boolean));
+    sales.push(...batch);
   }
-  if (invalid.size) {
-    const formats = [...invalid].slice(0, 4).map(([shape, count]) => `${count} × ${shape}`).join(" | ");
-    const onlyEmpty = invalid.size === 1 && invalid.has("lista vacía");
-    let contrast = "";
-    if (testOnly && onlyEmpty) {
-      try {
-        const report = await queryAgencyKey(key, "/v1/public/crm/reports/creators",
-          { fromDate, toDate }, send, "AK-CRM", "el reporte CRM de contraste");
-        if (Array.isArray(report?.data)) {
-          const withSales = report.data.filter((row) => creators.has(row?.creatorId) && (row.totalSalesCount > 0 || Boolean(money(row.totalSalesSum)))).length;
-          contrast = ` · CRM encontró ventas en ${withSales} modelos`;
-        }
-      } catch (error) {
-        if (error instanceof IntegrationError) contrast = ` · Contraste CRM: ${error.code}`;
-        else contrast = " · Contraste CRM no disponible";
-      }
+  if (empty.length) {
+    const report = await queryAgencyKey(key, "/v1/public/crm/reports/creators",
+      { fromDate, toDate }, send, "AK-CRM", "el reporte CRM de contraste");
+    const byCreator = new Map((Array.isArray(report?.data) ? report.data : []).map((row) => [row?.creatorId, row]));
+    const unconfirmed = empty.filter((id) => {
+      const row = byCreator.get(id);
+      return money(row?.totalSalesCount) !== 0 || money(row?.totalSalesSum) !== 0;
+    }).length;
+    if (unconfirmed) {
+      throw new IntegrationError(502, `El gráfico y las transacciones no confirmaron el neto para ${unconfirmed} de ${entries.length} modelos · Día ${day} · Ventana UTC ${fromDate} a ${toDate}`, "AK-NET-EMPTY");
     }
-    throw new IntegrationError(502, `AgencyKey no devolvió un importe neto válido para ${entries.length - sales.length} de ${entries.length} modelos · Día ${day} · Ventana UTC ${fromDate} a ${toDate} · ${formats}${contrast}`, onlyEmpty ? "AK-NET-EMPTY" : "AK-NET-FORMAT");
   }
   if (!testOnly) await bridge(project, env, "import", { p_day: day, p_sales: sales, p_attributions: null }, send);
-  return { day, creators: sales.length, attributions: 0 };
+  return { day, creators: sales.length, attributions: 0, ...(testOnly ? { transactionModels,
+    netTotal: sales.reduce((sum, row) => sum + Math.round(row.net * 100), 0) / 100 } : {}) };
 }
 
 async function listEmployees(env, send = fetch, instant = Date.now()) {
