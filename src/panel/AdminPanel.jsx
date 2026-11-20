@@ -20,7 +20,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
-  Settings,
   Users,
 } from "lucide-react";
 import Historias from "./Historias/historias.jsx";

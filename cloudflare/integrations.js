@@ -11,7 +11,7 @@ class IntegrationError extends Error {
   }
 }
 
-export async function integrationKey(secret, purpose, algorithm, operations) {
+async function integrationKey(secret, purpose, algorithm, operations) {
   const key = await crypto.subtle.importKey("raw", bytes(secret), "HKDF", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
     { name: "HKDF", hash: "SHA-256", salt: encoder.encode("hers-prueba/integrations/v1"), info: encoder.encode(purpose) },
@@ -24,7 +24,7 @@ export async function bridgeToken(secret) {
   return hex(await crypto.subtle.exportKey("raw", key));
 }
 
-export async function seal(secret, service, kind, value) {
+async function seal(secret, service, kind, value) {
   const key = await integrationKey(secret, "encryption", { name: "AES-GCM", length: 256 }, ["encrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(

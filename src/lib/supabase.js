@@ -3,9 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-}
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export const APPLICATIONS_TABLE = "applications";
@@ -47,10 +44,6 @@ export async function teamLogin(username, password, expectedRole) {
     username: data.username || cleanUsername,
     role: data.role || expectedRole,
   };
-}
-
-export async function adminLogin(username, password) {
-  return teamLogin(username, password, "admin");
 }
 
 export async function modelLogin(username, password) {

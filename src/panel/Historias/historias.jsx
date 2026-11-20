@@ -21,7 +21,6 @@ import {
   FaPaperclip,
   FaVideo,
   FaCamera,
-  FaClock,
   FaSave,
   FaTimes,
   FaStar,
@@ -30,15 +29,11 @@ import {
   FaTree,
   FaArrowUp,
   FaArrowDown,
-  FaPaperPlane,
-  FaMoon,
-  FaSun,
   FaSpinner,
   FaFolderOpen,
   FaChevronDown,
   FaChevronRight,
   FaPlusCircle,
-  FaLanguage,
 } from "react-icons/fa";
 
 // ==================== COMPONENTE BOTÓN CON CARGA ====================
@@ -331,22 +326,6 @@ const MensajeForm = ({
   );
 };
 
-// ==================== FUNCIONES UTILITARIAS ====================
-const formatearFecha = (fecha) => {
-  if (!fecha) return "Fecha no disponible";
-  try {
-    const date = new Date(fecha);
-    if (isNaN(date.getTime())) return "Fecha no disponible";
-    return date.toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  } catch {
-    return "Fecha no disponible";
-  }
-};
-
 // ==================== APP PRINCIPAL ====================
 function App({ embedded = true, onBack = null }) {
   // ==================== ESTADOS PRINCIPALES ====================
@@ -359,9 +338,7 @@ function App({ embedded = true, onBack = null }) {
   const [mensajeEn, setMensajeEn] = useState("");
   const [mensajeEs, setMensajeEs] = useState("");
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
-  const [cargando, setCargando] = useState(false);
   const initialLoadDone = useRef(false);
-  const [mensajeCargando, setMensajeCargando] = useState("");
 
   // ==================== MULTIMEDIA ====================
   const [videosDisponibles, setVideosDisponibles] = useState([]);
@@ -375,10 +352,6 @@ function App({ embedded = true, onBack = null }) {
     totalEstrellas: 0,
     usuarios: [],
   });
-
-  // ==================== CACHÉ ====================
-  const [cacheMultimedia, setCacheMultimedia] = useState({});
-  const [cacheEstadisticas, setCacheEstadisticas] = useState({});
 
   // ==================== OPCIONES ====================
   const [mostrarFormularioOpcion, setMostrarFormularioOpcion] = useState(false);
@@ -431,15 +404,9 @@ function App({ embedded = true, onBack = null }) {
   const [formEsBloqueado, setFormEsBloqueado] = useState(false);
   const [formPrecioEstrellas, setFormPrecioEstrellas] = useState(0);
 
-  // Estado para edición de mensaje existente
-  const [editEsBloqueado, setEditEsBloqueado] = useState(false);
-  const [editPrecioEstrellas, setEditPrecioEstrellas] = useState(0);
-  const [editMensajeId, setEditMensajeId] = useState(null);
-
   // Estado para opciones
   const [opcionEsBloqueado, setOpcionEsBloqueado] = useState(false);
   const [opcionPrecioEstrellas, setOpcionPrecioEstrellas] = useState(0);
-  const [opcionMensajeId, setOpcionMensajeId] = useState(null);
   const [opcionIndex, setOpcionIndex] = useState(null);
   const [opcionMensajeIndex, setOpcionMensajeIndex] = useState(null);
 
@@ -452,17 +419,6 @@ function App({ embedded = true, onBack = null }) {
   const [mostrarModalBloqueado, setMostrarModalBloqueado] = useState(false);
   const [modoBloqueado, setModoBloqueado] = useState("formulario");
   const bloqueadoOriginalRef = useRef({});
-
-  // ==================== FUNCIONES DE LOADING ====================
-  const mostrarLoading = (mensaje) => {
-    setMensajeCargando(mensaje);
-    setCargando(true);
-  };
-
-  const ocultarLoading = () => {
-    setCargando(false);
-    setMensajeCargando("");
-  };
 
   // ==================== FUNCIONES DE CARGA ====================
   const cargarHistorias = useCallback(async () => {
@@ -596,7 +552,6 @@ function App({ embedded = true, onBack = null }) {
     }
 
     setMensajesMultimedia((prev) => ({ ...prev, ...nuevosCache }));
-    setCacheMultimedia((prev) => ({ ...prev, ...nuevosCache }));
   }, []);
 
   const cargarEstadisticasParaMensajes = useCallback(async (mensajesIds) => {
@@ -605,7 +560,7 @@ function App({ embedded = true, onBack = null }) {
 
     for (const id of mensajesIds) {
       try {
-        const { data: mensajeData, error: mensajeError } = await supabase
+        const { error: mensajeError } = await supabase
           .from("mensajes")
           .select("*")
           .eq("id", id)
@@ -628,7 +583,6 @@ function App({ embedded = true, onBack = null }) {
     }
 
     setEstadisticasMensajes((prev) => ({ ...prev, ...nuevosCache }));
-    setCacheEstadisticas((prev) => ({ ...prev, ...nuevosCache }));
   }, []);
 
   const cargarMultimediaDeMensaje = useCallback(async (mensajeId) => {
@@ -677,7 +631,7 @@ function App({ embedded = true, onBack = null }) {
     async (historiaId, mensajesIds = null) => {
       setCargandoHistoria(true);
       try {
-        const mensajesCargados = await cargarMensajes(historiaId);
+        await cargarMensajes(historiaId);
         const secuenciaCargada = await cargarSecuencia(historiaId);
 
         let idsMensajes = mensajesIds;
@@ -751,8 +705,6 @@ function App({ embedded = true, onBack = null }) {
         setMensajes([]);
         setSecuencia([]);
         setMensajesMultimedia({});
-        setCacheMultimedia({});
-        setCacheEstadisticas({});
         setEstadisticasMensajes({});
         setEstadisticasCompras({ totalEstrellas: 0, usuarios: [] });
       }
@@ -765,8 +717,6 @@ function App({ embedded = true, onBack = null }) {
     async (historia) => {
       setHistoriaActual(historia);
       setMensajesMultimedia({});
-      setCacheMultimedia({});
-      setCacheEstadisticas({});
       setEstadisticasMensajes({});
       setEstadisticasCompras({ totalEstrellas: 0, usuarios: [] });
       await recargarTodo(historia.id);
@@ -806,8 +756,6 @@ function App({ embedded = true, onBack = null }) {
         setMensajes([]);
         setSecuencia([]);
         setMensajesMultimedia({});
-        setCacheMultimedia({});
-        setCacheEstadisticas({});
         setEstadisticasMensajes({});
       }
       await cargarHistorias();
@@ -1022,18 +970,6 @@ function App({ embedded = true, onBack = null }) {
     setMostrarModalBloqueado(true);
   }, [formEsBloqueado, formPrecioEstrellas]);
 
-  const abrirBloqueadoEdicion = useCallback((mensaje) => {
-    bloqueadoOriginalRef.current = {
-      esBloqueado: mensaje?.bloqueado || false,
-      precioEstrellas: mensaje?.precio_estrellas || 0,
-    };
-    setModoBloqueado("historias-edicion");
-    setEditEsBloqueado(mensaje?.bloqueado || false);
-    setEditPrecioEstrellas(mensaje?.precio_estrellas || 0);
-    setEditMensajeId(mensaje?.id || null);
-    setMostrarModalBloqueado(true);
-  }, []);
-
   const abrirBloqueadoCompleto = useCallback((mensaje) => {
     bloqueadoOriginalRef.current = {
       esBloqueado: mensaje?.bloqueado || false,
@@ -1075,7 +1011,6 @@ function App({ embedded = true, onBack = null }) {
     setModoBloqueado("opcion");
     setOpcionEsBloqueado(mensaje?.bloqueado || false);
     setOpcionPrecioEstrellas(mensaje?.precio_estrellas || 0);
-    setOpcionMensajeId(mensaje?.id || null);
     setOpcionIndex(index);
     setOpcionMensajeIndex(mensajeIndex);
     setMostrarModalBloqueado(true);
@@ -1087,36 +1022,6 @@ function App({ embedded = true, onBack = null }) {
     setMostrarModalBloqueado(false);
     bloqueadoOriginalRef.current = {};
   }, []);
-
-  const guardarBloqueadoEdicion = useCallback(async () => {
-    if (!editMensajeId) return;
-    try {
-      const { error } = await supabase
-        .from("mensajes")
-        .update({
-          bloqueado: editMultimediaSeleccionada.length > 0 && editEsBloqueado,
-          precio_estrellas:
-            editMultimediaSeleccionada.length > 0
-              ? Number(editPrecioEstrellas) || 0
-              : 0,
-        })
-        .eq("id", editMensajeId);
-
-      if (error) throw error;
-      await recargarTodo(historiaActual.id);
-      setMostrarModalBloqueado(false);
-      setEditMensajeId(null);
-      bloqueadoOriginalRef.current = {};
-    } catch (e) {
-      console.error("Error guardando bloqueado edición:", e);
-    }
-  }, [
-    editEsBloqueado,
-    editPrecioEstrellas,
-    editMensajeId,
-    historiaActual,
-    recargarTodo,
-  ]);
 
   const guardarBloqueadoCompleto = useCallback(async () => {
     if (!completoMensajeId) return;
@@ -1200,10 +1105,6 @@ function App({ embedded = true, onBack = null }) {
     if (modoBloqueado === "formulario") {
       setFormEsBloqueado(original.esBloqueado || false);
       setFormPrecioEstrellas(original.precioEstrellas || 0);
-    } else if (modoBloqueado === "historias-edicion") {
-      setEditEsBloqueado(original.esBloqueado || false);
-      setEditPrecioEstrellas(original.precioEstrellas || 0);
-      setEditMensajeId(null);
     } else if (modoBloqueado === "completo") {
       setCompletoEsBloqueado(original.esBloqueado || false);
       setCompletoPrecioEstrellas(original.precioEstrellas || 0);
@@ -2007,13 +1908,6 @@ function App({ embedded = true, onBack = null }) {
           setFormPrecioEstrellas(0);
         }
 
-        if (
-          setColeccion === setEditMultimediaSeleccionada &&
-          nuevaColeccion.length === 0
-        ) {
-          setEditEsBloqueado(false);
-          setEditPrecioEstrellas(0);
-        }
       } else {
         setColeccion([...coleccion, { ...item, tipo }]);
       }
@@ -2055,8 +1949,6 @@ function App({ embedded = true, onBack = null }) {
     setMensajes([]);
     setSecuencia([]);
     setMensajesMultimedia({});
-    setCacheMultimedia({});
-    setCacheEstadisticas({});
     setEstadisticasMensajes({});
     setMostrarEditor(false);
     setMostrarEditorHistoria(false);
@@ -2103,7 +1995,6 @@ function App({ embedded = true, onBack = null }) {
       const tieneHijos =
         esOpcion && secuencia.some((s) => s.padre_id === item.id);
       const estaExpandido = opcionesExpandidas[item.id] !== false;
-      const stats = mensaje && estadisticasMensajes[mensaje.id];
       const esBloqueado = Boolean(tieneMultimedia && mensaje?.bloqueado);
 
       if (!esOpcion && item.padre_id) return null;
@@ -3156,21 +3047,6 @@ function App({ embedded = true, onBack = null }) {
         />
       )}
 
-      {/* MODAL BLOQUEADO UNIFICADO - Edición */}
-      {modoBloqueado === "historias-edicion" && (
-        <ModalBloqueadoUnificado
-          isOpen={mostrarModalBloqueado}
-          onSave={guardarBloqueadoEdicion}
-          onCancel={cancelarBloqueado}
-          esBloqueado={editEsBloqueado}
-          setEsBloqueado={setEditEsBloqueado}
-          precioEstrellas={editPrecioEstrellas}
-          setPrecioEstrellas={setEditPrecioEstrellas}
-          titulo="Editar Bloqueado"
-          subtitulo="Ingresa el número de ⭐ (ponga 0 para desactivar)"
-        />
-      )}
-
       {/* MODAL BLOQUEADO UNIFICADO - Completo */}
       {modoBloqueado === "completo" && (
         <ModalBloqueadoUnificado
@@ -3219,19 +3095,6 @@ function App({ embedded = true, onBack = null }) {
   );
 
   // ==================== RENDER ====================
-  if (cargando) {
-    return (
-      <div className="historias-loading-container">
-        <div className="historias-logo-loading">
-          <img src="/HERSc.jpg" alt="Logo" className="historias-logo-img" />
-        </div>
-        <h1>Mis Historias</h1>
-        <p>{mensajeCargando || "Cargando..."}</p>
-        <div className="historias-spinner"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="historias-app admin-function-standalone-page">
       {renderModales()}
