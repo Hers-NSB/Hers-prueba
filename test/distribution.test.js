@@ -9,11 +9,11 @@ test("reparte la suma de todos los modelos con el plan vigente de cada fecha", (
     { effective_on: "2026-11-22", revision: 1, shares: { dropper: 10_000 } },
   ];
   const result = calculateDistribution([
-    { day: "2026-11-19", crm_total: "20.00" },
-    { day: "2026-11-20", crm_total: "5.15" },
-    { day: "2026-11-20", crm_total: "4.85" },
-    { day: "2026-11-22", crm_total: "10.00" },
-    { day: "2026-11-22", crm_total: null },
+    { day: "2026-11-19", net: "20.00" },
+    { day: "2026-11-20", net: "5.15" },
+    { day: "2026-11-20", net: "4.85" },
+    { day: "2026-11-22", net: "10.00" },
+    { day: "2026-11-22", crm_total: "100", net: null },
   ], plans);
   assert.equal(effectivePlan(plans, "2026-11-21").revision, 2);
   assert.equal(result.total, 40);
@@ -24,7 +24,7 @@ test("reparte la suma de todos los modelos con el plan vigente de cada fecha", (
 
 test("conserva los centavos con varios beneficiarios y devoluciones", () => {
   const plans = [{ effective_on: "2026-11-20", shares: { a: 3333, b: 3333, c: 3334 } }];
-  const sales = [{ day: "2026-11-20", crm_total: 0.02 }, { day: "2026-11-21", crm_total: -0.01 }];
+  const sales = [{ day: "2026-11-20", net: 0.02 }, { day: "2026-11-21", net: -0.01 }];
   const result = calculateDistribution(sales, plans);
   assert.equal(result.unassigned, 0);
   assert.deepEqual(result.payouts, new Map([["c", 0], ["a", 0.01], ["b", 0]]));

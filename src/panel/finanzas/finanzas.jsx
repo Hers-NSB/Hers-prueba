@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowUpRight, BarChart3, CircleDollarSign, Clock, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { crmTotal, dateKey, financeBreakdown, hasOperatingAmounts, kinds, metricIf, monthRange, ONLYFANS, summarize, usd } from "./finance";
+import { dateKey, financeBreakdown, hasOperatingAmounts, kinds, metricIf, monthRange, netSales, ONLYFANS, summarize, usd } from "./finance";
 import Distribution from "./Distribution";
 import "./finanzas.css";
 
@@ -149,26 +149,22 @@ function Breakdown({ data, dimension, title, label, catalog }) {
   })).sort((a, b) => a.name.localeCompare(b.name, "es"));
   return <section className="hf-section">
     <h2>{title}</h2>
-    <Table headings={[label, "Ingreso agencia", "Gastos", "Total CRM"]}
-      rows={rows.map(({ id, name, income, expenses, crm }) => [id ?? "unassigned", [name, usd(income), usd(expenses), usd(crm)]])} />
+    <Table headings={[label, "Ingreso agencia", "Gastos", "Ventas netas"]}
+      rows={rows.map(({ id, name, income, expenses, net }) => [id ?? "unassigned", [name, usd(income), usd(expenses), usd(net)]])} />
   </section>;
 }
 
 function Overview({ totals, data, onCreate }) {
   const { movements, sales, commissions } = data;
-  const hasAmounts = (field) => sales.some((row) => row[field] != null) ||
-    movements.some((row) => row.kind === "income" && row[field] != null);
   const hasOperations = hasOperatingAmounts(data);
   const investment = metricIf(movements, "investment", totals.investment);
   const cards = [
     ["Ingreso de la agencia", metricIf(movements, "income", totals.agency), Wallet, "income"],
     ["Gastos", metricIf(movements, "expense", totals.expense), ArrowUpRight, "expenses"],
     ["Utilidad operativa", hasOperations ? totals.profit : null, CircleDollarSign, "profit"],
-    ["Total del reporte CRM", crmTotal(sales), BarChart3, "sales"],
+    ["Ventas netas", netSales(sales, movements), BarChart3, "sales"],
   ];
   const detail = [
-    ["Ventas brutas registradas", hasAmounts("gross") ? totals.gross : null],
-    ["Ventas netas registradas", hasAmounts("net") ? totals.net : null],
     ["Comisiones calculadas", commissions.some((row) => row.commission != null) ? totals.commissions : null],
     ["Inversión", investment],
     ["Resultado después de inversión", hasOperations || investment !== null ? totals.afterInvestment : null],
@@ -187,16 +183,12 @@ function Overview({ totals, data, onCreate }) {
     <section className="hf-section">
       <h2>Detalle financiero</h2>
       <dl className="hf-financial-detail">{detail.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{usd(value)}</dd></div>)}</dl>
-      {totals.withoutPlatformAmounts > 0 && <p>Hay {totals.withoutPlatformAmounts} registros de AgencyKey sin desglose bruto y neto</p>}
+      {totals.withoutNet > 0 && <p>Hay registros de AgencyKey con el neto pendiente</p>}
     </section>
     <div className="hf-breakdowns">
       <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
       <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
     </div>
-    <section className="hf-section"><h2>Ventas importadas de AgencyKey</h2>
-      <Table headings={["Fecha", "Modelo", "Bruto", "Neto", "Total del reporte CRM"]} emptyText="Sin ventas importadas en este período"
-        rows={[...sales].reverse().map((row) => [`${row.day}-${row.creator_id}`, [row.day, findName(data.creators, row.creator_id), usd(row.gross), usd(row.net), usd(row.crm_total)]])} />
-    </section>
   </>;
 }
 

@@ -25,9 +25,9 @@ export function summarize({ movements, sales, commissions }) {
       totals[row.kind] += cents(row.amount);
     }
   }
-  let withoutPlatformAmounts = 0;
+  let withoutNet = 0;
   for (const row of sales) {
-    if (row.gross == null || row.net == null) withoutPlatformAmounts += 1;
+    if (row.net == null) withoutNet += 1;
     if (row.gross != null) totals.gross += cents(row.gross);
     if (row.net != null) totals.net += cents(row.net);
   }
@@ -38,7 +38,7 @@ export function summarize({ movements, sales, commissions }) {
   }
   totals.profit = totals.agency - totals.commissions - totals.expense;
   totals.afterInvestment = totals.profit - totals.investment;
-  return { ...Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, value / 100])), withoutRate, withoutPlatformAmounts };
+  return { ...Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, value / 100])), withoutRate, withoutNet };
 }
 
 export function dailyFinance({ movements, sales, commissions }) {
@@ -57,7 +57,7 @@ export function dailyFinance({ movements, sales, commissions }) {
       expenses: metricIf(rows.movements, "expense", totals.expense),
       profit: hasOperatingAmounts(rows) ? totals.profit : null,
       provisional: totals.withoutRate > 0,
-      crm: crmTotal(rows.sales),
+      net: netSales(rows.sales, rows.movements),
     };
   });
 }
@@ -70,28 +70,32 @@ export function metricIf(rows, kind, value) {
   return rows.some((row) => row.kind === kind) ? value : null;
 }
 
-export function crmTotal(rows) {
-  const reported = rows.filter((row) => row.crm_total != null);
-  return reported.length ? reported.reduce((sum, row) => sum + cents(row.crm_total), 0) / 100 : null;
+export function netSales(sales, movements = []) {
+  const reported = [...sales, ...movements.filter((row) => row.kind === "income")]
+    .filter((row) => row.net != null);
+  return reported.length ? reported.reduce((sum, row) => sum + cents(row.net), 0) / 100 : null;
 }
 
 export function financeBreakdown({ movements, sales }, dimension) {
   const group = new Map();
   const add = (id, metric, value) => {
-    const row = group.get(id) ?? { id, income: null, expenses: null, crm: null };
+    const row = group.get(id) ?? { id, income: null, expenses: null, net: null };
     row[metric] = (row[metric] ?? 0) + cents(value);
     group.set(id, row);
   };
   for (const row of movements) {
     const id = dimension === "model" ? row.creator_id : row.platform_id;
-    if (row.kind === "income") add(id, "income", row.amount);
+    if (row.kind === "income") {
+      add(id, "income", row.amount);
+      if (row.net != null) add(id, "net", row.net);
+    }
     if (row.kind === "expense") add(id, "expenses", row.amount);
   }
   for (const row of sales) {
-    if (row.crm_total != null) add(dimension === "model" ? row.creator_id : ONLYFANS, "crm", row.crm_total);
+    if (row.net != null) add(dimension === "model" ? row.creator_id : ONLYFANS, "net", row.net);
   }
-  return [...group.values()].map(({ id, income, expenses, crm }) => ({
+  return [...group.values()].map(({ id, income, expenses, net }) => ({
     id, income: income == null ? null : income / 100, expenses: expenses == null ? null : expenses / 100,
-    crm: crm == null ? null : crm / 100,
+    net: net == null ? null : net / 100,
   }));
 }

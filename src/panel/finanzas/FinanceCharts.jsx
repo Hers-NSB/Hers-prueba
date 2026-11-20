@@ -11,10 +11,10 @@ const dayMs = 86_400_000;
 
 function salesSeries(points) {
   const series = [];
-  for (const point of points.filter(({ crm }) => crm !== null)) {
+  for (const point of points.filter(({ net }) => net !== null)) {
     const previous = series.at(-1);
     if (previous && point.date - previous.date > dayMs) {
-      series.push({ date: previous.date + dayMs, crm: null });
+      series.push({ date: previous.date + dayMs, net: null });
     }
     series.push(point);
   }
@@ -44,7 +44,7 @@ function TrendCard({ title, subtitle, points, emptyText, sales = false }) {
             formatter={(value, name, item) => [usd(value),
               item.dataKey === "profit" && item.payload.provisional ? `${name} (provisional)` : name]} />
           {!sales && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
-          {sales ? <Line dataKey="crm" name="Total del reporte CRM" stroke="var(--hf-accent)"
+          {sales ? <Line dataKey="net" name="Ventas netas" stroke="var(--hf-accent)"
             strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
             : <>
               <Bar dataKey="income" name="Ingresos" fill="var(--hf-accent)" maxBarSize={28}
@@ -65,7 +65,7 @@ export default function FinanceCharts({ data }) {
   return <div className="hf-trends">
     <TrendCard title="Resultado operativo" subtitle="Ingresos de la agencia, gastos y utilidad por día · USD"
       points={points.filter(({ profit }) => profit !== null)} emptyText="Sin actividad operativa en este período" />
-    <TrendCard title="Evolución de ventas" subtitle="Total diario del reporte CRM de AgencyKey · USD"
-      points={salesSeries(points)} emptyText="Sin ventas importadas en este período" sales />
+    <TrendCard title="Evolución de ventas" subtitle="Ventas netas por día · USD"
+      points={salesSeries(points)} emptyText="Sin ventas netas registradas en este período" sales />
   </div>;
 }

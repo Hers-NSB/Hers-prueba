@@ -39,8 +39,8 @@ function exactCents(amount) {
 
 export function calculateDistribution(sales, plans) {
   const days = new Map();
-  for (const { day, crm_total } of sales) {
-    if (crm_total != null) days.set(day, (days.get(day) ?? 0n) + exactCents(crm_total));
+  for (const { day, net } of sales) {
+    if (net != null) days.set(day, (days.get(day) ?? 0n) + exactCents(net));
   }
   const payouts = new Map();
   let total = 0n;

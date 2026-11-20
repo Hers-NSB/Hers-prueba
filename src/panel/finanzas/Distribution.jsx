@@ -45,9 +45,9 @@ export default function Distribution({ data, onSaved }) {
   return <>
     <section className="hf-section">
       <h2>Reparto de ventas de AgencyKey</h2>
-      <p>Usa el total del reporte CRM de todos los modelos, según las fechas seleccionadas</p>
+      <p>Usa las ventas netas registradas de todos los modelos del período</p>
       <dl className="hf-financial-detail">
-        <div><dt>Ventas del período</dt><dd>{usd(result.total)}</dd></div>
+        <div><dt>Ventas netas del período</dt><dd>{usd(result.total)}</dd></div>
         <div><dt>Importe sin asignar</dt><dd>{usd(result.unassigned)}</dd></div>
       </dl>
       <form onSubmit={save}>
