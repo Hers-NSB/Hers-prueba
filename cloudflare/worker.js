@@ -134,6 +134,24 @@ function isoDay(value) {
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 
+function readEarningsNet(chart) {
+  // AgencyKey proxies the earnings chart. Some responses wrap its categories in data.
+  const total = chart?.total ?? chart?.data?.total;
+  for (const value of [total?.net, total?.total]) {
+    if (Number.isFinite(value)) return value;
+    if (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim())) {
+      const amount = Number(value);
+      if (Number.isFinite(amount)) return amount;
+    }
+  }
+  const fields = (value) => {
+    if (Array.isArray(value)) return "lista";
+    if (!value || typeof value !== "object") return value == null ? "ausente" : typeof value;
+    return Object.keys(value).filter((key) => /^[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(key)).slice(0, 8).join(", ") || "objeto vacío";
+  };
+  throw new Error(`AgencyKey no devolvió un importe neto válido · raíz: ${fields(chart)} · data: ${fields(chart?.data)} · total: ${fields(total)}`);
+}
+
 export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
   const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
   const currentDay = formatDay(instant, zone);
@@ -165,8 +183,7 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   for (let i = 0; i < entries.length; i += 5) {
     const batch = await Promise.all(entries.slice(i, i + 5).map(async (row) => {
       const result = await queryAgencyKey(key, `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`, params, send);
-      const net = result.total?.total;
-      if (!Number.isFinite(net)) throw new Error("AgencyKey no devolvió un importe neto válido");
+      const net = readEarningsNet(result);
       return { creator_key: row.id, creator_name: row.name, net };
     }));
     sales.push(...batch);

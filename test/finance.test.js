@@ -103,7 +103,7 @@ test("importa solo el neto verificado y lo guarda en un lote sin reemplazar atri
     if (url.includes("/v1/onlyfans/creators?")) return Response.json({
       data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
     });
-    if (url.includes("/42/api2/v2/earnings/chart?")) return Response.json({ total: { total: 28, gross: 35 } });
+    if (url.includes("/42/api2/v2/earnings/chart?")) return Response.json({ data: { total: { total: "28.00", gross: 35 } } });
     return Response.json(null);
   }, false, Date.parse("2026-11-20T11:00:00Z"));
   assert.equal(result.creators, 1);

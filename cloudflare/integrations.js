@@ -152,7 +152,7 @@ export async function handleIntegrations(request, project, env, run, send = fetc
     const upstream = /^AgencyKey (?:creators|employees|lectura): HTTP ([1-5][0-9]{2})$/.exec(error.message);
     return json({ error: upstream
       ? `AgencyKey respondió HTTP ${upstream[1]}. Revisa la clave y sus permisos de lectura`
-      : error.message === "AgencyKey no devolvió un importe neto válido" ? "AgencyKey no devolvió un importe neto válido"
+      : error.message.startsWith("AgencyKey no devolvió un importe neto válido") ? error.message
         : "La operación no se pudo completar" }, 502);
   }
 }
