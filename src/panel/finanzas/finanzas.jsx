@@ -2,11 +2,12 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowUpRight, BarChart3, CircleDollarSign, Clock, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { crmTotal, dateKey, financeBreakdown, hasOperatingAmounts, kinds, metricIf, monthRange, ONLYFANS, summarize, usd } from "./finance";
+import Distribution from "./Distribution";
 import "./finanzas.css";
 
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], rates: [], sync: null };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], rates: [], distributionSales: [], distributionPlans: [], sync: null };
 const catalog = { platform: "Plataforma", creator: "Modelo", member: "Chatter" };
 const catalogTables = { platform: "finance_platforms", creator: "finance_creators", member: "finance_members" };
 const tabs = ["Resumen", "Movimientos", "Comisiones", "Empleados"];
@@ -34,18 +35,20 @@ async function loadFinance({ from, to, creator, platform }) {
     return creator ? dates.eq("creator_id", creator) : dates;
   };
   const onlyFans = !platform || platform === ONLYFANS;
-  const [movements, sales, commissions, creators, platforms, members, rates, sync] =
+  const [movements, distributionSales, commissions, creators, platforms, members, rates, sync, distributionPlans] =
     await Promise.all([
       readRows("finance_movements", ["day", "id"], (query) => platform ? inPeriod(query).eq("platform_id", platform) : inPeriod(query)),
-      onlyFans ? readRows("finance_agencykey_sales", ["day", "creator_id"], inPeriod) : [],
+      readRows("finance_agencykey_sales", ["day", "creator_id"], (query) => query.gte("day", from).lte("day", to)),
       onlyFans ? readRows("finance_commissions", ["day", "creator_id", "member_id"], inPeriod) : [],
       readRows("finance_creators", ["name", "id"]),
       readRows("finance_platforms", ["name", "id"]),
       readRows("finance_members", ["name", "id"]),
       readRows("finance_rates", ["effective_on", "member_id"]),
       readRows("finance_sync", ["source"]),
+      readRows("finance_distribution_plans", ["effective_on", "revision"]),
     ]);
-  return { movements, sales, commissions, creators, platforms, members, rates, sync: sync.find((row) => row.source === "agencykey") };
+  const sales = onlyFans ? distributionSales.filter((row) => !creator || row.creator_id === creator) : [];
+  return { movements, sales, commissions, creators, platforms, members, rates, distributionSales, distributionPlans, sync: sync.find((row) => row.source === "agencykey") };
 }
 
 export default function Finanzas() {
@@ -113,7 +116,11 @@ export default function Finanzas() {
         {tab === "Movimientos" && <Movements data={data} onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Comisiones" && <Commissions data={data} onEdit={(row) => setEditor({ type: "rate", row })} />}
         {tab === "Empleados" && <Employees data={data} onCreate={(type) => setEditor({ type })}
-          onRate={(memberId) => setEditor({ type: "rate", memberId })} />}
+          onDistributionSaved={(plan) => setData((current) => ({
+            ...current,
+            distributionPlans: [...current.distributionPlans, plan].sort((a, b) =>
+              a.effective_on.localeCompare(b.effective_on) || a.revision - b.revision),
+          }))} />}
       </>}
       {editor && <Editor editor={editor} data={data} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); reload(); }} />}
     </>}
@@ -221,26 +228,16 @@ function Commissions({ data, onEdit }) {
   </>;
 }
 
-function Employees({ data, onCreate, onRate }) {
-  const today = dateKey(new Date());
-  const currentRates = new Map();
-  for (const rate of data.rates) {
-    if (rate.effective_on <= today) currentRates.set(rate.member_id, rate.percent);
-  }
+function Employees({ data, onCreate, onDistributionSaved }) {
   return <>
-    <div className="hf-catalogs">
-      <section className="hf-section">
-        <div className="hf-summary-head"><h2>Chatters</h2><button type="button" onClick={() => onCreate("member")}><Plus size={16} /> Agregar chatter</button></div>
-        <Table headings={["Nombre", "Porcentaje vigente", "Acción"]} emptyText="Sin chatters registrados"
-          rows={data.members.map(({ id, name }) => [id, [name, currentRates.has(id) ? `${currentRates.get(id)} %` : "Sin asignar",
-            <button type="button" aria-label={`Asignar porcentaje a ${name}`} onClick={() => onRate(id)}>Asignar %</button>]])} />
-      </section>
-      <section className="hf-section">
-        <div className="hf-summary-head"><h2>Modelos</h2><button type="button" onClick={() => onCreate("creator")}><Plus size={16} /> Agregar modelo</button></div>
-        <Table headings={["Nombre", "Origen"]} emptyText="Sin modelos registrados"
-          rows={data.creators.map(({ id, name, agencykey_id }) => [id, [name, agencykey_id ? "AgencyKey" : "Manual"]])} />
-      </section>
+    <div className="hf-summary-head">
+      <h2>Empleados</h2>
+      <div className="hf-actions">
+        <button type="button" onClick={() => onCreate("member")}><Plus size={16} /> Agregar chatter</button>
+        <button type="button" onClick={() => onCreate("creator")}><Plus size={16} /> Agregar modelo</button>
+      </div>
     </div>
+    <Distribution data={data} onSaved={onDistributionSaved} />
     <section className="hf-section">
       <div className="hf-summary-head"><h2>Plataformas</h2><button type="button" onClick={() => onCreate("platform")}><Plus size={16} /> Agregar plataforma</button></div>
       <Table headings={["Nombre"]} emptyText="Sin plataformas registradas" rows={data.platforms.map(({ id, name }) => [id, [name]])} />
@@ -248,8 +245,8 @@ function Employees({ data, onCreate, onRate }) {
   </>;
 }
 
-function Editor({ editor: { type, row, memberId }, data, onClose, onSaved }) {
-  const [values, setValues] = useState(row ?? { day: dateKey(new Date()), effective_on: dateKey(new Date()), kind: "expense", member_id: memberId });
+function Editor({ editor: { type, row }, data, onClose, onSaved }) {
+  const [values, setValues] = useState(row ?? { day: dateKey(new Date()), effective_on: dateKey(new Date()), kind: "expense" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setValues((current) => ({ ...current, [key]: value }));
