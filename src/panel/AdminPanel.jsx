@@ -19,12 +19,14 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
   Settings,
   Users,
 } from "lucide-react";
 import Historias from "./Historias/historias.jsx";
 import Postulaciones from "./Postulaciones/postulaciones.jsx";
 import Finanzas from "./finanzas/finanzas.jsx";
+import Integrations from "./integrations/Integrations.jsx";
 import { supabase, APPLICATIONS_TABLE, adminLogout } from "../lib/supabase";
 
 export default function AdminPanel({ onClose }) {
@@ -138,6 +140,13 @@ export default function AdminPanel({ onClose }) {
               <BarChart3 size={18} />
               <span>Finanzas</span>
             </button>
+            <button
+              className={`admin-nav-item ${activeSection === "integrations" ? "is-active" : ""}`}
+              onClick={() => goTo("integrations")}
+            >
+              <Plug size={18} />
+              <span>Integraciones</span>
+            </button>
           </nav>
 
           <div className="admin-sidebar__footer">
@@ -168,6 +177,12 @@ export default function AdminPanel({ onClose }) {
           {activeSection === "stories" && (
             <div className="admin-module-view">
               <Historias embedded onBack={() => goTo("dashboard")} />
+            </div>
+          )}
+
+          {activeSection === "integrations" && (
+            <div className="admin-module-view">
+              <Integrations />
             </div>
           )}
 

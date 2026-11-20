@@ -1,3 +1,5 @@
+import { bridge, handleIntegrations, storedAgencyKey } from "./integrations.js";
+
 const api = "https://app.agencykey.com/api/v1/public/crm/reports";
 const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
 const dayMs = 86_400_000;
@@ -77,17 +79,16 @@ export function normalizeReports(created, employees) {
   return { sales: [...sales.values()], attributions };
 }
 
-export async function importAgencyKey(instant, env, send = fetch) {
-  if (!env.AGENCYKEY_API_KEY || !env.SUPABASE_SYNC_KEY) {
-    console.warn("AgencyKey: faltan los secretos de ejecución");
-    return { skipped: true };
-  }
+export async function importAgencyKey(instant, env, send = fetch, testOnly = false) {
+  const hasBridge = Boolean(env.HERS_INTEGRATIONS_SECRET && env.SUPABASE_PUBLISHABLE_KEY);
+  const apiKey = hasBridge ? await storedAgencyKey(project, env, send) : env.AGENCYKEY_API_KEY;
+  if (!apiKey || (!testOnly && !hasBridge && !env.SUPABASE_SYNC_KEY)) return { skipped: true };
   const { day, ...period } = previousDay(instant, env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax");
   const getReport = async (report, options = {}) => {
     const response = await send(`${api}/${report}?${new URLSearchParams({ ...period, ...options })}`, {
       method: "GET",
       redirect: "error",
-      headers: { "x-public-api-key": env.AGENCYKEY_API_KEY, Accept: "application/json" },
+      headers: { "x-public-api-key": apiKey, Accept: "application/json" },
     });
     if (!response.ok) throw new Error(`AgencyKey ${report}: HTTP ${response.status}`);
     return response.json();
@@ -96,19 +97,33 @@ export async function importAgencyKey(instant, env, send = fetch) {
     getReport("creators"), getReport("employees", { includeCreatorBreakdown: "true" }),
   ]);
   const { sales, attributions } = normalizeReports(creators, members);
+  const outcome = { day, creators: sales.length, attributions: attributions.length };
+  if (testOnly) return outcome;
+  const batch = { p_day: day, p_sales: sales, p_attributions: attributions };
+  if (hasBridge) {
+    await bridge(project, env, "import", batch, send);
+    return outcome;
+  }
   const key = env.SUPABASE_SYNC_KEY;
   const response = await send(`${project}/rest/v1/rpc/finance_import_agencykey`, {
     method: "POST",
     redirect: "error",
     headers: { apikey: key, "Content-Type": "application/json",
       ...(key.startsWith("sb_secret_") ? {} : { Authorization: `Bearer ${key}` }) },
-    body: JSON.stringify({ p_day: day, p_sales: sales, p_attributions: attributions }),
+    body: JSON.stringify(batch),
   });
   if (!response.ok) throw new Error(`Supabase finance_import_agencykey: HTTP ${response.status}`);
-  return { day, creators: sales.length, attributions: attributions.length };
+  return outcome;
 }
 
 export default {
+  fetch(request, env) {
+    const path = new URL(request.url).pathname;
+    if (path === "/api/admin/integrations" || path.startsWith("/api/admin/integrations/")) {
+      return handleIntegrations(request, project, env, (testOnly) => importAgencyKey(Date.now(), env, fetch, testOnly));
+    }
+    return env.ASSETS.fetch(request);
+  },
   async scheduled(event, env) {
     const result = await importAgencyKey(event.scheduledTime, env);
     if (!result.skipped) console.log("AgencyKey: importación correcta", result);
