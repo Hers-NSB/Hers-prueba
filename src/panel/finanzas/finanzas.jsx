@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, BarChart3, CircleDollarSign, Clock, Plus, RefreshCw, Wallet } from "lucide-react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ArrowUpRight, BarChart3, CircleDollarSign, Clock, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { dateKey, kinds, monthRange, ONLYFANS, summarize, usd } from "./finance";
+import { crmTotal, dateKey, financeBreakdown, hasOperatingAmounts, kinds, metricIf, monthRange, ONLYFANS, summarize, usd } from "./finance";
 import "./finanzas.css";
+
+const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
 const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], rates: [], sync: null };
 const catalog = { platform: "Plataforma", creator: "Modelo", member: "Integrante" };
@@ -78,7 +80,7 @@ export default function Finanzas() {
   const invalid = !filters.from || !filters.to || filters.from > filters.to;
   const totals = summarize(data);
 
-  return <section className="hf" aria-label="Finanzas">
+  return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
       <div><h1>Finanzas</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
       <div className="hf-sync">
@@ -133,26 +135,59 @@ function Table({ headings, rows, emptyText = "Sin registros para este período" 
 
 const findName = (rows, id) => rows.find((row) => row.id === id)?.name || "—";
 
+function Breakdown({ data, dimension, title, label, catalog }) {
+  const rows = financeBreakdown(data, dimension).map((row) => ({
+    ...row, name: row.id ? findName(catalog, row.id) : "Sin asignar",
+  })).sort((a, b) => a.name.localeCompare(b.name, "es"));
+  return <section className="hf-section">
+    <h2>{title}</h2>
+    <Table headings={[label, "Ingreso agencia", "Gastos", "Total CRM"]}
+      rows={rows.map(({ id, name, income, expenses, crm }) => [id ?? "unassigned", [name, usd(income), usd(expenses), usd(crm)]])} />
+  </section>;
+}
+
 function Overview({ totals, data, onCreate }) {
+  const { movements, sales, commissions } = data;
+  const hasAmounts = (field) => sales.some((row) => row[field] != null) ||
+    movements.some((row) => row.kind === "income" && row[field] != null);
+  const hasOperations = hasOperatingAmounts(data);
+  const investment = metricIf(movements, "investment", totals.investment);
   const cards = [
-    ["Ventas brutas", totals.gross, BarChart3], ["Ventas netas de plataforma", totals.net, ArrowDownLeft],
-    ["Ingreso de la agencia", totals.agency, Wallet], ["Comisiones", totals.commissions, CircleDollarSign],
-    ["Gastos", totals.expense, ArrowUpRight], ["Inversión", totals.investment, ArrowUpRight],
+    ["Ingreso de la agencia", metricIf(movements, "income", totals.agency), Wallet, "income"],
+    ["Gastos", metricIf(movements, "expense", totals.expense), ArrowUpRight, "expenses"],
+    ["Utilidad operativa", hasOperations ? totals.profit : null, CircleDollarSign, "profit"],
+    ["Total del reporte CRM", crmTotal(sales), BarChart3, "sales"],
+  ];
+  const detail = [
+    ["Ventas brutas registradas", hasAmounts("gross") ? totals.gross : null],
+    ["Ventas netas registradas", hasAmounts("net") ? totals.net : null],
+    ["Comisiones calculadas", commissions.some((row) => row.commission != null) ? totals.commissions : null],
+    ["Inversión", investment],
+    ["Resultado después de inversión", hasOperations || investment !== null ? totals.afterInvestment : null],
   ];
   return <>
     <div className="hf-summary-head"><h2>Resumen del período</h2><button type="button" className="hf-primary" onClick={onCreate}><Plus size={16} /> Registrar movimiento</button></div>
-    <div className="hf-kpis">{cards.map(([label, value, Icon]) => <article key={label}>
-      <Icon size={18} aria-hidden="true" /><span>{label}</span><strong>{usd(value)}</strong>
+    <div className="hf-kpis hf-overview-kpis">{cards.map(([label, value, Icon, tone]) => <article key={label} data-tone={tone}>
+      <span className="hf-kpi-label"><Icon size={18} aria-hidden="true" />{label}</span>
+      <strong>{usd(value)}</strong>
+      {tone === "profit" && totals.withoutRate > 0 && <small>Provisional</small>}
     </article>)}</div>
-    <div className="hf-result">
-      <div><h2>Utilidad operativa</h2><strong>{usd(totals.profit)}</strong><p>Ingreso de la agencia − comisiones − gastos</p></div>
-      <div><h2>Resultado después de inversión</h2><strong>{usd(totals.afterInvestment)}</strong><p>Utilidad operativa − inversión</p></div>
-    </div>
     {totals.withoutRate > 0 && <p className="hf-notice">Hay {totals.withoutRate} registros de ventas atribuidas sin porcentaje vigente. La utilidad es provisional</p>}
-    {totals.withoutPlatformAmounts > 0 && <p className="hf-notice">Los totales de plataforma están incompletos. Hay {totals.withoutPlatformAmounts} registros de AgencyKey sin desglose bruto y neto</p>}
+    <Suspense fallback={<p className="hf-notice" role="status">Cargando gráficos…</p>}>
+      <FinanceCharts data={data} />
+    </Suspense>
+    <section className="hf-section">
+      <h2>Detalle financiero</h2>
+      <dl className="hf-financial-detail">{detail.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{usd(value)}</dd></div>)}</dl>
+      {totals.withoutPlatformAmounts > 0 && <p>Hay {totals.withoutPlatformAmounts} registros de AgencyKey sin desglose bruto y neto</p>}
+    </section>
+    <div className="hf-breakdowns">
+      <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
+      <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
+    </div>
     <section className="hf-section"><h2>Ventas importadas de AgencyKey</h2>
       <Table headings={["Fecha", "Modelo", "Bruto", "Neto", "Total del reporte CRM"]} emptyText="Sin ventas importadas en este período"
-        rows={[...data.sales].reverse().map((row) => [`${row.day}-${row.creator_id}`, [row.day, findName(data.creators, row.creator_id), usd(row.gross), usd(row.net), usd(row.crm_total)]])} />
+        rows={[...sales].reverse().map((row) => [`${row.day}-${row.creator_id}`, [row.day, findName(data.creators, row.creator_id), usd(row.gross), usd(row.net), usd(row.crm_total)]])} />
     </section>
   </>;
 }

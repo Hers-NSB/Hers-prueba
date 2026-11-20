@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarize } from "../src/panel/finanzas/finance.js";
+import { crmTotal, dailyFinance, financeBreakdown, ONLYFANS, summarize } from "../src/panel/finanzas/finance.js";
 import { importAgencyKey, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
@@ -60,4 +60,37 @@ test("omite la importación con secretos ausentes y no persiste reportes fallido
     assert.ok(url.startsWith("https://app.agencykey.com/"));
     return new Response(null, { status: 403 });
   }), /HTTP 403/);
+});
+
+
+test("usa fechas registradas y conserva la diferencia entre cero y dato ausente", () => {
+  const data = {
+    movements: [{ day: "2026-11-18", kind: "expense", amount: "10.12" }],
+    sales: [{ day: "2026-11-19", crm_total: "0.00" }, { day: "2026-11-21", gross: "100" }],
+    commissions: [{ day: "2026-11-19", attributed: "8.00", commission: null }],
+  };
+  assert.deepEqual(dailyFinance(data), [
+    { date: Date.parse("2026-11-18"), income: null, expenses: 10.12, profit: -10.12, provisional: false, crm: null },
+    { date: Date.parse("2026-11-19"), income: null, expenses: null, profit: null, provisional: true, crm: 0 },
+    { date: Date.parse("2026-11-21"), income: null, expenses: null, profit: null, provisional: false, crm: null },
+  ]);
+  assert.equal(crmTotal([{ gross: 100, net: 80 }]), null);
+});
+
+test("agrupa ventas CRM y movimientos por modelo y plataforma sin duplicar importes", () => {
+  const data = {
+    movements: [{ creator_id: creator, platform_id: "otra", kind: "income", amount: "0.10" },
+      { creator_id: creator, platform_id: "otra", kind: "income", amount: "0.20" },
+      { creator_id: null, platform_id: null, kind: "expense", amount: "3.00" }],
+    sales: [{ creator_id: creator, crm_total: "25.50" }],
+  };
+  assert.deepEqual(financeBreakdown(data, "model"), [
+    { id: creator, income: .30, expenses: null, crm: 25.50 },
+    { id: null, income: null, expenses: 3, crm: null },
+  ]);
+  assert.deepEqual(financeBreakdown(data, "platform"), [
+    { id: "otra", income: .30, expenses: null, crm: null },
+    { id: null, income: null, expenses: 3, crm: null },
+    { id: ONLYFANS, income: null, expenses: null, crm: 25.50 },
+  ]);
 });
