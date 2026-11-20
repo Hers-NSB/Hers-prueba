@@ -45,7 +45,7 @@ async function unseal(secret, service, kind, value) {
 export async function bridge(project, env, action, data = {}, send = fetch) {
   const response = await send(`${project}/rest/v1/rpc/hers_integration_worker`, {
     method: "POST",
-    redirect: "error",
+    redirect: "manual",
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ p_token: await bridgeToken(env.HERS_INTEGRATIONS_SECRET), p_action: action, p_data: data }),
   });
@@ -64,7 +64,7 @@ async function admin(request, project, env, send) {
   const token = request.headers.get("Authorization");
   if (!token?.startsWith("Bearer ") || token.length > 6144) throw new IntegrationError(401, "Inicia sesión para continuar");
   const response = await send(`${project}/auth/v1/user`, {
-    redirect: "error",
+    redirect: "manual",
     cache: "no-store",
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, Authorization: token },
   });
