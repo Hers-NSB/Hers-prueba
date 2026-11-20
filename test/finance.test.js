@@ -123,11 +123,16 @@ test("consulta el total explícito cuando el gráfico devuelve una lista y recha
         data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
       });
       if (url.includes("/earnings/chart?")) return Response.json(new URL(url).searchParams.has("type") ? rows : []);
+      if (url.includes("/crm/reports/creators?")) return Response.json({ data: [{ creatorId: creator, totalSalesCount: 1 }] });
       assert.equal(JSON.parse(options.body).p_action, "agencykey", "La prueba nunca escribe ventas");
       return Response.json(null);
     };
   }
   const result = await importNet("2026-11-19", env, send([{ type: "total", net: "28.00", gross: 35 }]), true, instant);
   assert.equal(result.creators, 1);
-  await assert.rejects(importNet("2026-11-19", env, send([]), true, instant), /1 de 1 modelos.*lista vacía/);
+  await assert.rejects(importNet("2026-11-19", env, send([]), true, instant), (error) => {
+    assert.equal(error.code, "AK-NET-EMPTY");
+    assert.match(error.message, /1 de 1 modelos.*lista vacía.*CRM encontró ventas en 1 modelos/);
+    return true;
+  });
 });

@@ -29,16 +29,20 @@ import { supabase, APPLICATIONS_TABLE, adminLogout } from "../lib/supabase";
 
 export default function AdminPanel({ onClose }) {
   const [activeSection, setActiveSection] = useState("dashboard");
-  const [applicationCount, setApplicationCount] = useState(0);
+  const [applications, setApplications] = useState({ count: null, warning: "" });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     const loadCount = async () => {
-      const { count } = await supabase
+      const { count, error, status } = await supabase
         .from(APPLICATIONS_TABLE)
         .select("id", { count: "exact", head: true });
-      if (mounted) setApplicationCount(count || 0);
+      if (!mounted) return;
+      const warning = status === 404
+        ? "[SB-APPLICATIONS-404] La tabla de Postulaciones no está disponible en Supabase"
+        : error ? "[SB-APPLICATIONS-READ] No se pudo consultar el conteo de Postulaciones" : "";
+      setApplications({ count, warning });
     };
     loadCount();
     return () => {
@@ -157,8 +161,9 @@ export default function AdminPanel({ onClose }) {
         </aside>
 
         <main className="admin-workspace">
+          {applications.warning && <p className="admin-workspace-notice" role="status">{applications.warning}</p>}
           {activeSection === "dashboard" && (
-            <AdminDashboardHome applicationCount={applicationCount} />
+            <AdminDashboardHome applicationCount={applications.count} />
           )}
 
           {activeSection === "applications" && (
@@ -211,7 +216,7 @@ function AdminDashboardHome({ applicationCount }) {
       <div className="admin-dashboard-stats">
         <div className="admin-stat-card">
           <span className="admin-stat-card__label">Postulaciones</span>
-          <strong>{applicationCount}</strong>
+          <strong>{applicationCount ?? "—"}</strong>
           <span>Registros recibidos</span>
         </div>
         <div className="admin-stat-card">

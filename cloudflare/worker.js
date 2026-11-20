@@ -1,4 +1,4 @@
-import { bridge, handleIntegrations, storedAgencyKey } from "./integrations.js";
+import { bridge, handleIntegrations, IntegrationError, storedAgencyKey } from "./integrations.js";
 
 const api = "https://app.agencykey.com/api/v1/public/crm/reports";
 const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
@@ -121,12 +121,24 @@ export async function importAgencyKey(instant, env, send = fetch, testOnly = fal
 
 const agencyRoot = "https://app.agencykey.com/api";
 
-async function queryAgencyKey(apiKey, path, params, send) {
-  const response = await send(`${agencyRoot}${path}?${new URLSearchParams(params)}`, {
-    redirect: "manual", headers: { "x-public-api-key": apiKey, Accept: "application/json" },
-  });
-  if (!response.ok) throw new Error(`AgencyKey lectura: HTTP ${response.status}`);
-  return response.json();
+async function queryAgencyKey(apiKey, path, params, send, code, stage) {
+  let response;
+  try {
+    response = await send(`${agencyRoot}${path}?${new URLSearchParams(params)}`, {
+      redirect: "manual", headers: { "x-public-api-key": apiKey, Accept: "application/json" },
+    });
+  } catch {
+    throw new IntegrationError(502, `AgencyKey no respondió al consultar ${stage}`, `${code}-NETWORK`);
+  }
+  if (!response.ok) {
+    const reason = response.status === 401 || response.status === 403 ? " · Verifica los permisos de la clave" : "";
+    throw new IntegrationError(502, `AgencyKey respondió HTTP ${response.status} al consultar ${stage}${reason}`, `${code}-HTTP`);
+  }
+  try {
+    return await response.json();
+  } catch {
+    throw new IntegrationError(502, `AgencyKey devolvió una respuesta no JSON al consultar ${stage}`, `${code}-JSON`);
+  }
 }
 
 function isoDay(value) {
@@ -180,17 +192,17 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
 
   const creators = new Map();
   for (let page = 1; ; page += 1) {
-    const result = await queryAgencyKey(key, "/v1/onlyfans/creators", { page, limit: 100 }, send);
-    if (!Array.isArray(result.data) || !Number.isInteger(result.pagination?.pages)) throw new Error("Formato de modelos inesperado");
+    const result = await queryAgencyKey(key, "/v1/onlyfans/creators", { page, limit: 100 }, send, "AK-MODELS", "los modelos");
+    if (!Array.isArray(result?.data) || !Number.isInteger(result.pagination?.pages)) throw new IntegrationError(502, "AgencyKey devolvió un formato de modelos inesperado", "AK-MODELS-FORMAT");
     for (const row of result.data) {
       if (!isId(row.id) || !isName(row.name) || !Number.isSafeInteger(row.creatorExternalId) || creators.has(row.id)) {
-        throw new Error("Modelo de AgencyKey inválido o repetido");
+        throw new IntegrationError(502, "AgencyKey devolvió un modelo inválido o repetido", "AK-MODELS-ROW");
       }
       creators.set(row.id, row);
     }
     if (page >= result.pagination.pages) break;
   }
-  if (!creators.size) throw new Error("AgencyKey no devolvió modelos accesibles");
+  if (!creators.size) throw new IntegrationError(502, "AgencyKey no devolvió modelos accesibles", "AK-MODELS-EMPTY");
 
   const { fromDate, toDate } = reportPeriod(day, zone);
   const params = { startDate: fromDate.slice(0, 19).replace("T", " "),
@@ -201,10 +213,10 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   for (let i = 0; i < entries.length; i += 5) {
     const batch = await Promise.all(entries.slice(i, i + 5).map(async (row) => {
       const path = `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`;
-      const chart = await queryAgencyKey(key, path, params, send);
+      const chart = await queryAgencyKey(key, path, params, send, "AK-NET-CHART", `el gráfico de ingresos del ${day}`);
       let net = readEarningsNet(chart);
       if (net === null) {
-        const totalChart = await queryAgencyKey(key, path, { ...params, type: "total" }, send);
+        const totalChart = await queryAgencyKey(key, path, { ...params, type: "total" }, send, "AK-NET-TOTAL", `el gráfico total del ${day}`);
         net = readEarningsNet(totalChart);
         if (net === null) {
           const original = describeEarnings(chart);
@@ -219,8 +231,23 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
     sales.push(...batch.filter(Boolean));
   }
   if (invalid.size) {
-    const formats = [...invalid].map(([shape, count]) => `${count} × ${shape}`).join(" | ");
-    throw new Error(`AgencyKey no devolvió un importe neto válido para ${entries.length - sales.length} de ${entries.length} modelos · ${formats}`);
+    const formats = [...invalid].slice(0, 4).map(([shape, count]) => `${count} × ${shape}`).join(" | ");
+    const onlyEmpty = invalid.size === 1 && invalid.has("lista vacía");
+    let contrast = "";
+    if (testOnly && onlyEmpty) {
+      try {
+        const report = await queryAgencyKey(key, "/v1/public/crm/reports/creators",
+          { fromDate, toDate }, send, "AK-CRM", "el reporte CRM de contraste");
+        if (Array.isArray(report?.data)) {
+          const withSales = report.data.filter((row) => creators.has(row?.creatorId) && (row.totalSalesCount > 0 || Boolean(money(row.totalSalesSum)))).length;
+          contrast = ` · CRM encontró ventas en ${withSales} modelos`;
+        }
+      } catch (error) {
+        if (error instanceof IntegrationError) contrast = ` · Contraste CRM: ${error.code}`;
+        else contrast = " · Contraste CRM no disponible";
+      }
+    }
+    throw new IntegrationError(502, `AgencyKey no devolvió un importe neto válido para ${entries.length - sales.length} de ${entries.length} modelos · Día ${day} · Ventana UTC ${fromDate} a ${toDate} · ${formats}${contrast}`, onlyEmpty ? "AK-NET-EMPTY" : "AK-NET-FORMAT");
   }
   if (!testOnly) await bridge(project, env, "import", { p_day: day, p_sales: sales, p_attributions: null }, send);
   return { day, creators: sales.length, attributions: 0 };
@@ -234,8 +261,8 @@ async function listEmployees(env, send = fetch, instant = Date.now()) {
   const start = new Date(Date.parse(day) - 29 * dayMs).toISOString().slice(0, 10);
   const result = await queryAgencyKey(key, "/v1/public/crm/reports/employees", {
     fromDate: reportPeriod(start, zone).fromDate, toDate: new Date(instant).toISOString(),
-  }, send);
-  if (!Array.isArray(result.data)) throw new Error("Formato de empleados inesperado");
+  }, send, "AK-EMPLOYEES", "los empleados");
+  if (!Array.isArray(result?.data)) throw new IntegrationError(502, "AgencyKey devolvió un formato de empleados inesperado", "AK-EMPLOYEES-FORMAT");
   return { employees: result.data.filter(({ senderId, senderName }) => isId(senderId) && isName(senderName))
     .map(({ senderId, senderName }) => ({ id: senderId, name: senderName })) };
 }
