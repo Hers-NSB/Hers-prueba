@@ -125,9 +125,11 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
       if (url.includes("/earnings/chart?")) return Response.json(new URL(url).searchParams.has("type") ? rows : []);
       if (url.includes("/payouts/transactions?")) {
         const later = new URL(url).searchParams.has("marker");
-        const row = { id: "tx", createdAt: "2026-11-19T20:00:00Z", net: 28, amount: 35, currency: "USD" };
+        const row = { id: "tx", createdAt: "2026-11-19T20:00:00Z", net: 28, amount: 35, currency: "USD", status: "loading" };
         if (!rows) return Response.json({ list: [], hasMore: false });
-        return Response.json({ list: later ? [row, { ...row, id: "outside", createdAt: "2026-11-20T04:00:00Z" }] : [row],
+        const reversed = { ...row, id: "reversed", status: "undo", net: 12 };
+        const chargeback = { ...row, id: "chargeback", chargebackAt: "2026-11-20T10:26:08Z", net: 3.6 };
+        return Response.json({ list: later ? [row, reversed, chargeback, { ...row, id: "outside", createdAt: "2026-11-20T04:00:00Z" }] : [row],
           hasMore: !later, nextMarker: 123 });
       }
       if (url.includes("/crm/reports/creators?")) return Response.json({ data: [{ creatorId: creator, totalSalesCount: 1 }] });

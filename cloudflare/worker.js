@@ -194,20 +194,22 @@ async function readTransactionsNet(key, creatorExternalId, bounds, send) {
         throw new IntegrationError(502, `Una transacción de la consulta del ${day} llegó sin fecha válida`, "AK-NET-TRANSACTIONS-DATE");
       }
       if (time < start || time > end) continue;
-      const net = money(row.net);
+      const reversed = row.status === "undo" || Boolean(row.chargebackAt || row.chargebackId);
+      const net = reversed ? 0 : money(row.net);
       const id = row.id;
       if (net === null || row.currency !== "USD" || (typeof id !== "string" && !Number.isSafeInteger(id)) || id === "") {
         throw new IntegrationError(502, `Una transacción del ${day} llegó sin neto, moneda o identificador válido`, "AK-NET-TRANSACTIONS-ROW");
       }
       const cents = Math.round(net * 100);
       const previous = seen.get(String(id));
-      if (!Number.isSafeInteger(cents) || (previous !== undefined && previous !== cents)) {
+      if (!Number.isSafeInteger(cents) || (previous && (previous.cents !== cents || previous.reversed !== reversed))) {
         throw new IntegrationError(502, `Una transacción del ${day} tiene un importe inconsistente`, "AK-NET-TRANSACTIONS-AMOUNT");
       }
-      seen.set(String(id), cents);
+      seen.set(String(id), { cents, reversed });
     }
     if (!result.hasMore) {
-      return { count: seen.size, net: [...seen.values()].reduce((sum, cents) => sum + cents, 0) / 100 };
+      const sales = [...seen.values()].filter((row) => !row.reversed);
+      return { count: sales.length, net: sales.reduce((sum, row) => sum + row.cents, 0) / 100 };
     }
     const next = result.nextMarker;
     if ((typeof next !== "string" && !Number.isSafeInteger(next)) || next === "" || markers.has(String(next))) break;
