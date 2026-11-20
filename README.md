@@ -1,10 +1,10 @@
 # HERS · Entorno de pruebas
 
-La versión web usa Vite, Supabase «Hers prueba» y Cloudflare Workers. El panel de administrador contiene Finanzas.
+La aplicación de pruebas usa React, Vite, Supabase y Cloudflare Workers. El panel de administración incluye Finanzas e Integraciones. [Abrir HERS de pruebas](https://hers-prueba.datosenviados07.workers.dev/).
 
 ## Desarrollo
 
-Requiere Node.js 24. Copia `.env.example` a `.env.local` y configura `VITE_SUPABASE_ANON_KEY` con la **clave publicable** de Supabase «Hers prueba».
+Requiere Node.js 24. Copia `.env.example` a `.env.local` y configura `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` con la URL y la clave publicable del mismo proyecto de Supabase.
 
 ```sh
 npm ci
@@ -13,17 +13,24 @@ npm run build
 npm test
 ```
 
-El proyecto de pruebas nace vacío. Aplica las migraciones de `supabase/migrations` y despliega `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Acceder → Administrador e inicia sesión con el correo completo. El inicio de sesión de pruebas también acepta el nombre de una cuenta del dominio `@hers-prueba.example`. Una sesión tiene que renovarse si cambia su rol.
+El proyecto de pruebas nace vacío. Aplica las migraciones de `supabase/migrations` y despliega `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Equipo → Administrador e inicia sesión con el correo completo. El inicio de sesión de pruebas también acepta el nombre de una cuenta del dominio `@hers-prueba.example`. Una sesión tiene que renovarse si cambia su rol.
 
-`test/finance.integration.sql` comprueba los permisos de visitante, chatter y administrador, las vigencias, la edición de movimientos y la importación repetida. Ejecútalo en el SQL Editor de **Hers prueba**. Se revierte al terminar.
+Los archivos `test/finance.integration.sql` y `test/integrations.integration.sql` comprueban permisos, vigencias, movimientos, importaciones y el almacenamiento de credenciales. Ejecútalos en el SQL Editor de **Hers prueba**. Cada prueba revierte sus datos al terminar.
 
 La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Postulaciones, Historias, el acceso de modelos y EmailJS requieren su configuración propia en el proyecto de pruebas.
 
+## Finanzas y reparto
+
+- **Resumen** muestra ingresos, gastos, utilidad y ventas del CRM, con filtros de fecha, modelo y plataforma. **Movimientos** permite registrar operaciones manuales en USD.
+- **Empleados** permite agregar chatters y modelos y asignar porcentajes a cada persona, a Dropper y a Agencia HERS. Selecciona **Vigente desde** y guarda la regla. Cada revisión queda en el historial.
+- El reparto aplica a cada día la regla vigente y usa como base el total CRM importado de todos los modelos. Solo el filtro de fechas afecta este cálculo. Los porcentajes admiten dos decimales, pueden sumar hasta el 100 % y el panel muestra el importe sin asignar.
+- **Comisiones** muestra el cálculo sobre las ventas atribuidas y el historial de sus porcentajes. El resultado operativo descuenta comisiones y gastos. El resultado después de inversión también descuenta la inversión.
+
 ## Cloudflare y AgencyKey
 
-Publica `dist/` como assets estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo. El trigger usa `0 11 * * *` (11:00 UTC). La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
+Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js`. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations` y `/api/admin/integrations/*`. El trigger usa `0 11 * * *` (11:00 UTC). La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
 
-En **Administrador → Integraciones**, selecciona `agencykey` y guarda la clave API de una cuenta con acceso de lectura y permisos `analytics.creators.viewList` y `analytics.employees.viewList`. Usa **Probar conexión** para consultar ambos reportes del último día cerrado sin guardar ventas. **Sincronizar ahora** importa ese mismo día. El disparador diario usa la misma credencial.
+En **Administrador → Integraciones**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda la clave API de una cuenta con acceso de lectura y permisos `analytics.creators.viewList` y `analytics.employees.viewList`. Usa **Probar conexión** para consultar ambos reportes del último día cerrado sin guardar ventas. **Sincronizar ahora** importa ese mismo día. El disparador diario usa la misma credencial.
 
 El panel permite guardar o reemplazar claves API, tokens y contraseñas de otros servicios. El Worker usa actualmente la credencial de AgencyKey. La lista de credenciales devuelve el nombre, el tipo y la fecha de actualización. La contraseña de acceso a HERS pertenece a Supabase Auth.
 
@@ -31,7 +38,7 @@ La configuración inicial del Worker requiere `HERS_INTEGRATIONS_SECRET` (32 byt
 
 El Worker lee `GET /api/v1/public/crm/reports/creators` y `GET /api/v1/public/crm/reports/employees` con `includeCreatorBreakdown=true` para este último. El [OpenAPI de AgencyKey](https://app.agencykey.com/api/public-docs/) documenta `totalSalesSum` en ambos. El reporte de creadores entrega un monto único. Las rutas públicas proxy de OnlyFans para transacciones y ganancias tienen un esquema abierto. Falta confirmar con una llamada autorizada cuáles campos proporcionan ambos importes por día y modelo. Finanzas muestra el total del CRM como tal y señala cuándo faltan los importes brutos y netos.
 
-La importación reemplaza el día de forma atómica, con claves únicas de fecha/modelo/integrante. Actualiza la última importación correcta después de guardar ambos reportes. Con secretos ausentes omite el intento. Los movimientos e ingresos de la agencia se registran manualmente en USD. El cálculo de utilidad operativa descuenta comisiones y gastos, y el resultado después de inversión también descuenta la inversión.
+La importación reemplaza el día de forma atómica, con claves únicas de fecha/modelo/integrante. Actualiza la última importación correcta después de guardar ambos reportes.
 
 Referencias de la vista web.
 
