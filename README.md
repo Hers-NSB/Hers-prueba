@@ -9,6 +9,7 @@ Requiere Node.js 24. Copia `.env.example` a `.env.local` y configura `VITE_SUPAB
 ```sh
 npm ci
 npm run dev
+npm run lint
 npm run build
 npm test
 ```
@@ -21,10 +22,10 @@ La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Postu
 
 ## Finanzas y reparto
 
-- **Resumen** muestra ingresos, gastos, utilidad y ventas del CRM, con filtros de fecha, modelo y plataforma. **Movimientos** permite registrar operaciones manuales en USD.
-- **Empleados** permite agregar chatters y modelos y asignar porcentajes a cada persona, a Dropper y a Agencia HERS. Selecciona **Vigente desde** y guarda la regla. Cada revisión queda en el historial.
-- El reparto aplica a cada día la regla vigente sobre el neto importado de todos los modelos. Los porcentajes admiten dos decimales y pueden sumar hasta el 100 %. La parte sin asignar va a la bóveda de Agencia HERS.
-- **Comisiones** muestra el cálculo sobre las ventas atribuidas y el historial de sus porcentajes. El resultado operativo descuenta comisiones y gastos. El resultado después de inversión también descuenta la inversión.
+- **Resumen** muestra las ventas netas, el ingreso de Agencia HERS, los gastos y la utilidad para el período seleccionado en el calendario.
+- **Extracción** permite registrar ingresos, gastos e inversiones en USD, crear categorías y editar movimientos.
+- **Empleados** permite agregar personas desde AgencyKey o manualmente, editar su nombre y rol, y retirarlas del listado conservando su historial.
+- En **Empleados**, selecciona **Vigente desde** y guarda los porcentajes de reparto de empleados, modelos, Dropper y Agencia HERS. Cada revisión queda en el historial. El reparto usa las ventas netas del día y asigna a la bóveda de Agencia HERS la parte que queda sin repartir.
 
 ## Cloudflare y AgencyKey
 
@@ -36,7 +37,7 @@ El panel permite guardar o reemplazar claves API, tokens y contraseñas de otros
 
 La configuración inicial del Worker requiere `HERS_INTEGRATIONS_SECRET` (32 bytes aleatorios en Base64) como secreto, `SUPABASE_PUBLISHABLE_KEY` (clave publicable de «Hers prueba») como variable y el hash SHA-256 del token derivado por `bridgeToken` en `hers_private.integration_backend.token_hash`. Configura estos valores una vez por entorno mediante Cloudflare y Supabase. El secreto cifra las credenciales y permite al Worker llamar al RPC acotado de integración. Su reemplazo requiere recifrar las credenciales guardadas. Para los despliegues existentes, el Worker admite también la configuración previa de `AGENCYKEY_API_KEY` y `SUPABASE_SYNC_KEY` cuando el RPC de integración aún no está configurado.
 
-El Worker consulta los modelos accesibles y el gráfico de ingresos de OnlyFans mediante el [proxy público de AgencyKey](https://app.agencykey.com/api/public-docs/). Guarda el neto de cada modelo por día mediante una actualización transaccional. El reporte de empleados alimenta el selector de **Agregar desde AgencyKey**. Finanzas muestra un aviso cuando un importe neto está pendiente.
+El Worker consulta los modelos accesibles y el gráfico de ingresos de OnlyFans mediante el [proxy público de AgencyKey](https://app.agencykey.com/api/public-docs/). Si el gráfico no devuelve el neto, usa el campo neto de las transacciones en USD del período y excluye las revertidas por contracargo. Guarda el neto de cada modelo por día mediante una actualización transaccional. El reporte de empleados alimenta el selector de **Agregar desde AgencyKey**. Los avisos de integración muestran un código de diagnóstico y una referencia por intento.
 
 Referencias de la vista web.
 
