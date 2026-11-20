@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { dailyFinance, financeBreakdown, netSales, ONLYFANS, summarize } from "../src/panel/finanzas/finance.js";
-import { importAgencyKey, normalizeReports, previousDay } from "../cloudflare/worker.js";
+import { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
 const member = "00000000-0000-4000-8000-000000000002";
@@ -93,4 +93,23 @@ test("agrupa ventas netas y movimientos por modelo y plataforma sin duplicar imp
     { id: null, income: null, expenses: 3, net: null },
     { id: ONLYFANS, income: null, expenses: null, net: 25.50 },
   ]);
+});
+
+test("importa solo el neto verificado y lo guarda en un lote sin reemplazar atribuciones", async () => {
+  const env = { HERS_INTEGRATIONS_SECRET: Buffer.alloc(32).toString("base64"), SUPABASE_PUBLISHABLE_KEY: "fixture", AGENCYKEY_API_KEY: "fixture" };
+  const calls = [];
+  const result = await importNet("2026-11-19", env, async (url, options) => {
+    calls.push([url, options]);
+    if (url.includes("/v1/onlyfans/creators?")) return Response.json({
+      data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
+    });
+    if (url.includes("/42/api2/v2/earnings/chart?")) return Response.json({ total: { total: 28, gross: 35 } });
+    return Response.json(null);
+  }, false, Date.parse("2026-11-20T11:00:00Z"));
+  assert.equal(result.creators, 1);
+  const batch = JSON.parse(calls.at(-1)[1].body).p_data;
+  assert.deepEqual(batch, { p_day: "2026-11-19", p_sales: [{ creator_key: creator, creator_name: "Modelo", net: 28 }], p_attributions: null });
+  assert.equal(new URL(calls[2][0]).searchParams.get("startDate"), "2026-11-19 04:00:00");
+  assert.deepEqual(await importNet("2026-11-21", env, () => assert.fail("No consultar en fechas futuras"),
+    false, Date.parse("2026-11-20T11:00:00Z")), { day: "2026-11-21", future: true });
 });

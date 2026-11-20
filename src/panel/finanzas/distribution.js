@@ -9,7 +9,7 @@ export function effectivePlan(plans, day) {
 
 export function distributionRecipients({ members, creators }) {
   return [
-    ...members.map(({ id, name }) => ({ id: `chatter:${id}`, name, role: "Chatter" })),
+    ...members.map(({ id, name, role, archived_on }) => ({ id: `chatter:${id}`, name, role, archived_on })),
     ...creators.map(({ id, name }) => ({ id: `model:${id}`, name, role: "Modelo" })),
     { id: "dropper", name: "Dropper", role: "Dropper" },
     { id: "hers", name: "Agencia HERS", role: "Agencia" },
@@ -20,8 +20,7 @@ function allocateCents(amount, shares) {
   const sign = amount < 0n ? -1n : 1n;
   const magnitude = amount * sign;
   const remainder = fullShare - totalShares(shares);
-  const parts = Object.entries(shares).sort(([a], [b]) => a.localeCompare(b));
-  parts.push(["unassigned", remainder]);
+  const parts = Object.entries({ ...shares, hers: (shares.hers ?? 0) + remainder }).sort(([a], [b]) => a.localeCompare(b));
   const payouts = parts.map(([id, units]) => {
     const numerator = magnitude * BigInt(units);
     return { id, amount: numerator / BigInt(fullShare), fraction: numerator % BigInt(fullShare) };
@@ -37,22 +36,27 @@ function exactCents(amount) {
   return whole.startsWith("-") ? -unsigned : unsigned;
 }
 
-export function calculateDistribution(sales, plans) {
+export function calculateDistribution(sales, plans, members = []) {
   const days = new Map();
   for (const { day, net } of sales) {
     if (net != null) days.set(day, (days.get(day) ?? 0n) + exactCents(net));
   }
+  const archived = new Map(members.filter(({ archived_on }) => archived_on).map(({ id, archived_on }) => [`chatter:${id}`, archived_on]));
   const payouts = new Map();
+  const agencyByDay = new Map();
   let total = 0n;
   for (const [day, amount] of days) {
     total += amount;
-    for (const [id, payout] of allocateCents(amount, effectivePlan(plans, day)?.shares ?? {})) {
+    const shares = Object.fromEntries(Object.entries(effectivePlan(plans, day)?.shares ?? {})
+      .filter(([id]) => !archived.has(id) || day < archived.get(id)));
+    for (const [id, payout] of allocateCents(amount, shares)) {
       payouts.set(id, (payouts.get(id) ?? 0n) + payout);
+      if (id === "hers") agencyByDay.set(day, Number(payout) / 100);
     }
   }
   return {
     total: days.size ? Number(total) / 100 : null,
-    unassigned: days.size ? Number(payouts.get("unassigned")) / 100 : null,
-    payouts: new Map([...payouts].filter(([id]) => id !== "unassigned").map(([id, amount]) => [id, Number(amount) / 100])),
+    agencyByDay,
+    payouts: new Map([...payouts].map(([id, amount]) => [id, Number(amount) / 100])),
   };
 }

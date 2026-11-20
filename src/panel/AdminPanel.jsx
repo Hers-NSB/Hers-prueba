@@ -20,7 +20,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
-  Users,
 } from "lucide-react";
 import Historias from "./Historias/historias.jsx";
 import Postulaciones from "./Postulaciones/postulaciones.jsx";
@@ -127,11 +126,6 @@ export default function AdminPanel({ onClose }) {
               <BookOpen size={18} />
               <span>Historias</span>
             </button>
-            <button className="admin-nav-item" disabled>
-              <Users size={18} />
-              <span>IA</span>
-              <small>Próximo</small>
-            </button>
             <button
               className={`admin-nav-item ${activeSection === "finance" ? "is-active" : ""}`}
               onClick={() => goTo("finance")}
@@ -144,7 +138,7 @@ export default function AdminPanel({ onClose }) {
               onClick={() => goTo("integrations")}
             >
               <Plug size={18} />
-              <span>Integraciones</span>
+              <span>Conectores</span>
             </button>
           </nav>
 

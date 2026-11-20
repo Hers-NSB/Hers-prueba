@@ -28,18 +28,13 @@
 .hf-header, .hf-summary-head { display: flex; align-items: center; justify-content: space-between; gap: .85rem; flex-wrap: wrap; }
 .hf-header p, .hf-section > p { margin-top: .4rem; }
 .hf-header { margin-bottom: 1.35rem; }
-.hf-sync { display: flex; align-items: center; gap: .65rem; background: var(--hf-surface); border: 1px solid var(--hf-line); border-radius: 10px; padding: .6rem .72rem; }
-.hf-sync small, .hf-table small { display: block; }
-.hf-sync > svg { color: var(--hf-accent); flex: none; }
 .hf .hf-icon { padding-inline: .6rem; }
 .hf-tabs, .hf-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .hf-tabs { margin-bottom: 1rem; }
 .hf-tabs button[aria-pressed="true"] { color: var(--hf-accent); }
-.hf-filters, .hf-kpis, .hf-result, .hf-catalogs, .hf-form { display: grid; gap: .8rem; }
-.hf-filters { grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr)); padding: .9rem; border: 1px solid var(--hf-line); background: var(--hf-surface); border-radius: 12px; margin-bottom: 1rem; }
+.hf-kpis, .hf-result, .hf-catalogs, .hf-form { display: grid; gap: .8rem; }
 .hf label, .hf-dialog label { display: grid; align-content: start; gap: .35rem; min-width: 0; color: var(--hf-muted); font-size: .88rem; }
 .hf input, .hf select, .hf-dialog input, .hf-dialog select { width: 100%; }
-.hf-presets { align-self: end; grid-column: 1 / -1; }
 .hf-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr)); margin-top: .8rem; }
 .hf-kpis article, .hf-section, .hf-result, .hf-notice { background: var(--hf-surface); border: 1px solid var(--hf-line); padding: 1rem; border-radius: 12px; }
 .hf-kpis article { display: grid; gap: .55rem; min-width: 0; }
@@ -172,3 +167,35 @@
 .hf-distribution-actions { margin-top: .85rem; }
 .hf-distribution-version { padding: .65rem 0; border-bottom: 1px solid var(--hf-line); }
 .hf-distribution-version summary { cursor: pointer; }
+
+.hf-toolbar { display: flex; flex-wrap: wrap; align-items: start; gap: .8rem; margin-bottom: 1rem; }
+.hf-period { position: relative; display: grid; gap: .4rem; max-width: 100%; color: #a1a8b4; font-size: .9rem; }
+.hf .hf-select-trigger, .hf-dialog .hf-select-trigger {
+  min-height: 42px; border-radius: 10px; border-color: #39393d; background: #202022; color: #f1f2f4;
+}
+.hf .hf-period-trigger { justify-content: space-between; gap: 1.1rem; font-weight: 650; }
+.hf-calendar {
+  position: absolute; inset: calc(100% + .45rem) auto auto 0; z-index: 5;
+  display: grid; grid-template-columns: minmax(115px, .85fr) minmax(0, 1.5fr);
+  width: min(520px, calc(100cqw - 4px)); border: 1px solid #323235; border-radius: 20px;
+  background: #121214; color: #f0f1f3; box-shadow: 0 12px 30px #0008;
+}
+.hf-calendar-presets { display: grid; align-content: start; gap: .3rem; padding: .75rem; border-right: 1px solid #28282b; }
+.hf-calendar-body { padding: .7rem; min-width: 0; }
+.hf-calendar-month { display: grid; grid-template-columns: auto auto 1fr auto auto; gap: .15rem; align-items: center; text-align: center; color: #a9afba; text-transform: capitalize; }
+.hf-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
+.hf-calendar-grid > span { background: #202023; padding: .6rem .05rem; font-weight: 650; color: #a9afba; }
+.hf-calendar-grid > span:nth-child(6), .hf-calendar-grid > span:nth-child(7) { color: #ff6767; }
+.hf .hf-calendar button { min-height: 36px; padding: .25rem; border: 0; border-radius: 9px; background: transparent; }
+.hf .hf-calendar-presets button { justify-content: start; padding-inline: .55rem; text-align: left; }
+.hf .hf-calendar-grid button { justify-content: center; }
+.hf .hf-calendar button[aria-pressed="true"], .hf .hf-calendar button:hover:not(:disabled) { background: #252528; }
+.hf .hf-calendar button[data-other="true"] { color: #92939b; }
+.hf .hf-calendar > p { grid-column: 1 / -1; padding: .65rem .85rem; border-top: 1px solid #28282b; }
+.hf-notifications { padding: .5rem .75rem; border: 1px solid var(--hf-line); border-radius: 10px; font-size: .84rem; }
+.hf-notifications p { margin-top: .2rem; }
+.hf-category { display: grid; gap: .35rem; }
+@container (max-width: 425px) {
+  .hf-calendar { grid-template-columns: minmax(0, 1fr); }
+  .hf-calendar-presets { grid-template-columns: repeat(2, 1fr); padding-bottom: 0; border-right: 0; }
+}

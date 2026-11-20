@@ -654,14 +654,10 @@ function CountUpValue({
   const [value, setValue] = useState(active ? 0 : target);
 
   useEffect(() => {
-    if (!active) {
-      setValue(target);
-      return;
-    }
+    if (!active) return;
 
     let start = null;
     let frame;
-    setValue(0);
 
     const step = (timestamp) => {
       if (start === null) start = timestamp;
@@ -677,7 +673,7 @@ function CountUpValue({
   return (
     <>
       {prefix}
-      {value}
+      {active ? value : target}
       {suffix}
     </>
   );
@@ -1064,7 +1060,7 @@ function ModelLoginForm({ onSuccess }) {
       const result = await modelLogin(cleanUsername, password);
       if (result.error) throw new Error(result.error);
       onSuccess(`Bienvenida, ${result.username || cleanUsername}`);
-    } catch (error) {
+    } catch {
       setErrors({
         username: "Usuario incorrectos",
         password: "Contraseña incorrectos",

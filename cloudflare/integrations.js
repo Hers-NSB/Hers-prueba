@@ -107,7 +107,7 @@ async function readCredential(request) {
   return { service, kind, value };
 }
 
-export async function handleIntegrations(request, project, env, run, send = fetch) {
+export async function handleIntegrations(request, project, env, run, send = fetch, employees) {
   const json = (payload, status = 200) => Response.json(payload, { status, headers: { "Cache-Control": "no-store" } });
   const route = new URL(request.url);
   const action = route.pathname.slice("/api/admin/integrations".length);
@@ -125,17 +125,34 @@ export async function handleIntegrations(request, project, env, run, send = fetc
       const ciphertext = await seal(env.HERS_INTEGRATIONS_SECRET, service, kind, value);
       return json(await bridge(project, env, "save", { service, kind, ciphertext, updated_by: user }, send));
     }
+    if (request.method === "GET" && action === "/employees" && employees) {
+      const result = await employees();
+      if (result.skipped) throw new IntegrationError(409, "Guarda primero la clave API de AgencyKey");
+      return json(result);
+    }
     if (request.method === "POST" && ["/test", "/sync"].includes(action)) {
-      const result = await run(action === "/test");
+      let day;
+      if (action === "/sync" && request.body) {
+        const raw = await request.text();
+        if (raw.length > 100) throw new IntegrationError(413, "Solicitud demasiado grande");
+        try { day = JSON.parse(raw).day; }
+        catch { throw new IntegrationError(400, "Fecha de importación inválida"); }
+        if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+          !Number.isFinite(Date.parse(day)) || new Date(day).toISOString().slice(0, 10) !== day) {
+          throw new IntegrationError(400, "Fecha de importación inválida");
+        }
+      }
+      const result = await run(action === "/test", day);
       if (result.skipped) throw new IntegrationError(409, "Guarda primero la clave API de AgencyKey");
       return json({ ok: true, ...result });
     }
     return json({ error: "Operación no disponible" }, 404);
   } catch (error) {
     if (error instanceof IntegrationError) return json({ error: error.message }, error.status);
-    const upstream = /^AgencyKey (?:creators|employees): HTTP ([1-5][0-9]{2})$/.exec(error.message);
+    const upstream = /^AgencyKey (?:creators|employees|lectura): HTTP ([1-5][0-9]{2})$/.exec(error.message);
     return json({ error: upstream
-      ? `AgencyKey respondió HTTP ${upstream[1]}. Revisa la clave y los permisos de reportes`
-      : "La operación no se pudo completar" }, 502);
+      ? `AgencyKey respondió HTTP ${upstream[1]}. Revisa la clave y sus permisos de lectura`
+      : error.message === "AgencyKey no devolvió un importe neto válido" ? "AgencyKey no devolvió un importe neto válido"
+        : "La operación no se pudo completar" }, 502);
   }
 }

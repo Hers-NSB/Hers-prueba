@@ -1,23 +1,23 @@
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { calculateDistribution, distributionRecipients, effectivePlan, percentage, shareUnits, totalShares } from "./distribution";
+import { distributionRecipients, effectivePlan, percentage, shareUnits, totalShares } from "./distribution";
 import { dateKey, usd } from "./finance";
 
 const percent = new Intl.NumberFormat("es-VE", { maximumFractionDigits: 2 });
 const formatShare = (units) => `${percent.format(percentage(units))} %`;
 
-export default function Distribution({ data, onSaved }) {
+export default function Distribution({ data, result, onSaved }) {
   const plans = data.distributionPlans;
   const [day, setDay] = useState(() => dateKey(new Date()));
   const [draft, setDraft] = useState(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState(null);
   const recipients = distributionRecipients(data);
+  const activeRecipients = recipients.filter(({ archived_on }) => !archived_on);
   const current = effectivePlan(plans, day);
   const exact = current?.effective_on === day ? current : null;
-  const shares = draft ?? current?.shares ?? {};
+  const shares = draft ?? Object.fromEntries(activeRecipients.filter(({ id }) => current?.shares[id] != null).map(({ id }) => [id, current.shares[id]]));
   const assigned = totalShares(shares);
-  const result = calculateDistribution(data.distributionSales, plans);
   const versions = [...plans].reverse();
 
   async function save(event) {
@@ -48,7 +48,7 @@ export default function Distribution({ data, onSaved }) {
       <p>Usa las ventas netas registradas de todos los modelos del período</p>
       <dl className="hf-financial-detail">
         <div><dt>Ventas netas del período</dt><dd>{usd(result.total)}</dd></div>
-        <div><dt>Importe sin asignar</dt><dd>{usd(result.unassigned)}</dd></div>
+        <div><dt>Bóveda de Agencia HERS</dt><dd>{usd(result.payouts.get("hers"))}</dd></div>
       </dl>
       <form onSubmit={save}>
         <div className="hf-distribution-settings">
@@ -56,11 +56,11 @@ export default function Distribution({ data, onSaved }) {
             onChange={(event) => { setDay(event.target.value); setDraft(null); setNotice(null); }} /></label>
           <p>{formatShare(assigned)} asignado · {assigned > 10_000
             ? `${formatShare(assigned - 10_000)} por encima del límite`
-            : `${formatShare(10_000 - assigned)} por asignar`}</p>
+            : `${formatShare(10_000 - assigned)} a la bóveda`}</p>
         </div>
         <div className="hf-table" tabIndex={0}><table>
           <thead><tr><th scope="col">Beneficiario</th><th scope="col">Rol</th><th scope="col">Porcentaje</th><th scope="col">Importe del período</th></tr></thead>
-          <tbody>{recipients.map(({ id, name, role }) => <tr key={id}>
+          <tbody>{activeRecipients.map(({ id, name, role }) => <tr key={id}>
             <th scope="row">{name}</th>
             <td>{role}</td>
             <td><input className="hf-share-input" type="number" min="0" max="100" step="0.01" inputMode="decimal"

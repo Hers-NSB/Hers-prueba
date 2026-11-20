@@ -15,6 +15,10 @@ function formatDay(instant, zone) {
 export function previousDay(instant, zone) {
   const current = Date.parse(`${formatDay(instant, zone)}T00:00:00Z`);
   const day = new Date(current - dayMs).toISOString().slice(0, 10);
+  return { day, ...reportPeriod(day, zone) };
+}
+
+function reportPeriod(day, zone) {
   // Locate local midnight across daylight-saving transitions.
   const midnight = (key) => {
     const approx = Date.parse(`${key}T00:00:00Z`);
@@ -28,9 +32,8 @@ export function previousDay(instant, zone) {
     return right;
   };
   return {
-    day,
     fromDate: new Date(midnight(day)).toISOString(),
-    toDate: new Date(midnight(formatDay(instant, zone)) - 1).toISOString(),
+    toDate: new Date(midnight(new Date(Date.parse(day) + dayMs).toISOString().slice(0, 10)) - 1).toISOString(),
   };
 }
 
@@ -116,6 +119,76 @@ export async function importAgencyKey(instant, env, send = fetch, testOnly = fal
   return outcome;
 }
 
+const agencyRoot = "https://app.agencykey.com/api";
+
+async function queryAgencyKey(apiKey, path, params, send) {
+  const response = await send(`${agencyRoot}${path}?${new URLSearchParams(params)}`, {
+    redirect: "manual", headers: { "x-public-api-key": apiKey, Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(`AgencyKey lectura: HTTP ${response.status}`);
+  return response.json();
+}
+
+function isoDay(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+}
+
+export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
+  const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
+  const currentDay = formatDay(instant, zone);
+  day ??= previousDay(instant, zone).day;
+  if (!isoDay(day)) throw new Error("Fecha de importación inválida");
+  if (day > currentDay) return { day, future: true };
+  const key = await storedAgencyKey(project, env, send);
+  if (!key) return { skipped: true };
+
+  const creators = new Map();
+  for (let page = 1; ; page += 1) {
+    const result = await queryAgencyKey(key, "/v1/onlyfans/creators", { page, limit: 100 }, send);
+    if (!Array.isArray(result.data) || !Number.isInteger(result.pagination?.pages)) throw new Error("Formato de modelos inesperado");
+    for (const row of result.data) {
+      if (!isId(row.id) || !isName(row.name) || !Number.isSafeInteger(row.creatorExternalId) || creators.has(row.id)) {
+        throw new Error("Modelo de AgencyKey inválido o repetido");
+      }
+      creators.set(row.id, row);
+    }
+    if (page >= result.pagination.pages) break;
+  }
+  if (!creators.size) throw new Error("AgencyKey no devolvió modelos accesibles");
+
+  const { fromDate, toDate } = reportPeriod(day, zone);
+  const params = { startDate: fromDate.slice(0, 19).replace("T", " "),
+    endDate: (day === currentDay ? new Date(instant).toISOString() : toDate).slice(0, 19).replace("T", " "), withTotal: "true" };
+  const sales = [];
+  const entries = [...creators.values()];
+  for (let i = 0; i < entries.length; i += 5) {
+    const batch = await Promise.all(entries.slice(i, i + 5).map(async (row) => {
+      const result = await queryAgencyKey(key, `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`, params, send);
+      const net = result.total?.total;
+      if (!Number.isFinite(net)) throw new Error("AgencyKey no devolvió un importe neto válido");
+      return { creator_key: row.id, creator_name: row.name, net };
+    }));
+    sales.push(...batch);
+  }
+  if (!testOnly) await bridge(project, env, "import", { p_day: day, p_sales: sales, p_attributions: null }, send);
+  return { day, creators: sales.length, attributions: 0 };
+}
+
+async function listEmployees(env, send = fetch, instant = Date.now()) {
+  const key = await storedAgencyKey(project, env, send);
+  if (!key) return { skipped: true };
+  const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
+  const day = formatDay(instant, zone);
+  const start = new Date(Date.parse(day) - 29 * dayMs).toISOString().slice(0, 10);
+  const result = await queryAgencyKey(key, "/v1/public/crm/reports/employees", {
+    fromDate: reportPeriod(start, zone).fromDate, toDate: new Date(instant).toISOString(),
+  }, send);
+  if (!Array.isArray(result.data)) throw new Error("Formato de empleados inesperado");
+  return { employees: result.data.filter(({ senderId, senderName }) => isId(senderId) && isName(senderName))
+    .map(({ senderId, senderName }) => ({ id: senderId, name: senderName })) };
+}
+
 export default {
   fetch(request, env) {
     const path = new URL(request.url).pathname;
@@ -126,12 +199,8 @@ export default {
       });
     }
     if (path === "/api/admin/integrations" || path.startsWith("/api/admin/integrations/")) {
-      return handleIntegrations(request, project, env, (testOnly) => importAgencyKey(Date.now(), env, fetch, testOnly));
+      return handleIntegrations(request, project, env, (testOnly, day) => importNet(day, env, fetch, testOnly), fetch, () => listEmployees(env));
     }
     return env.ASSETS.fetch(request);
-  },
-  async scheduled(event, env) {
-    const result = await importAgencyKey(event.scheduledTime, env);
-    if (!result.skipped) console.log("AgencyKey: importación correcta", result);
   },
 };

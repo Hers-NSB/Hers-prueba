@@ -41,7 +41,7 @@ export function summarize({ movements, sales, commissions }) {
   return { ...Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, value / 100])), withoutRate, withoutNet };
 }
 
-export function dailyFinance({ movements, sales, commissions }) {
+export function dailyFinance({ movements, sales, commissions }, agencyByDay = new Map()) {
   const days = new Map();
   for (const [type, rows] of Object.entries({ movements, sales, commissions })) {
     for (const row of rows) {
@@ -51,11 +51,13 @@ export function dailyFinance({ movements, sales, commissions }) {
   }
   return [...days].sort(([a], [b]) => a.localeCompare(b)).map(([day, rows]) => {
     const totals = summarize(rows);
+    const vault = agencyByDay.get(day);
+    const manualIncome = metricIf(rows.movements, "income", totals.agency);
     return {
       date: Date.parse(day),
-      income: metricIf(rows.movements, "income", totals.agency),
+      income: manualIncome == null && vault == null ? null : ((manualIncome ?? 0) + (vault ?? 0)),
       expenses: metricIf(rows.movements, "expense", totals.expense),
-      profit: hasOperatingAmounts(rows) ? totals.profit : null,
+      profit: hasOperatingAmounts(rows) || vault != null ? totals.profit + (vault ?? 0) : null,
       provisional: totals.withoutRate > 0,
       net: netSales(rows.sales, rows.movements),
     };

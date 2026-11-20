@@ -17,11 +17,5 @@ export async function sendApplicationNotification() {
     );
   }
 
-  try {
-    const response = await emailjs.send(serviceId, templateId, {});
-
-    return response;
-  } catch (error) {
-    throw error;
-  }
+  return emailjs.send(serviceId, templateId, {});
 }

@@ -60,8 +60,8 @@ function TrendCard({ title, subtitle, points, emptyText, sales = false }) {
   </section>;
 }
 
-export default function FinanceCharts({ data }) {
-  const points = dailyFinance(data);
+export default function FinanceCharts({ data, agencyByDay }) {
+  const points = dailyFinance(data, agencyByDay);
   return <div className="hf-trends">
     <TrendCard title="Resultado operativo" subtitle="Ingresos de la agencia, gastos y utilidad por día · USD"
       points={points.filter(({ profit }) => profit !== null)} emptyText="Sin actividad operativa en este período" />

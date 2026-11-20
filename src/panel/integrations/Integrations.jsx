@@ -1,25 +1,12 @@
 import { useEffect, useState } from "react";
 import { KeyRound, Plus, RefreshCw, Save, ShieldCheck } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import callApi from "./connectorApi";
 import "../finanzas/finanzas.css";
 import "./integrations.css";
 
 const kinds = { "api-key": "Clave API", token: "Token", password: "Contraseña de servicio" };
 const blank = { service: "agencykey", kind: "api-key", value: "" };
 const dateTime = (date) => new Date(date).toLocaleString("es-VE");
-
-async function callApi(path = "", method = "GET", payload, signal) {
-  const { data, error } = await supabase.auth.getSession();
-  if (error || !data.session) throw new Error("Inicia sesión para continuar");
-  const response = await fetch(`/api/admin/integrations${path}`, {
-    method, signal, cache: "no-store",
-    headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
-    body: payload && JSON.stringify(payload),
-  });
-  const result = await response.json().catch(() => null);
-  if (!response.ok || !result) throw new Error(result?.error || "Integraciones no está disponible");
-  return result;
-}
 
 export default function Integrations() {
   const [data, setData] = useState(null);
@@ -47,10 +34,10 @@ export default function Integrations() {
         saved = true;
         setForm(null);
         setNotice({ success: "Credencial guardada" });
-      } else if (operation !== "refresh") {
+      } else if (operation === "test") {
         const result = await callApi(`/${operation}`, "POST");
-        const label = operation === "test" ? "Conexión correcta" : "Importación completada";
-        setNotice({ success: `${label} · ${result.day} · ${result.creators} modelos · ${result.attributions} atribuciones` });
+        const label = "Conexión correcta";
+        setNotice({ success: `${label} · ${result.day} · ${result.creators} modelos` });
       }
       setData(await callApi());
     } catch (error) {
@@ -68,15 +55,15 @@ export default function Integrations() {
   };
   const close = () => { if (!busy) setForm(null); };
 
-  return <section className="hf hers-integrations" aria-label="Integraciones">
+  return <section className="hf hers-integrations" aria-label="Conectores">
     <header className="hf-header">
-      <div><h1>Integraciones</h1><p>Conexiones y credenciales de HERS</p></div>
+      <div><h1>Conectores</h1><p>Conexiones y credenciales de HERS</p></div>
       <button type="button" onClick={() => perform("refresh")} disabled={busy}>
         <RefreshCw size={16} aria-hidden="true" /> Actualizar estado
       </button>
     </header>
     {notice && <p className="hf-notice" role={notice.error ? "alert" : "status"}>{notice.error || notice.success}</p>}
-    {!data && !notice && <p role="status">Cargando integraciones…</p>}
+    {!data && !notice && <p role="status">Cargando conectores…</p>}
     {data && <>
       <section className="hf-section hers-integration-card">
         <div className="hf-summary-head">
@@ -93,7 +80,6 @@ export default function Integrations() {
         <div className="hf-actions">
           {agencyKeySaved ? <>
             <button type="button" disabled={busy} onClick={() => perform("test")}>{action === "test" ? "Probando…" : "Probar conexión"}</button>
-            <button type="button" className="hf-primary" disabled={busy} onClick={() => perform("sync")}>{action === "sync" ? "Sincronizando…" : "Sincronizar ahora"}</button>
           </> : <button type="button" className="hf-primary" disabled={busy} onClick={() => edit()}>Configurar AgencyKey</button>}
         </div>
       </section>
