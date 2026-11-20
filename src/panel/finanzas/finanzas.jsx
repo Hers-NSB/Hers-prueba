@@ -7,9 +7,9 @@ import "./finanzas.css";
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
 const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], rates: [], sync: null };
-const catalog = { platform: "Plataforma", creator: "Modelo", member: "Integrante" };
+const catalog = { platform: "Plataforma", creator: "Modelo", member: "Chatter" };
 const catalogTables = { platform: "finance_platforms", creator: "finance_creators", member: "finance_members" };
-const tabs = ["Resumen", "Movimientos", "Comisiones", "Catálogos"];
+const tabs = ["Resumen", "Movimientos", "Comisiones", "Empleados"];
 const categories = ["Operación", "Marketing", "Software", "Producción", "Equipos", "Servicios"];
 const pageSize = 500;
 
@@ -112,7 +112,8 @@ export default function Finanzas() {
         {tab === "Resumen" && <Overview totals={totals} data={data} onCreate={() => setEditor({ type: "movement" })} />}
         {tab === "Movimientos" && <Movements data={data} onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Comisiones" && <Commissions data={data} onEdit={(row) => setEditor({ type: "rate", row })} />}
-        {tab === "Catálogos" && <Catalogs data={data} onCreate={(type) => setEditor({ type })} />}
+        {tab === "Empleados" && <Employees data={data} onCreate={(type) => setEditor({ type })}
+          onRate={(memberId) => setEditor({ type: "rate", memberId })} />}
       </>}
       {editor && <Editor editor={editor} data={data} onClose={() => setEditor(null)} onSaved={() => { setEditor(null); reload(); }} />}
     </>}
@@ -220,18 +221,35 @@ function Commissions({ data, onEdit }) {
   </>;
 }
 
-function Catalogs({ data, onCreate }) {
-  return <div className="hf-catalogs">
-    {[[ "creator", "Modelos", data.creators ], ["platform", "Plataformas", data.platforms], ["member", "Integrantes", data.members]].map(([type, label, rows]) =>
-      <section className="hf-section" key={type}>
-        <div className="hf-summary-head"><h2>{label}</h2><button type="button" onClick={() => onCreate(type)}><Plus size={16} /> Agregar</button></div>
-        {rows.length ? <ul>{rows.map((row) => <li key={row.id}>{row.name}{row.agencykey_id && <small>AgencyKey</small>}</li>)}</ul> : <p className="hf-empty">Sin registros</p>}
-      </section>)}
-  </div>;
+function Employees({ data, onCreate, onRate }) {
+  const today = dateKey(new Date());
+  const currentRates = new Map();
+  for (const rate of data.rates) {
+    if (rate.effective_on <= today) currentRates.set(rate.member_id, rate.percent);
+  }
+  return <>
+    <div className="hf-catalogs">
+      <section className="hf-section">
+        <div className="hf-summary-head"><h2>Chatters</h2><button type="button" onClick={() => onCreate("member")}><Plus size={16} /> Agregar chatter</button></div>
+        <Table headings={["Nombre", "Porcentaje vigente", "Acción"]} emptyText="Sin chatters registrados"
+          rows={data.members.map(({ id, name }) => [id, [name, currentRates.has(id) ? `${currentRates.get(id)} %` : "Sin asignar",
+            <button type="button" aria-label={`Asignar porcentaje a ${name}`} onClick={() => onRate(id)}>Asignar %</button>]])} />
+      </section>
+      <section className="hf-section">
+        <div className="hf-summary-head"><h2>Modelos</h2><button type="button" onClick={() => onCreate("creator")}><Plus size={16} /> Agregar modelo</button></div>
+        <Table headings={["Nombre", "Origen"]} emptyText="Sin modelos registrados"
+          rows={data.creators.map(({ id, name, agencykey_id }) => [id, [name, agencykey_id ? "AgencyKey" : "Manual"]])} />
+      </section>
+    </div>
+    <section className="hf-section">
+      <div className="hf-summary-head"><h2>Plataformas</h2><button type="button" onClick={() => onCreate("platform")}><Plus size={16} /> Agregar plataforma</button></div>
+      <Table headings={["Nombre"]} emptyText="Sin plataformas registradas" rows={data.platforms.map(({ id, name }) => [id, [name]])} />
+    </section>
+  </>;
 }
 
-function Editor({ editor: { type, row }, data, onClose, onSaved }) {
-  const [values, setValues] = useState(row ?? { day: dateKey(new Date()), effective_on: dateKey(new Date()), kind: "expense" });
+function Editor({ editor: { type, row, memberId }, data, onClose, onSaved }) {
+  const [values, setValues] = useState(row ?? { day: dateKey(new Date()), effective_on: dateKey(new Date()), kind: "expense", member_id: memberId });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setValues((current) => ({ ...current, [key]: value }));
@@ -268,9 +286,9 @@ function Editor({ editor: { type, row }, data, onClose, onSaved }) {
     } finally { setSaving(false); }
   };
 
-  return <dialog className="hf-dialog" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
+  return <dialog className="hf-dialog" aria-labelledby="hf-editor-title" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
     <form onSubmit={save}>
-      <h2>{row ? "Editar" : "Registrar"} {type === "movement" ? "movimiento" : type === "rate" ? "porcentaje" : catalog[type].toLowerCase()}</h2>
+      <h2 id="hf-editor-title">{row ? "Editar" : "Registrar"} {type === "movement" ? "movimiento" : type === "rate" ? "porcentaje" : catalog[type].toLowerCase()}</h2>
       <div className="hf-form">
         {type === "movement" && <>
           {field("Fecha", "day", { type: "date", required: true })}
