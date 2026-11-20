@@ -59,25 +59,3 @@ NO cambiar estilos y colores de cosas que no te pedi que cambiaras
     outline: none !important;
   }
 }
-
-.hers-recovery {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  background: #fbf5ef;
-  color: #493026;
-}
-.hers-recovery__card {
-  display: grid;
-  gap: 1rem;
-  max-width: 28rem;
-  width: 100%;
-  padding: clamp(1.25rem, 5vw, 2rem);
-  background: #fffaf5;
-  border: 1px solid #ecd9cb;
-  border-radius: 1.25rem;
-}
-.hers-recovery__card h1 { font-size: clamp(1.5rem, 5vw, 2rem); }
-.hers-recovery__card a, .hers-recovery-link { color: #88442e; text-decoration: underline; }
-.hers-recovery-link { border: 0; background: none; padding: .45rem; cursor: pointer; font: inherit; }

@@ -15,8 +15,6 @@ npm test
 
 El proyecto de pruebas nace vacío. Aplica las migraciones de `supabase/migrations` y despliega `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Acceder → Administrador e inicia sesión con el correo completo. El inicio de sesión de pruebas también acepta el nombre de una cuenta del dominio `@hers-prueba.example`. Una sesión tiene que renovarse si cambia su rol.
 
-Para configurar una contraseña por correo, abre **Acceder al panel del equipo → Administrador → Crear o restablecer contraseña**. En Supabase Auth → URL Configuration, añade como Redirect URL `https://hers-prueba.datosenviados07.workers.dev/restablecer-contrasena`. El enlace abre una sesión de recuperación aislada para guardar la nueva contraseña y volver al acceso.
-
 `test/finance.integration.sql` comprueba los permisos de visitante, chatter y administrador, las vigencias, la edición de movimientos y la importación repetida. Ejecútalo en el SQL Editor de **Hers prueba**. Se revierte al terminar.
 
 La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Postulaciones, Historias, el acceso de modelos y EmailJS requieren su configuración propia en el proyecto de pruebas.

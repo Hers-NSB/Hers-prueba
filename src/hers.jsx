@@ -64,7 +64,6 @@ import {
 } from "./lib/supabase";
 import { sendApplicationNotification } from "./lib/emailjs";
 import AdminPanel from "./panel/AdminPanel.jsx";
-import { recoveryPath } from "./auth/recovery.js";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -88,7 +87,7 @@ export default function HERS() {
   }, []);
 
   const [authModal, setAuthModal] = useState(null);
-  const [teamPanelOpen, setTeamPanelOpen] = useState(() => new URLSearchParams(window.location.search).get("acceso") === "administrador");
+  const [teamPanelOpen, setTeamPanelOpen] = useState(false);
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [toast, setToast] = useState(null);
   const [checkingAdminSession, setCheckingAdminSession] = useState(
@@ -1921,7 +1920,7 @@ function PhotoUpload({ id, title, preview, error, onChange, onRemove, small }) {
 }
 
 function TeamAuthModal({ onClose, onAdminLogin, onChatterLogin }) {
-  const [role, setRole] = useState(() => new URLSearchParams(window.location.search).get("acceso") === "administrador" ? "admin" : "chatter");
+  const [role, setRole] = useState("chatter");
 
   return (
     <ModalShell onClose={onClose}>
@@ -1963,43 +1962,6 @@ function AdminLoginForm({ onSuccess }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [recovery, setRecovery] = useState(false);
-  const [recoveryNotice, setRecoveryNotice] = useState("");
-
-  const sendRecovery = async (event) => {
-    event.preventDefault();
-    setLoading(true);
-    setError("");
-    setRecoveryNotice("");
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(username.trim().toLowerCase(), {
-        redirectTo: new URL(recoveryPath, window.location.origin).href,
-      });
-      if (error?.status === 429) setError("Espera un minuto antes de solicitar otro enlace");
-      else if (error && error.status !== 404) setError("No se pudo enviar el enlace. Intenta de nuevo");
-      else setRecoveryNotice("Si el correo está registrado, recibirás un enlace para elegir tu contraseña");
-    } catch {
-      setError("No se pudo conectar con Supabase. Intenta de nuevo");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (recovery) {
-    return <form className="auth-form" onSubmit={sendRecovery}>
-      <label>Correo de tu cuenta<input type="email" value={username} autoComplete="email" required
-        onChange={(event) => setUsername(event.target.value)} /></label>
-      {error && <span className="field-error" role="alert">{error}</span>}
-      {recoveryNotice && <p role="status">{recoveryNotice}</p>}
-      <button className="btn btn--growth btn--full" type="submit" disabled={loading}>
-        {loading ? "Enviando…" : "Enviar enlace"}
-      </button>
-      <button className="hers-recovery-link" type="button" disabled={loading} onClick={() => {
-        setError("");
-        setRecovery(false);
-      }}>Volver a iniciar sesión</button>
-    </form>;
-  }
 
   const submit = async (e) => {
     e.preventDefault();
@@ -2069,12 +2031,6 @@ function AdminLoginForm({ onSuccess }) {
           </>
         )}
       </button>
-      <button className="hers-recovery-link" type="button" disabled={loading} onClick={() => {
-        setError("");
-        setPassword("");
-        setRecoveryNotice("");
-        setRecovery(true);
-      }}>Crear o restablecer contraseña</button>
     </form>
   );
 }

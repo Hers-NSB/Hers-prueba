@@ -119,6 +119,12 @@ export async function importAgencyKey(instant, env, send = fetch, testOnly = fal
 export default {
   fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (path === "/restablecer-contrasena" || path === "/restablecer-contrasena/") {
+      return new Response("El acceso de HERS se gestiona desde Supabase", {
+        status: 410,
+        headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
     if (path === "/api/admin/integrations" || path.startsWith("/api/admin/integrations/")) {
       return handleIntegrations(request, project, env, (testOnly) => importAgencyKey(Date.now(), env, fetch, testOnly));
     }
