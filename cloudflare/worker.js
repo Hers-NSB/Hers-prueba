@@ -87,7 +87,7 @@ export async function importAgencyKey(instant, env, send = fetch, testOnly = fal
   const getReport = async (report, options = {}) => {
     const response = await send(`${api}/${report}?${new URLSearchParams({ ...period, ...options })}`, {
       method: "GET",
-      redirect: "error",
+      redirect: "manual",
       headers: { "x-public-api-key": apiKey, Accept: "application/json" },
     });
     if (!response.ok) throw new Error(`AgencyKey ${report}: HTTP ${response.status}`);
@@ -107,7 +107,7 @@ export async function importAgencyKey(instant, env, send = fetch, testOnly = fal
   const key = env.SUPABASE_SYNC_KEY;
   const response = await send(`${project}/rest/v1/rpc/finance_import_agencykey`, {
     method: "POST",
-    redirect: "error",
+    redirect: "manual",
     headers: { apikey: key, "Content-Type": "application/json",
       ...(key.startsWith("sb_secret_") ? {} : { Authorization: `Bearer ${key}` }) },
     body: JSON.stringify(batch),
