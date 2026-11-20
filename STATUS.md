@@ -3,9 +3,8 @@
 Entorno web de pruebas de HERS. El panel de administración incluye Finanzas e Integraciones.
 
 - Fecha: 2026-11-20.
-- [PR #3](https://github.com/Hers-NSB/Hers-prueba/pull/3), rama `feat/finanzas-dashboard`. El resumen de Finanzas está desplegado en pruebas. El PR incorpora la paleta del panel, formularios centrados y el reparto de ventas en Empleados.
-- [Cloudflare de pruebas](https://hers-prueba.datosenviados07.workers.dev/). El disparador diario está configurado para las 11:00 UTC.
-- AgencyKey verificado en Cloudflare de pruebas. Supabase recibió 5 registros por modelo y 10 atribuciones del 19 de noviembre de 2026. El arreglo del Worker está en el [PR #2](https://github.com/Hers-NSB/Hers-prueba/pull/2).
-- El panel de equipo incluye el inicio de sesión. Las cuentas de administrador y sus contraseñas se gestionan desde Supabase.
-- Finanzas → Empleados calcula el reparto sobre el total CRM de todos los modelos del período. Cada revisión guarda los porcentajes y su fecha de vigencia. Los porcentajes pueden sumar hasta 100 %.
+- Integrado en `main`. [PR #2 de AgencyKey](https://github.com/Hers-NSB/Hers-prueba/pull/2) y [PR #3 de Finanzas](https://github.com/Hers-NSB/Hers-prueba/pull/3).
+- [Cloudflare de pruebas](https://hers-prueba.datosenviados07.workers.dev/) sirve el panel actualizado. El disparador diario de AgencyKey está configurado para las 11:00 UTC.
+- Supabase de pruebas tiene aplicada la migración `20261120211652_finance_distribution_plans`. Se verificaron la importación de AgencyKey y los permisos del reparto.
+- Finanzas → Empleados calcula el reparto sobre el total CRM de todos los modelos del período. Cada revisión conserva los porcentajes y su fecha de vigencia.
 - Siguiente paso: configurar los porcentajes de Chatters, Modelos, Dropper y Agencia HERS desde Empleados.
