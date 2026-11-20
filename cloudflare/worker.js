@@ -134,22 +134,39 @@ function isoDay(value) {
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 
-function readEarningsNet(chart) {
-  // AgencyKey proxies the earnings chart. Some responses wrap its categories in data.
-  const total = chart?.total ?? chart?.data?.total;
-  for (const value of [total?.net, total?.total]) {
-    if (Number.isFinite(value)) return value;
-    if (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim())) {
-      const amount = Number(value);
-      if (Number.isFinite(amount)) return amount;
-    }
+function money(value) {
+  if (Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim())) {
+    const amount = Number(value);
+    if (Number.isFinite(amount)) return amount;
   }
+  return null;
+}
+
+function readEarningsNet(chart) {
+  const list = Array.isArray(chart) ? chart : Array.isArray(chart?.data) ? chart.data : null;
+  const totalRows = list?.filter((row) => [row?.type, row?.key, row?.name, row?.id].includes("total")) ?? [];
+  const selected = totalRows.length === 1 ? totalRows[0] : null;
+  const candidates = [chart?.total, chart?.data?.total, selected];
+  for (const total of candidates) {
+    const net = money(total?.net) ?? money(total?.total);
+    if (net !== null) return net;
+  }
+  if (list?.length === 1) {
+    const net = money(list[0]?.net);
+    if (net !== null) return net;
+  }
+  return null;
+}
+
+function describeEarnings(chart) {
   const fields = (value) => {
-    if (Array.isArray(value)) return "lista";
     if (!value || typeof value !== "object") return value == null ? "ausente" : typeof value;
     return Object.keys(value).filter((key) => /^[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(key)).slice(0, 8).join(", ") || "objeto vacío";
   };
-  throw new Error(`AgencyKey no devolvió un importe neto válido · raíz: ${fields(chart)} · data: ${fields(chart?.data)} · total: ${fields(total)}`);
+  const list = Array.isArray(chart) ? chart : Array.isArray(chart?.data) ? chart.data : null;
+  if (list) return list.length ? `lista de ${list.length} · campos: ${fields(list[0])}` : "lista vacía";
+  return `raíz: ${fields(chart)} · data: ${fields(chart?.data)} · total: ${fields(chart?.total ?? chart?.data?.total)}`;
 }
 
 export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
@@ -179,14 +196,31 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   const params = { startDate: fromDate.slice(0, 19).replace("T", " "),
     endDate: (day === currentDay ? new Date(instant).toISOString() : toDate).slice(0, 19).replace("T", " "), withTotal: "true" };
   const sales = [];
+  const invalid = new Map();
   const entries = [...creators.values()];
   for (let i = 0; i < entries.length; i += 5) {
     const batch = await Promise.all(entries.slice(i, i + 5).map(async (row) => {
-      const result = await queryAgencyKey(key, `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`, params, send);
-      const net = readEarningsNet(result);
+      const path = `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`;
+      const chart = await queryAgencyKey(key, path, params, send);
+      let net = readEarningsNet(chart);
+      if (net === null) {
+        const totalChart = await queryAgencyKey(key, path, { ...params, type: "total" }, send);
+        net = readEarningsNet(totalChart);
+        if (net === null) {
+          const original = describeEarnings(chart);
+          const directed = describeEarnings(totalChart);
+          const format = original === directed ? original : `${original} / total: ${directed}`;
+          invalid.set(format, (invalid.get(format) ?? 0) + 1);
+          return null;
+        }
+      }
       return { creator_key: row.id, creator_name: row.name, net };
     }));
-    sales.push(...batch);
+    sales.push(...batch.filter(Boolean));
+  }
+  if (invalid.size) {
+    const formats = [...invalid].map(([shape, count]) => `${count} × ${shape}`).join(" | ");
+    throw new Error(`AgencyKey no devolvió un importe neto válido para ${entries.length - sales.length} de ${entries.length} modelos · ${formats}`);
   }
   if (!testOnly) await bridge(project, env, "import", { p_day: day, p_sales: sales, p_attributions: null }, send);
   return { day, creators: sales.length, attributions: 0 };

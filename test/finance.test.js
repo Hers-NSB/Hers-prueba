@@ -113,3 +113,21 @@ test("importa solo el neto verificado y lo guarda en un lote sin reemplazar atri
   assert.deepEqual(await importNet("2026-11-21", env, () => assert.fail("No consultar en fechas futuras"),
     false, Date.parse("2026-11-20T11:00:00Z")), { day: "2026-11-21", future: true });
 });
+
+test("consulta el total explícito cuando el gráfico devuelve una lista y rechaza listas vacías", async () => {
+  const env = { HERS_INTEGRATIONS_SECRET: Buffer.alloc(32).toString("base64"), SUPABASE_PUBLISHABLE_KEY: "fixture", AGENCYKEY_API_KEY: "fixture" };
+  const instant = Date.parse("2026-11-20T11:00:00Z");
+  function send(rows) {
+    return async (url, options) => {
+      if (url.includes("/v1/onlyfans/creators?")) return Response.json({
+        data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
+      });
+      if (url.includes("/earnings/chart?")) return Response.json(new URL(url).searchParams.has("type") ? rows : []);
+      assert.equal(JSON.parse(options.body).p_action, "agencykey", "La prueba nunca escribe ventas");
+      return Response.json(null);
+    };
+  }
+  const result = await importNet("2026-11-19", env, send([{ type: "total", net: "28.00", gross: 35 }]), true, instant);
+  assert.equal(result.creators, 1);
+  await assert.rejects(importNet("2026-11-19", env, send([]), true, instant), /1 de 1 modelos.*lista vacía/);
+});
