@@ -1,8 +1,11 @@
 # Estado de Hers-prueba
 
-Repositorio de pruebas de HERS. El primer cambio funcional se centra en Finanzas e incorpora los archivos de la página principal como base.
+Entorno web de pruebas de HERS. El panel de administración incluye Finanzas e Integraciones.
 
 - Fecha: 2026-11-20.
-- Alcance: resumen financiero, gastos e inversión, modelos por plataforma y comisiones sobre ventas atribuidas por AgencyKey.
-- Entorno previsto: Supabase «Hers prueba» y Cloudflare.
-- Siguiente paso: incorporar los archivos del proyecto en una rama, verificar la compilación y abrir el pull request.
+- Rama: `finanzas-pruebas`. [PR #1](https://github.com/Hers-NSB/Hers-prueba/pull/1).
+- [Cloudflare de pruebas](https://hers-prueba.datosenviados07.workers.dev/). El disparador diario está configurado para las 11:00 UTC.
+- Integraciones permite guardar credenciales cifradas y probar o ejecutar la sincronización de AgencyKey.
+- Comprobaciones: compilación de Vite, ocho pruebas de Node y validación en Supabase del acceso al RPC y de la respuesta sin secretos.
+- El panel de equipo incluye el inicio de sesión. Las cuentas de administrador y sus contraseñas se gestionan desde Supabase.
+- Siguiente paso: entrar con una cuenta administradora de «Hers prueba», guardar la clave de AgencyKey desde Integraciones y ejecutar **Probar conexión**. Sigue pendiente validar el origen público de los importes brutos y netos por modelo.

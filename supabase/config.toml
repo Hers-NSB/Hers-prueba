@@ -1,0 +1,4 @@
+project_id = "hers-prueba"
+
+[functions.team-login]
+verify_jwt = false
