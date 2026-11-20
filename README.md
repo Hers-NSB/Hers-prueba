@@ -1,6 +1,6 @@
 # HERS · Entorno de pruebas
 
-La aplicación de pruebas usa React, Vite, Supabase y Cloudflare Workers. El panel de administración incluye Finanzas e Integraciones. [Abrir HERS de pruebas](https://hers-prueba.datosenviados07.workers.dev/).
+La aplicación de pruebas usa React, Vite, Supabase y Cloudflare Workers. El panel de administración incluye Finanzas y Conectores. [Abrir HERS de pruebas](https://hers-prueba.datosenviados07.workers.dev/).
 
 ## Desarrollo
 
@@ -23,22 +23,20 @@ La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Postu
 
 - **Resumen** muestra ingresos, gastos, utilidad y ventas del CRM, con filtros de fecha, modelo y plataforma. **Movimientos** permite registrar operaciones manuales en USD.
 - **Empleados** permite agregar chatters y modelos y asignar porcentajes a cada persona, a Dropper y a Agencia HERS. Selecciona **Vigente desde** y guarda la regla. Cada revisión queda en el historial.
-- El reparto aplica a cada día la regla vigente y usa como base el total CRM importado de todos los modelos. Solo el filtro de fechas afecta este cálculo. Los porcentajes admiten dos decimales, pueden sumar hasta el 100 % y el panel muestra el importe sin asignar.
+- El reparto aplica a cada día la regla vigente sobre el neto importado de todos los modelos. Los porcentajes admiten dos decimales y pueden sumar hasta el 100 %. La parte sin asignar va a la bóveda de Agencia HERS.
 - **Comisiones** muestra el cálculo sobre las ventas atribuidas y el historial de sus porcentajes. El resultado operativo descuenta comisiones y gastos. El resultado después de inversión también descuenta la inversión.
 
 ## Cloudflare y AgencyKey
 
-Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js`. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations` y `/api/admin/integrations/*`. El trigger usa `0 11 * * *` (11:00 UTC). La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
+Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js`. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations` y `/api/admin/integrations/*`. La sincronización se realiza al pulsar **Actualizar** en Finanzas. El Worker se publica sin disparadores programados. La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
 
-En **Administrador → Integraciones**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda la clave API de una cuenta con acceso de lectura y permisos `analytics.creators.viewList` y `analytics.employees.viewList`. Usa **Probar conexión** para consultar ambos reportes del último día cerrado sin guardar ventas. **Sincronizar ahora** importa ese mismo día. El disparador diario usa la misma credencial.
+En **Administrador → Conectores**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda una clave API con acceso a los modelos, sus estadísticas de ingresos de OnlyFans y al reporte de empleados. **Probar conexión** consulta el último día cerrado sin guardar ventas. **Actualizar** en Finanzas sincroniza las fechas elegibles del período seleccionado.
 
 El panel permite guardar o reemplazar claves API, tokens y contraseñas de otros servicios. El Worker usa actualmente la credencial de AgencyKey. La lista de credenciales devuelve el nombre, el tipo y la fecha de actualización. La contraseña de acceso a HERS pertenece a Supabase Auth.
 
 La configuración inicial del Worker requiere `HERS_INTEGRATIONS_SECRET` (32 bytes aleatorios en Base64) como secreto, `SUPABASE_PUBLISHABLE_KEY` (clave publicable de «Hers prueba») como variable y el hash SHA-256 del token derivado por `bridgeToken` en `hers_private.integration_backend.token_hash`. Configura estos valores una vez por entorno mediante Cloudflare y Supabase. El secreto cifra las credenciales y permite al Worker llamar al RPC acotado de integración. Su reemplazo requiere recifrar las credenciales guardadas. Para los despliegues existentes, el Worker admite también la configuración previa de `AGENCYKEY_API_KEY` y `SUPABASE_SYNC_KEY` cuando el RPC de integración aún no está configurado.
 
-El Worker lee `GET /api/v1/public/crm/reports/creators` y `GET /api/v1/public/crm/reports/employees` con `includeCreatorBreakdown=true` para este último. El [OpenAPI de AgencyKey](https://app.agencykey.com/api/public-docs/) documenta `totalSalesSum` en ambos. El reporte de creadores entrega un monto único. Las rutas públicas proxy de OnlyFans para transacciones y ganancias tienen un esquema abierto. Falta confirmar con una llamada autorizada cuáles campos proporcionan ambos importes por día y modelo. Finanzas muestra el total del CRM como tal y señala cuándo faltan los importes brutos y netos.
-
-La importación reemplaza el día de forma atómica, con claves únicas de fecha/modelo/integrante. Actualiza la última importación correcta después de guardar ambos reportes.
+El Worker consulta los modelos accesibles y el gráfico de ingresos de OnlyFans mediante el [proxy público de AgencyKey](https://app.agencykey.com/api/public-docs/). Guarda el neto de cada modelo por día mediante una actualización transaccional. El reporte de empleados alimenta el selector de **Agregar desde AgencyKey**. Finanzas muestra un aviso cuando un importe neto está pendiente.
 
 Referencias de la vista web.
 

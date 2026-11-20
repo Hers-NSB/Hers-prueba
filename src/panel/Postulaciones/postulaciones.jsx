@@ -8,7 +8,7 @@ No usar . final en los textos ni usar el signo ¿
 Siempre usa iconos del paquete de emojis de React
 */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import {
@@ -49,9 +49,6 @@ export default function Postulaciones({ onBack = null }) {
   const [confirmApp, setConfirmApp] = useState(null);
 
   const loadApplications = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
     try {
       const { data, error: fetchError } = await supabase
         .from(APPLICATIONS_TABLE)
@@ -99,7 +96,8 @@ export default function Postulaciones({ onBack = null }) {
   }, []);
 
   useEffect(() => {
-    loadApplications();
+    const start = setTimeout(loadApplications, 0);
+    return () => clearTimeout(start);
   }, [loadApplications]);
 
   const requestDelete = (app) => setConfirmApp(app);
@@ -202,7 +200,7 @@ export default function Postulaciones({ onBack = null }) {
           <div className="postulaciones-actions">
             <button
               className="postulaciones-btn postulaciones-btn--outline"
-              onClick={loadApplications}
+              onClick={() => { setLoading(true); setError(""); loadApplications(); }}
               disabled={loading}
             >
               <RefreshCw
@@ -371,24 +369,24 @@ function ApplicationDetail({
 }) {
   const [expandedPhoto, setExpandedPhoto] = useState(null);
 
-  const availablePhotos = PHOTO_FIELDS.filter(
+  const availablePhotos = useMemo(() => PHOTO_FIELDS.filter(
     ({ key }) => app[key] && photoUrls[app[key]],
   ).map(({ key, label }) => ({
     key,
     label,
     url: photoUrls[app[key]],
-  }));
+  })), [app, photoUrls]);
 
   const expandedPhotoIndex = expandedPhoto
     ? availablePhotos.findIndex((photo) => photo.key === expandedPhoto.key)
     : -1;
 
-  const showPhoto = (index) => {
+  const showPhoto = useCallback((index) => {
     if (!availablePhotos.length) return;
     const normalizedIndex =
       (index + availablePhotos.length) % availablePhotos.length;
     setExpandedPhoto(availablePhotos[normalizedIndex]);
-  };
+  }, [availablePhotos]);
 
   useEffect(() => {
     if (!expandedPhoto) return;
@@ -405,7 +403,7 @@ function ApplicationDetail({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [expandedPhoto, expandedPhotoIndex]);
+  }, [expandedPhoto, expandedPhotoIndex, showPhoto]);
 
   return (
     <div

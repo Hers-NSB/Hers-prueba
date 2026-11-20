@@ -4,10 +4,11 @@ const base64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const bytes = (value) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 const hex = (data) => Array.from(new Uint8Array(data), (byte) => byte.toString(16).padStart(2, "0")).join("");
 
-class IntegrationError extends Error {
-  constructor(status, message) {
+export class IntegrationError extends Error {
+  constructor(status, message, code = "CON-REQUEST") {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -49,7 +50,7 @@ export async function bridge(project, env, action, data = {}, send = fetch) {
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ p_token: await bridgeToken(env.HERS_INTEGRATIONS_SECRET), p_action: action, p_data: data }),
   });
-  if (!response.ok) throw new IntegrationError(502, "El almacenamiento de integraciones no está disponible");
+  if (!response.ok) throw new IntegrationError(502, `Supabase rechazó la operación de ${action === "agencykey" ? "leer la credencial" : action === "import" ? "guardar ventas" : "Conectores"} (HTTP ${response.status})`, "SB-CON-RPC");
   return response.json();
 }
 
@@ -62,18 +63,18 @@ export async function storedAgencyKey(project, env, send = fetch) {
 
 async function admin(request, project, env, send) {
   const token = request.headers.get("Authorization");
-  if (!token?.startsWith("Bearer ") || token.length > 6144) throw new IntegrationError(401, "Inicia sesión para continuar");
+  if (!token?.startsWith("Bearer ") || token.length > 6144) throw new IntegrationError(401, "Inicia sesión para continuar", "CON-SESSION-MISSING");
   const response = await send(`${project}/auth/v1/user`, {
     redirect: "manual",
     cache: "no-store",
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, Authorization: token },
   });
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) throw new IntegrationError(401, "Vuelve a iniciar sesión");
-    throw new IntegrationError(502, "No se pudo verificar tu sesión");
+    if (response.status === 401 || response.status === 403) throw new IntegrationError(401, "Vuelve a iniciar sesión", "CON-SESSION-EXPIRED");
+    throw new IntegrationError(502, `No se pudo verificar tu sesión en Supabase (HTTP ${response.status})`, "SB-CON-AUTH");
   }
   const user = await response.json();
-  if (!user.id || user.app_metadata?.role !== "admin") throw new IntegrationError(403, "Acceso exclusivo para administradores");
+  if (!user.id || user.app_metadata?.role !== "admin") throw new IntegrationError(403, "Acceso exclusivo para administradores", "CON-ROLE");
   return user.id;
 }
 
@@ -107,16 +108,23 @@ async function readCredential(request) {
   return { service, kind, value };
 }
 
-export async function handleIntegrations(request, project, env, run, send = fetch) {
-  const json = (payload, status = 200) => Response.json(payload, { status, headers: { "Cache-Control": "no-store" } });
+export async function handleIntegrations(request, project, env, run, send = fetch, employees) {
+  const reference = crypto.randomUUID().slice(0, 12);
+  const json = (payload, status = 200) => Response.json(payload, {
+    status, headers: { "Cache-Control": "no-store", "X-HERS-Request-ID": reference },
+  });
   const route = new URL(request.url);
   const action = route.pathname.slice("/api/admin/integrations".length);
+  const fail = (status, code, message) => {
+    if (status >= 500) console.warn("Conectores", { code, reference, status });
+    return json({ error: `[${code}] ${message} · Ref. ${reference}`, code, reference }, status);
+  };
   try {
     if (!env.HERS_INTEGRATIONS_SECRET || !env.SUPABASE_PUBLISHABLE_KEY) {
-      throw new IntegrationError(503, "Integraciones aún no está configurado");
+      throw new IntegrationError(503, "Conectores aún no está configurado en el Worker", "CON-CONFIG");
     }
     if (request.headers.has("Origin") && request.headers.get("Origin") !== route.origin) {
-      throw new IntegrationError(403, "Origen no permitido");
+      throw new IntegrationError(403, "Origen no permitido", "CON-ORIGIN");
     }
     const user = await admin(request, project, env, send);
     if (request.method === "GET" && action === "") return json(await bridge(project, env, "status", {}, send));
@@ -125,17 +133,30 @@ export async function handleIntegrations(request, project, env, run, send = fetc
       const ciphertext = await seal(env.HERS_INTEGRATIONS_SECRET, service, kind, value);
       return json(await bridge(project, env, "save", { service, kind, ciphertext, updated_by: user }, send));
     }
+    if (request.method === "GET" && action === "/employees" && employees) {
+      const result = await employees();
+      if (result.skipped) throw new IntegrationError(409, "Guarda primero la clave API de AgencyKey", "AK-KEY-MISSING");
+      return json(result);
+    }
     if (request.method === "POST" && ["/test", "/sync"].includes(action)) {
-      const result = await run(action === "/test");
-      if (result.skipped) throw new IntegrationError(409, "Guarda primero la clave API de AgencyKey");
+      let day;
+      if (action === "/sync" && request.body) {
+        const raw = await request.text();
+        if (raw.length > 100) throw new IntegrationError(413, "Solicitud demasiado grande");
+        try { day = JSON.parse(raw).day; }
+        catch { throw new IntegrationError(400, "Fecha de importación inválida", "CON-DATE"); }
+        if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+          !Number.isFinite(Date.parse(day)) || new Date(day).toISOString().slice(0, 10) !== day) {
+          throw new IntegrationError(400, "Fecha de importación inválida", "CON-DATE");
+        }
+      }
+      const result = await run(action === "/test", day);
+      if (result.skipped) throw new IntegrationError(409, "Guarda primero la clave API de AgencyKey", "AK-KEY-MISSING");
       return json({ ok: true, ...result });
     }
-    return json({ error: "Operación no disponible" }, 404);
+    return fail(404, "CON-ROUTE", "Operación no disponible");
   } catch (error) {
-    if (error instanceof IntegrationError) return json({ error: error.message }, error.status);
-    const upstream = /^AgencyKey (?:creators|employees): HTTP ([1-5][0-9]{2})$/.exec(error.message);
-    return json({ error: upstream
-      ? `AgencyKey respondió HTTP ${upstream[1]}. Revisa la clave y los permisos de reportes`
-      : "La operación no se pudo completar" }, 502);
+    if (error instanceof IntegrationError) return fail(error.status, error.code, error.message);
+    return fail(502, "CON-UNEXPECTED", "La operación no se pudo completar");
   }
 }

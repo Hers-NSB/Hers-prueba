@@ -61,3 +61,14 @@ test("distingue probar conexión y sincronizar y bloquea orígenes ajenos", asyn
   }), project, env, noSync, () => assert.fail());
   assert.equal(blocked.status, 403);
 });
+
+test("devuelve el código y una referencia que se puede leer desde el panel existente", async () => {
+  const response = await handleIntegrations(new Request(base, { headers: auth }), project, env, noSync,
+    async (url) => url.endsWith("/user") ? Response.json({ id: user, app_metadata: { role: "admin" } })
+      : new Response("contenido interno que no debe llegar al panel", { status: 404 }));
+  const result = await response.json();
+  assert.equal(response.status, 502);
+  assert.equal(result.code, "SB-CON-RPC");
+  assert.equal(result.reference, response.headers.get("X-HERS-Request-ID"));
+  assert.equal(result.error, `[SB-CON-RPC] Supabase rechazó la operación de Conectores (HTTP 404) · Ref. ${result.reference}`);
+});

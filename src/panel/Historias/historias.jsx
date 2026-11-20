@@ -77,7 +77,6 @@ const ModalBloqueadoUnificado = ({
   isOpen,
   onSave,
   onCancel,
-  esBloqueado,
   setEsBloqueado,
   precioEstrellas,
   setPrecioEstrellas,
@@ -1958,7 +1957,7 @@ function App({ embedded = true, onBack = null }) {
     setFormPrecioEstrellas(0);
     setMostrarModalBloqueado(false);
     initialLoadDone.current = false;
-  }, [embedded, onBack]);
+  }, [onBack]);
 
   // ==================== RENDER ÁRBOL ====================
   const renderArbol = useMemo(() => {
@@ -2290,7 +2289,6 @@ function App({ embedded = true, onBack = null }) {
     secuencia,
     mensajes,
     mensajesMultimedia,
-    estadisticasMensajes,
     opcionesExpandidas,
     moviendoItem,
     itemIdEnMovimiento,

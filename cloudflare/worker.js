@@ -1,4 +1,4 @@
-import { bridge, handleIntegrations, storedAgencyKey } from "./integrations.js";
+import { bridge, handleIntegrations, IntegrationError, storedAgencyKey } from "./integrations.js";
 
 const api = "https://app.agencykey.com/api/v1/public/crm/reports";
 const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
@@ -15,6 +15,10 @@ function formatDay(instant, zone) {
 export function previousDay(instant, zone) {
   const current = Date.parse(`${formatDay(instant, zone)}T00:00:00Z`);
   const day = new Date(current - dayMs).toISOString().slice(0, 10);
+  return { day, ...reportPeriod(day, zone) };
+}
+
+function reportPeriod(day, zone) {
   // Locate local midnight across daylight-saving transitions.
   const midnight = (key) => {
     const approx = Date.parse(`${key}T00:00:00Z`);
@@ -28,9 +32,8 @@ export function previousDay(instant, zone) {
     return right;
   };
   return {
-    day,
     fromDate: new Date(midnight(day)).toISOString(),
-    toDate: new Date(midnight(formatDay(instant, zone)) - 1).toISOString(),
+    toDate: new Date(midnight(new Date(Date.parse(day) + dayMs).toISOString().slice(0, 10)) - 1).toISOString(),
   };
 }
 
@@ -116,6 +119,184 @@ export async function importAgencyKey(instant, env, send = fetch, testOnly = fal
   return outcome;
 }
 
+const agencyRoot = "https://app.agencykey.com/api";
+
+async function queryAgencyKey(apiKey, path, params, send, code, stage) {
+  let response;
+  try {
+    response = await send(`${agencyRoot}${path}?${new URLSearchParams(params)}`, {
+      redirect: "manual", headers: { "x-public-api-key": apiKey, Accept: "application/json" },
+    });
+  } catch {
+    throw new IntegrationError(502, `AgencyKey no respondió al consultar ${stage}`, `${code}-NETWORK`);
+  }
+  if (!response.ok) {
+    const reason = response.status === 401 || response.status === 403 ? " · Verifica los permisos de la clave" : "";
+    throw new IntegrationError(502, `AgencyKey respondió HTTP ${response.status} al consultar ${stage}${reason}`, `${code}-HTTP`);
+  }
+  try {
+    return await response.json();
+  } catch {
+    throw new IntegrationError(502, `AgencyKey devolvió una respuesta no JSON al consultar ${stage}`, `${code}-JSON`);
+  }
+}
+
+function isoDay(value) {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+}
+
+function money(value) {
+  if (Number.isFinite(value)) return value;
+  if (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim())) {
+    const amount = Number(value);
+    if (Number.isFinite(amount)) return amount;
+  }
+  return null;
+}
+
+function readEarningsNet(chart) {
+  const list = Array.isArray(chart) ? chart : Array.isArray(chart?.data) ? chart.data : null;
+  const totalRows = list?.filter((row) => [row?.type, row?.key, row?.name, row?.id].includes("total")) ?? [];
+  const selected = totalRows.length === 1 ? totalRows[0] : null;
+  const candidates = [chart?.total, chart?.data?.total, selected];
+  for (const total of candidates) {
+    const net = money(total?.net) ?? money(total?.total);
+    if (net !== null) return net;
+  }
+  if (list?.length === 1) {
+    const net = money(list[0]?.net);
+    if (net !== null) return net;
+  }
+  return null;
+}
+
+async function readTransactionsNet(key, creatorExternalId, bounds, send) {
+  const { day, fromDate, toDate, params } = bounds;
+  const path = `/v1/onlyfans/${creatorExternalId}/api2/v2/payouts/transactions`;
+  const start = Date.parse(fromDate);
+  const end = Date.parse(toDate);
+  const seen = new Map();
+  const markers = new Set();
+  let marker;
+  for (let page = 0; page < 5; page += 1) {
+    const payload = await queryAgencyKey(key, path, {
+      startDate: params.startDate, endDate: params.endDate, limit: 50,
+      ...(marker ? { marker } : {}),
+    }, send, "AK-NET-TRANSACTIONS", `las transacciones del ${day}`);
+    const result = Array.isArray(payload?.list) ? payload : payload?.data;
+    if (!Array.isArray(result?.list) || typeof result.hasMore !== "boolean") {
+      throw new IntegrationError(502, `Las transacciones del ${day} no tienen el formato esperado`, "AK-NET-TRANSACTIONS-FORMAT");
+    }
+    for (const row of result.list) {
+      const time = Date.parse(row?.createdAt ?? row?.date);
+      if (!Number.isFinite(time)) {
+        throw new IntegrationError(502, `Una transacción de la consulta del ${day} llegó sin fecha válida`, "AK-NET-TRANSACTIONS-DATE");
+      }
+      if (time < start || time > end) continue;
+      const reversed = row.status === "undo" || Boolean(row.chargebackAt || row.chargebackId);
+      const net = reversed ? 0 : money(row.net);
+      const id = row.id;
+      if (net === null || row.currency !== "USD" || (typeof id !== "string" && !Number.isSafeInteger(id)) || id === "") {
+        throw new IntegrationError(502, `Una transacción del ${day} llegó sin neto, moneda o identificador válido`, "AK-NET-TRANSACTIONS-ROW");
+      }
+      const cents = Math.round(net * 100);
+      const previous = seen.get(String(id));
+      if (!Number.isSafeInteger(cents) || (previous && (previous.cents !== cents || previous.reversed !== reversed))) {
+        throw new IntegrationError(502, `Una transacción del ${day} tiene un importe inconsistente`, "AK-NET-TRANSACTIONS-AMOUNT");
+      }
+      seen.set(String(id), { cents, reversed });
+    }
+    if (!result.hasMore) {
+      const sales = [...seen.values()].filter((row) => !row.reversed);
+      return { count: sales.length, net: sales.reduce((sum, row) => sum + row.cents, 0) / 100 };
+    }
+    const next = result.nextMarker;
+    if ((typeof next !== "string" && !Number.isSafeInteger(next)) || next === "" || markers.has(String(next))) break;
+    marker = String(next);
+    markers.add(marker);
+  }
+  throw new IntegrationError(502, `La lectura de transacciones del ${day} quedó incompleta`, "AK-NET-TRANSACTIONS-PAGE");
+}
+
+export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
+  const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
+  const currentDay = formatDay(instant, zone);
+  day ??= previousDay(instant, zone).day;
+  if (!isoDay(day)) throw new Error("Fecha de importación inválida");
+  if (day > currentDay) return { day, future: true };
+  const key = await storedAgencyKey(project, env, send);
+  if (!key) return { skipped: true };
+
+  const creators = new Map();
+  for (let page = 1; ; page += 1) {
+    const result = await queryAgencyKey(key, "/v1/onlyfans/creators", { page, limit: 100 }, send, "AK-MODELS", "los modelos");
+    if (!Array.isArray(result?.data) || !Number.isInteger(result.pagination?.pages)) throw new IntegrationError(502, "AgencyKey devolvió un formato de modelos inesperado", "AK-MODELS-FORMAT");
+    for (const row of result.data) {
+      if (!isId(row.id) || !isName(row.name) || !Number.isSafeInteger(row.creatorExternalId) || creators.has(row.id)) {
+        throw new IntegrationError(502, "AgencyKey devolvió un modelo inválido o repetido", "AK-MODELS-ROW");
+      }
+      creators.set(row.id, row);
+    }
+    if (page >= result.pagination.pages) break;
+  }
+  if (!creators.size) throw new IntegrationError(502, "AgencyKey no devolvió modelos accesibles", "AK-MODELS-EMPTY");
+
+  const period = reportPeriod(day, zone);
+  const fromDate = period.fromDate;
+  const toDate = day === currentDay ? new Date(instant).toISOString() : period.toDate;
+  const params = { startDate: fromDate.slice(0, 19).replace("T", " "),
+    endDate: toDate.slice(0, 19).replace("T", " "), withTotal: "true" };
+  const sales = [];
+  const empty = [];
+  let transactionModels = 0;
+  const entries = [...creators.values()];
+  for (let i = 0; i < entries.length; i += 5) {
+    const batch = await Promise.all(entries.slice(i, i + 5).map(async (row) => {
+      const path = `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`;
+      const chart = await queryAgencyKey(key, path, { ...params, type: "total" }, send, "AK-NET-CHART", `el gráfico de ingresos del ${day}`);
+      let net = readEarningsNet(chart);
+      if (net === null) {
+        const result = await readTransactionsNet(key, row.creatorExternalId, { day, fromDate, toDate, params }, send);
+        if (result.count === 0) empty.push(row.id);
+        transactionModels += 1;
+        net = result.net;
+      }
+      return { creator_key: row.id, creator_name: row.name, net };
+    }));
+    sales.push(...batch);
+  }
+  if (empty.length) {
+    const report = await queryAgencyKey(key, "/v1/public/crm/reports/creators",
+      { fromDate, toDate }, send, "AK-CRM", "el reporte CRM de contraste");
+    const byCreator = new Map((Array.isArray(report?.data) ? report.data : []).map((row) => [row?.creatorId, row]));
+    const unconfirmed = empty.filter((id) => {
+      const row = byCreator.get(id);
+      return money(row?.totalSalesCount) !== 0 || money(row?.totalSalesSum) !== 0;
+    }).length;
+    if (unconfirmed) {
+      throw new IntegrationError(502, `El gráfico y las transacciones no confirmaron el neto para ${unconfirmed} de ${entries.length} modelos · Día ${day} · Ventana UTC ${fromDate} a ${toDate}`, "AK-NET-EMPTY");
+    }
+  }
+  if (!testOnly) await bridge(project, env, "import", { p_day: day, p_sales: sales, p_attributions: null }, send);
+  return { day, creators: sales.length, attributions: 0, ...(testOnly ? { transactionModels,
+    netTotal: sales.reduce((sum, row) => sum + Math.round(row.net * 100), 0) / 100 } : {}) };
+}
+
+async function listEmployees(env, send = fetch, instant = Date.now()) {
+  const key = await storedAgencyKey(project, env, send);
+  if (!key) return { skipped: true };
+  const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
+  const day = formatDay(instant, zone);
+  const start = new Date(Date.parse(day) - 29 * dayMs).toISOString().slice(0, 10);
+  const result = await queryAgencyKey(key, "/v1/public/crm/reports/employees", {
+    fromDate: reportPeriod(start, zone).fromDate, toDate: new Date(instant).toISOString(),
+  }, send, "AK-EMPLOYEES", "los empleados");
+  if (!Array.isArray(result?.data)) throw new IntegrationError(502, "AgencyKey devolvió un formato de empleados inesperado", "AK-EMPLOYEES-FORMAT");
+  return { employees: result.data.filter(({ senderId, senderName }) => isId(senderId) && isName(senderName))
+    .map(({ senderId, senderName }) => ({ id: senderId, name: senderName })) };
+}
+
 export default {
   fetch(request, env) {
     const path = new URL(request.url).pathname;
@@ -126,12 +307,8 @@ export default {
       });
     }
     if (path === "/api/admin/integrations" || path.startsWith("/api/admin/integrations/")) {
-      return handleIntegrations(request, project, env, (testOnly) => importAgencyKey(Date.now(), env, fetch, testOnly));
+      return handleIntegrations(request, project, env, (testOnly, day) => importNet(day, env, fetch, testOnly), fetch, () => listEmployees(env));
     }
     return env.ASSETS.fetch(request);
-  },
-  async scheduled(event, env) {
-    const result = await importAgencyKey(event.scheduledTime, env);
-    if (!result.skipped) console.log("AgencyKey: importación correcta", result);
   },
 };
