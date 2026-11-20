@@ -1,0 +1,61 @@
+/*Importante hacer esto en mi css:
+Evitar crear !important.
+Crear comentarios del nombre de las secciones del código.
+No poner comentarios explicativos.
+Evitar poner estilos repetidos o que pisen a otros estilos. 
+Usar un nombre de estilo único para este código y evitar que se parezca a otros.
+Eliminar estilos que ya no se estén usando e incoherentes.
+Revisar siempre que el css sea coherente con su jsx 
+NO cambiar estilos y colores de cosas que no te pedi que cambiaras
+*/
+
+@media (hover: none) and (pointer: coarse) {
+  button,
+  a,
+  label,
+  [role="button"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="radio"],
+  input[type="checkbox"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .radio-option,
+  .radio-option * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus,
+  button:focus-visible,
+  a:focus,
+  a:focus-visible,
+  label:focus,
+  label:focus-visible,
+  [role="button"]:focus,
+  [role="button"]:focus-visible,
+  input[type="button"]:focus,
+  input[type="submit"]:focus,
+  input[type="reset"]:focus,
+  input[type="radio"]:focus,
+  input[type="checkbox"]:focus {
+    outline: none;
+  }
+
+  .stats__panel-body,
+  .stats__panel-body *,
+  .stats__panel-body svg,
+  .stats__panel-body svg * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .stats__panel-body:focus,
+  .stats__panel-body:focus-visible,
+  .stats__panel-body svg:focus,
+  .stats__panel-body svg:focus-visible,
+  .stats__panel-body *:focus,
+  .stats__panel-body *:focus-visible {
+    outline: none !important;
+  }
+}
