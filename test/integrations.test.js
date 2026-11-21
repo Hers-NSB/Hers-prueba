@@ -72,3 +72,14 @@ test("devuelve el código y una referencia que se puede leer desde el panel exis
   assert.equal(result.reference, response.headers.get("X-HERS-Request-ID"));
   assert.equal(result.error, `[SB-CON-RPC] Supabase rechazó la operación de Conectores (HTTP 404) · Ref. ${result.reference}`);
 });
+
+test("devuelve un error JSON cuando falla el inicio OAuth", async () => {
+  const request = new Request(`${base}/agencykey-directory/connect`, { method: "POST", headers: auth });
+  const response = await handleIntegrations(request, project, env, noSync,
+    async () => Response.json({ id: user, app_metadata: { role: "admin" } }), {
+      async begin() { throw new Error("fallo del proveedor"); },
+    });
+  assert.equal(response.status, 502);
+  assert.equal((await response.json()).code, "CON-UNEXPECTED");
+  assert.ok(response.headers.get("X-HERS-Request-ID"));
+});

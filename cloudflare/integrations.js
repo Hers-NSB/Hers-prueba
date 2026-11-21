@@ -130,7 +130,7 @@ export async function handleIntegrations(request, project, env, run, send = fetc
       throw new IntegrationError(403, "Origen no permitido", "CON-ORIGIN");
     }
     if (request.method === "GET" && action === "/agencykey-directory/callback" && directory) {
-      return directory.finish(request, project, env, send);
+      return await directory.finish(request, project, env, send);
     }
     const user = await admin(request, project, env, send);
     if (request.method === "GET" && action === "") return json(await bridge(project, env, "status", {}, send));
@@ -140,7 +140,7 @@ export async function handleIntegrations(request, project, env, run, send = fetc
       return json(await bridge(project, env, "save", { service, kind, ciphertext, updated_by: user }, send));
     }
     if (request.method === "POST" && action === "/agencykey-directory/connect" && directory) {
-      return directory.begin(request, user, env, send);
+      return await directory.begin(request, user, env, send);
     }
     if (request.method === "POST" && action === "/employees" && directory) {
       return json(await directory.sync(project, env, send));

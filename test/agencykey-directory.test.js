@@ -48,6 +48,7 @@ test("OAuth verifica el estado y la prueba PKCE antes de guardar el token cifrad
   const env = { HERS_INTEGRATIONS_SECRET: btoa("0123456789abcdef0123456789abcdef"), SUPABASE_PUBLISHABLE_KEY: "test" };
   const begin = await beginDirectory(new Request(app + route + "/connect"), owner, env, async (url, options) => {
     assert.equal(url, "https://app.agencykey.com/oauth/register");
+    assert.equal(options.redirect, "manual");
     assert.deepEqual(JSON.parse(options.body).redirect_uris, [app + route + "/callback"]);
     return Response.json({ client_id: "test-client" });
   });

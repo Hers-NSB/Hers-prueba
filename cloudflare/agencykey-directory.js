@@ -25,7 +25,7 @@ async function responseJson(response, stage) {
 }
 
 function providerOptions(options) {
-  return { ...options, redirect: "error", signal: AbortSignal.timeout(12_000) };
+  return { ...options, redirect: "manual", signal: AbortSignal.timeout(12_000) };
 }
 
 async function requestToken(parameters, send) {

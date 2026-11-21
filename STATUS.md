@@ -19,3 +19,4 @@ Entorno web de pruebas de HERS. Fecha de verificación: 2026-11-21.
 - El directorio usa OAuth de AgencyKey. La primera conexión se autoriza en **Finanzas → Empleados**. Las bajas se reflejan al consultar el directorio y conservan el historial.
 - Se verificaron ESLint, 21 pruebas de JavaScript, la compilación y la prueba SQL con reversión sobre Supabase de pruebas.
 - Supabase de pruebas tiene las migraciones `20261121223206` y `20261121223243`. Siguiente comprobación: autorizar AgencyKey con una cuenta con acceso al directorio completo y abrir Empleados.
+- La prueba OAuth del PR #8 encontró un modo de redirección incompatible con Workers. El ajuste se verificó en el runtime local de Cloudflare. Pasaron ESLint y 22 pruebas.
