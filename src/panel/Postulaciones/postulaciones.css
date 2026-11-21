@@ -1,14 +1,3 @@
-/*Importante hacer esto en mi css:
-Evitar crear !important.
-Crear comentarios del nombre de las secciones del código.
-No poner comentarios explicativos.
-Evitar poner estilos repetidos o que pisen a otros estilos. 
-Usar un nombre de estilo único para este código y evitar que se parezca a otros.
-Eliminar estilos que ya no se estén usando e incoherentes.
-Revisar siempre que el css sea coherente con su jsx 
-NO cambiar estilos y colores de cosas que no te pedi que cambiaras
-*/
-
 .postulaciones-module {
   min-height: 100%;
   background: var(--post-bg);
@@ -72,7 +61,6 @@ NO cambiar estilos y colores de cosas que no te pedi que cambiaras
   align-items: center;
   gap: 9px;
 }
-/* Estilos independientes del módulo de Postulaciones. */
 .postulaciones-error,
 .postulaciones-loading,
 .postulaciones-empty {
@@ -654,7 +642,6 @@ NO cambiar estilos y colores de cosas que no te pedi que cambiaras
   border-top: 1px solid var(--post-border);
 }
 
-/* Superficies propias del módulo: no dependen de AdminPanel. */
 .postulaciones-panel {
   background: var(--post-bg);
   color: var(--post-text);

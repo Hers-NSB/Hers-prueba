@@ -19,7 +19,6 @@ export function previousDay(instant, zone) {
 }
 
 function reportPeriod(day, zone) {
-  // Locate local midnight across daylight-saving transitions.
   const midnight = (key) => {
     const approx = Date.parse(`${key}T00:00:00Z`);
     let left = approx - dayMs;

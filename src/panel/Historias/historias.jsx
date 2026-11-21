@@ -1,13 +1,3 @@
-/*Importante hacer esto en mi jsx:
-Evitar y elminar funciones repetidas.
-Crear comentarios del nombre de las secciones del código.
-No poner comentarios explicativos.
-Eliminar partes del código que no se estén usando.
-Evitar y eliminar tener código incoherente.
-No usar . final en los textos ni usar el signo ¿
-Siempre usa iconos del paquete de emojis de React
-*/
-
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import "./historias.css";
@@ -36,7 +26,6 @@ import {
   FaPlusCircle,
 } from "react-icons/fa";
 
-// ==================== COMPONENTE BOTÓN CON CARGA ====================
 const BotonConCarga = ({
   onClick,
   cargando,
@@ -72,7 +61,6 @@ const BotonConCarga = ({
   </button>
 );
 
-// ==================== COMPONENTE MODAL BLOQUEADO UNIFICADO ====================
 const ModalBloqueadoUnificado = ({
   isOpen,
   onSave,
@@ -143,7 +131,6 @@ const ModalBloqueadoUnificado = ({
   );
 };
 
-// ==================== COMPONENTE SELECTOR MULTIMEDIA ====================
 const SelectorMultimedia = ({
   videos,
   fotos,
@@ -217,7 +204,6 @@ const SelectorMultimedia = ({
   );
 };
 
-// ==================== COMPONENTE MENSAJE FORM ====================
 const MensajeForm = ({
   mensajeEn,
   setMensajeEn,
@@ -325,9 +311,7 @@ const MensajeForm = ({
   );
 };
 
-// ==================== APP PRINCIPAL ====================
 function App({ embedded = true, onBack = null }) {
-  // ==================== ESTADOS PRINCIPALES ====================
   const [historias, setHistorias] = useState([]);
   const [historiaActual, setHistoriaActual] = useState(null);
   const [mensajes, setMensajes] = useState([]);
@@ -339,26 +323,22 @@ function App({ embedded = true, onBack = null }) {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const initialLoadDone = useRef(false);
 
-  // ==================== MULTIMEDIA ====================
   const [videosDisponibles, setVideosDisponibles] = useState([]);
   const [fotosDisponibles, setFotosDisponibles] = useState([]);
   const [multimediaSeleccionada, setMultimediaSeleccionada] = useState([]);
   const [mensajesMultimedia, setMensajesMultimedia] = useState({});
   const [estadisticasMensajes, setEstadisticasMensajes] = useState({});
 
-  // ==================== ESTADÍSTICAS DE ESTRELLAS POR SECUENCIA ====================
   const [estadisticasCompras, setEstadisticasCompras] = useState({
     totalEstrellas: 0,
     usuarios: [],
   });
 
-  // ==================== OPCIONES ====================
   const [mostrarFormularioOpcion, setMostrarFormularioOpcion] = useState(false);
   const [opcionesConfig, setOpcionesConfig] = useState([]);
   const [opcionEditando, setOpcionEditando] = useState(null);
   const [guardandoOpciones, setGuardandoOpciones] = useState(false);
 
-  // ==================== EDITAR MENSAJE ====================
   const [editandoMensaje, setEditandoMensaje] = useState(null);
   const [editMensajeEn, setEditMensajeEn] = useState("");
   const [editMensajeEs, setEditMensajeEs] = useState("");
@@ -369,20 +349,16 @@ function App({ embedded = true, onBack = null }) {
   const [mostrarEditor, setMostrarEditor] = useState(false);
   const [cargandoEditor, setCargandoEditor] = useState(false);
 
-  // ==================== EDITAR HISTORIA ====================
   const [editandoHistoria, setEditandoHistoria] = useState(null);
   const [editTituloEn, setEditTituloEn] = useState("");
   const [editTituloEs, setEditTituloEs] = useState("");
   const [mostrarEditorHistoria, setMostrarEditorHistoria] = useState(false);
   const [guardandoHistoria, setGuardandoHistoria] = useState(false);
 
-  // ==================== CONFIRMACIONES ====================
   const [confirmarEliminacion, setConfirmarEliminacion] = useState(null);
 
-  // ==================== UI - ÁRBOL ====================
   const [opcionesExpandidas, setOpcionesExpandidas] = useState({});
 
-  // ==================== ESTADOS DE GUARDADO ====================
   const [guardandoMensaje, setGuardandoMensaje] = useState(false);
   const [guardandoEdicionMensaje, setGuardandoEdicionMensaje] = useState(false);
   const [eliminandoItem, setEliminandoItem] = useState(false);
@@ -390,36 +366,28 @@ function App({ embedded = true, onBack = null }) {
   const [itemIdEnMovimiento, setItemIdEnMovimiento] = useState(null);
   const [itemIdEnEliminacion, setItemIdEnEliminacion] = useState(null);
 
-  // ==================== MODAL DE MENSAJE COMPLETO ====================
   const [mensajeCompleto, setMensajeCompleto] = useState(null);
   const [mostrarMensajeCompleto, setMostrarMensajeCompleto] = useState(false);
   const [cargandoMensajeCompleto, setCargandoMensajeCompleto] = useState(false);
 
-  // ==================== CARGA DE HISTORIA ====================
   const [cargandoHistoria, setCargandoHistoria] = useState(false);
 
-  // ==================== ESTADOS BLOQUEADO ====================
-  // Estado para el formulario de mensaje
   const [formEsBloqueado, setFormEsBloqueado] = useState(false);
   const [formPrecioEstrellas, setFormPrecioEstrellas] = useState(0);
 
-  // Estado para opciones
   const [opcionEsBloqueado, setOpcionEsBloqueado] = useState(false);
   const [opcionPrecioEstrellas, setOpcionPrecioEstrellas] = useState(0);
   const [opcionIndex, setOpcionIndex] = useState(null);
   const [opcionMensajeIndex, setOpcionMensajeIndex] = useState(null);
 
-  // Estado para mensaje completo
   const [completoEsBloqueado, setCompletoEsBloqueado] = useState(false);
   const [completoPrecioEstrellas, setCompletoPrecioEstrellas] = useState(0);
   const [completoMensajeId, setCompletoMensajeId] = useState(null);
 
-  // Modal
   const [mostrarModalBloqueado, setMostrarModalBloqueado] = useState(false);
   const [modoBloqueado, setModoBloqueado] = useState("formulario");
   const bloqueadoOriginalRef = useRef({});
 
-  // ==================== FUNCIONES DE CARGA ====================
   const cargarHistorias = useCallback(async () => {
     const { data, error } = await supabase.from("historias").select("*");
 
@@ -606,7 +574,6 @@ function App({ embedded = true, onBack = null }) {
     }
   }, []);
 
-  // ==================== VERIFICAR MULTIMEDIA EN USO ====================
   const verificarMultimediaEnUso = useCallback(
     (fileUniqueId, mensajeIdIgnorar = null) => {
       if (!fileUniqueId) return false;
@@ -625,7 +592,6 @@ function App({ embedded = true, onBack = null }) {
     [mensajesMultimedia],
   );
 
-  // ==================== RECARGAR TODO ====================
   const recargarTodo = useCallback(
     async (historiaId, mensajesIds = null) => {
       setCargandoHistoria(true);
@@ -668,7 +634,6 @@ function App({ embedded = true, onBack = null }) {
     ],
   );
 
-  // ==================== EFECTOS ====================
   useEffect(() => {
     if (!initialLoadDone.current) {
       initialLoadDone.current = true;
@@ -677,7 +642,6 @@ function App({ embedded = true, onBack = null }) {
     }
   }, [cargarHistorias, cargarMultimediaDisponible]);
 
-  // ==================== CREAR HISTORIA ====================
   const crearHistoria = useCallback(
     async (e) => {
       e.preventDefault();
@@ -711,7 +675,6 @@ function App({ embedded = true, onBack = null }) {
     [tituloEn, tituloEs, cargarHistorias],
   );
 
-  // ==================== SELECCIONAR HISTORIA ====================
   const seleccionarHistoria = useCallback(
     async (historia) => {
       setHistoriaActual(historia);
@@ -726,7 +689,6 @@ function App({ embedded = true, onBack = null }) {
     [recargarTodo],
   );
 
-  // ==================== ELIMINAR HISTORIA ====================
   const eliminarHistoria = useCallback(
     async (historiaId) => {
       setEliminandoItem(true);
@@ -765,7 +727,6 @@ function App({ embedded = true, onBack = null }) {
     [historiaActual, cargarHistorias],
   );
 
-  // ==================== ELIMINAR MENSAJE INDIVIDUAL ====================
   const eliminarMensajeIndividual = useCallback(
     async (mensajeId, secuenciaId) => {
       setEliminandoItem(true);
@@ -804,7 +765,6 @@ function App({ embedded = true, onBack = null }) {
     [secuencia, historiaActual, recargarTodo],
   );
 
-  // ==================== ELIMINAR OPCIÓN COMPLETA ====================
   const eliminarOpcionCompleta = useCallback(
     async (opcionId) => {
       setEliminandoItem(true);
@@ -855,7 +815,6 @@ function App({ embedded = true, onBack = null }) {
     [secuencia, historiaActual, recargarTodo],
   );
 
-  // ==================== MOVER MENSAJE ====================
   const moverMensaje = useCallback(
     async (secuenciaId, direccion) => {
       setMoviendoItem(true);
@@ -901,7 +860,6 @@ function App({ embedded = true, onBack = null }) {
     [secuencia],
   );
 
-  // ==================== MOVER MENSAJE DENTRO DE UNA OPCIÓN ====================
   const moverMensajeOpcion = useCallback(
     async (opcionId, secuenciaId, direccion) => {
       setMoviendoItem(true);
@@ -958,7 +916,6 @@ function App({ embedded = true, onBack = null }) {
     [secuencia],
   );
 
-  // ==================== FUNCIONES PARA ABRIR MODAL BLOQUEADO ====================
 
   const abrirBloqueadoFormulario = useCallback(() => {
     bloqueadoOriginalRef.current = {
@@ -1015,7 +972,6 @@ function App({ embedded = true, onBack = null }) {
     setMostrarModalBloqueado(true);
   }, []);
 
-  // ==================== FUNCIONES PARA GUARDAR BLOQUEADO ====================
 
   const guardarBloqueadoFormulario = useCallback(() => {
     setMostrarModalBloqueado(false);
@@ -1119,11 +1075,9 @@ function App({ embedded = true, onBack = null }) {
     bloqueadoOriginalRef.current = {};
   }, [modoBloqueado]);
 
-  // ==================== GUARDAR MENSAJE ====================
   const guardarMensaje = useCallback(async () => {
     if (!historiaActual) return;
 
-    // Verificar duplicados de mensaje
     if (mensajeEn.trim() || mensajeEs.trim()) {
       const mensajesExistentes = mensajes.filter(
         (m) => !m.mensaje_en?.startsWith("[OPCION]"),
@@ -1145,7 +1099,6 @@ function App({ embedded = true, onBack = null }) {
       }
     }
 
-    // Verificar multimedia en uso
     for (const item of multimediaSeleccionada) {
       if (verificarMultimediaEnUso(item.file_unique_id)) {
         return;
@@ -1252,7 +1205,6 @@ function App({ embedded = true, onBack = null }) {
     [mensajeEn, mensajeEs, multimediaSeleccionada, guardarMensaje],
   );
 
-  // ==================== EDITAR HISTORIA ====================
   const guardarEdicionHistoria = useCallback(
     async (e) => {
       e.preventDefault();
@@ -1293,7 +1245,6 @@ function App({ embedded = true, onBack = null }) {
     ],
   );
 
-  // ==================== EDITAR MENSAJE ====================
   const iniciarEdicion = useCallback(
     async (mensaje) => {
       if (!mensaje?.id) {
@@ -1352,7 +1303,6 @@ function App({ embedded = true, onBack = null }) {
         (m) => m.file_unique_id,
       );
 
-      // Desasociar multimedia eliminada
       for (const fileUniqueId of existentesFileUniqueIds) {
         if (!nuevosFileUniqueIds.includes(fileUniqueId)) {
           await supabase
@@ -1363,7 +1313,6 @@ function App({ embedded = true, onBack = null }) {
         }
       }
 
-      // Asociar multimedia nueva
       for (let i = 0; i < editMultimediaSeleccionada.length; i++) {
         const item = editMultimediaSeleccionada[i];
         const existe = multimediaExistente.some(
@@ -1426,7 +1375,6 @@ function App({ embedded = true, onBack = null }) {
     recargarTodo,
   ]);
 
-  // ==================== OPCIONES CONFIG ====================
   const agregarOpcionConfig = useCallback(() => {
     setOpcionesConfig((prev) => [
       ...prev,
@@ -1562,7 +1510,6 @@ function App({ embedded = true, onBack = null }) {
     });
   }, []);
 
-  // ==================== GUARDAR OPCIONES ====================
   const guardarOpcionesCompletas = useCallback(async () => {
     if (!historiaActual || opcionesConfig.length === 0) return;
     setGuardandoOpciones(true);
@@ -1699,7 +1646,6 @@ function App({ embedded = true, onBack = null }) {
     }
   }, [historiaActual, opcionesConfig, secuencia, recargarTodo]);
 
-  // ==================== ACTUALIZAR OPCIÓN EXISTENTE ====================
   const actualizarOpcionExistente = useCallback(async () => {
     if (!historiaActual || !opcionEditando || opcionesConfig.length === 0)
       return;
@@ -1821,7 +1767,6 @@ function App({ embedded = true, onBack = null }) {
     }
   }, [historiaActual, opcionEditando, opcionesConfig, secuencia, recargarTodo]);
 
-  // ==================== EDITAR OPCIÓN EXISTENTE ====================
   const editarOpcionExistente = useCallback(
     async (item) => {
       try {
@@ -1883,7 +1828,6 @@ function App({ embedded = true, onBack = null }) {
     [secuencia, mensajes, cargarMultimediaDeMensaje],
   );
 
-  // ==================== TOGGLE MULTIMEDIA ====================
   const toggleMultimedia = useCallback(
     (item, tipo, coleccion, setColeccion, mensajeIdIgnorar = null) => {
       if (verificarMultimediaEnUso(item.file_unique_id, mensajeIdIgnorar)) {
@@ -1914,7 +1858,6 @@ function App({ embedded = true, onBack = null }) {
     [verificarMultimediaEnUso],
   );
 
-  // ==================== VER MENSAJE COMPLETO ====================
   const verMensajeCompleto = useCallback(
     async (mensaje) => {
       if (!mensaje?.id) return;
@@ -1936,7 +1879,6 @@ function App({ embedded = true, onBack = null }) {
     [cargarEstadisticasParaMensajes, cargarMultimediaParaMensajes],
   );
 
-  // ==================== LOGOUT ====================
   const logout = useCallback(() => {
     if (onBack) {
       onBack();
@@ -1959,7 +1901,6 @@ function App({ embedded = true, onBack = null }) {
     initialLoadDone.current = false;
   }, [onBack]);
 
-  // ==================== RENDER ÁRBOL ====================
   const renderArbol = useMemo(() => {
     if (secuencia.length === 0) {
       return (
@@ -2300,10 +2241,8 @@ function App({ embedded = true, onBack = null }) {
     editarOpcionExistente,
   ]);
 
-  // ==================== RENDER MODALES ====================
   const renderModales = () => (
     <>
-      {/* CONFIRMACIÓN */}
       {confirmarEliminacion && (
         <div className="historias-confirm-overlay">
           <div className="historias-confirm-modal">
@@ -2343,7 +2282,6 @@ function App({ embedded = true, onBack = null }) {
         </div>
       )}
 
-      {/* MENSAJE COMPLETO */}
       {mostrarMensajeCompleto && mensajeCompleto && (
         <div
           className="historias-mensaje-completo-overlay"
@@ -2504,7 +2442,6 @@ function App({ embedded = true, onBack = null }) {
         </div>
       )}
 
-      {/* EDITOR MENSAJE */}
       {mostrarEditor && (
         <div className="historias-editor-mensaje-overlay">
           <div className="historias-editor-mensaje-modal">
@@ -2603,7 +2540,6 @@ function App({ embedded = true, onBack = null }) {
         </div>
       )}
 
-      {/* EDITOR HISTORIA */}
       {mostrarEditorHistoria && (
         <div className="historias-editor-historia-overlay">
           <div className="historias-editor-historia-modal">
@@ -2658,7 +2594,6 @@ function App({ embedded = true, onBack = null }) {
         </div>
       )}
 
-      {/* FORMULARIO OPCIONES */}
       {mostrarFormularioOpcion && (
         <div className="historias-editor-opcion-overlay">
           <div className="historias-editor-opcion-modal">
@@ -3030,7 +2965,6 @@ function App({ embedded = true, onBack = null }) {
         </div>
       )}
 
-      {/* MODAL BLOQUEADO UNIFICADO - Formulario */}
       {modoBloqueado === "formulario" && (
         <ModalBloqueadoUnificado
           isOpen={mostrarModalBloqueado}
@@ -3045,7 +2979,6 @@ function App({ embedded = true, onBack = null }) {
         />
       )}
 
-      {/* MODAL BLOQUEADO UNIFICADO - Completo */}
       {modoBloqueado === "completo" && (
         <ModalBloqueadoUnificado
           isOpen={mostrarModalBloqueado}
@@ -3060,7 +2993,6 @@ function App({ embedded = true, onBack = null }) {
         />
       )}
 
-      {/* MODAL BLOQUEADO UNIFICADO - Mensaje de opción existente */}
       {modoBloqueado === "opcion" && (
         <ModalBloqueadoUnificado
           isOpen={mostrarModalBloqueado}
@@ -3075,7 +3007,6 @@ function App({ embedded = true, onBack = null }) {
         />
       )}
 
-      {/* MODAL BLOQUEADO UNIFICADO - Mensaje nuevo de opción */}
       {modoBloqueado === "opcionTemp" && (
         <ModalBloqueadoUnificado
           isOpen={mostrarModalBloqueado}
@@ -3092,7 +3023,6 @@ function App({ embedded = true, onBack = null }) {
     </>
   );
 
-  // ==================== RENDER ====================
   return (
     <div className="historias-app admin-function-standalone-page">
       {renderModales()}

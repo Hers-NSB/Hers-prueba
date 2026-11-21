@@ -18,7 +18,7 @@ El proyecto de pruebas nace vacío. Aplica las migraciones de `supabase/migratio
 
 Los archivos `test/finance.integration.sql` y `test/integrations.integration.sql` comprueban permisos, vigencias, movimientos, importaciones y el almacenamiento de credenciales. Ejecútalos en el SQL Editor de **Hers prueba**. Cada prueba revierte sus datos al terminar.
 
-La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Postulaciones, Historias, el acceso de modelos y EmailJS requieren su configuración propia en el proyecto de pruebas.
+La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las migraciones configuran la tabla de Postulaciones y su almacenamiento privado de fotos. Historias y el acceso de modelos requieren su configuración propia en el proyecto de pruebas.
 
 ## Finanzas y reparto
 

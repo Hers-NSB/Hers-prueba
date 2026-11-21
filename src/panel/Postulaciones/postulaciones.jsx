@@ -1,13 +1,3 @@
-/*Importante hacer esto en mi jsx:
-Evitar y elminar funciones repetidas.
-Crear comentarios del nombre de las secciones del código.
-No poner comentarios explicativos.
-Eliminar partes del código que no se estén usando.
-Evitar y eliminar tener código incoherente.
-No usar . final en los textos ni usar el signo ¿
-Siempre usa iconos del paquete de emojis de React
-*/
-
 import { useCallback, useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";

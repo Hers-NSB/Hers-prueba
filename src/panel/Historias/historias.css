@@ -90,7 +90,6 @@ textarea {
     var(--color-fondo);
 }
 
-/* ==================== SPINNER ==================== */
 .historias-spin {
   animation: spin 0.8s linear infinite;
 }
@@ -114,7 +113,6 @@ textarea {
   animation: spin 0.8s linear infinite;
 }
 
-/* ==================== LOGO ==================== */
 .historias-logo {
   width: 46px;
   height: 46px;
@@ -176,9 +174,7 @@ textarea {
   }
 }
 
-/* ==================== LOGIN ==================== */
 
-/* ==================== LOADING ==================== */
 .historias-loading-container {
   min-height: 100vh;
   display: flex;
@@ -202,7 +198,6 @@ textarea {
   color: var(--color-texto-claro);
 }
 
-/* ==================== HEADER ==================== */
 .historias-header {
   background: var(--color-header-bg);
   backdrop-filter: blur(12px);
@@ -281,7 +276,6 @@ textarea {
   color: var(--danger);
 }
 
-/* ==================== FORMULARIO NUEVA HISTORIA ==================== */
 .historias-form-nueva-historia {
   background: #e4d3c5;
   padding: 18px 28px;
@@ -356,7 +350,6 @@ textarea {
   color: var(--danger);
 }
 
-/* ==================== MAIN CONTENT ==================== */
 .historias-main-content {
   display: flex;
   flex: 1;
@@ -364,7 +357,6 @@ textarea {
   height: calc(100vh - 78px);
 }
 
-/* ==================== SIDEBAR ==================== */
 .historias-sidebar {
   width: 272px;
   background: var(--color-sidebar-bg);
@@ -471,7 +463,6 @@ textarea {
   font-size: 0.85rem;
 }
 
-/* ==================== CONTENIDO PRINCIPAL ==================== */
 .historias-contenido-principal {
   flex: 1;
   padding: 22px 26px;
@@ -535,7 +526,6 @@ textarea {
   height: 12px;
 }
 
-/* ==================== FORMULARIO MENSAJE ==================== */
 .historias-form-mensaje-normal {
   background: var(--color-card);
   padding: 16px 18px;
@@ -713,7 +703,6 @@ textarea {
   transform: none;
 }
 
-/* ==================== BOTÓN BLOQUEADO HEADER ==================== */
 .historias-btn-bloqueado-header {
   background: var(--color-bloqueado-bg);
   color: var(--bloqueado-text);
@@ -736,7 +725,6 @@ textarea {
   border-color: var(--color-bloqueado-gold);
 }
 
-/* ==================== PANEL DE ÁRBOL ==================== */
 .historias-panel-arbol {
   background: var(--color-card);
   border-radius: var(--r-lg);
@@ -781,7 +769,6 @@ textarea {
   min-height: 200px;
 }
 
-/* ==================== CARGA DE HISTORIA ==================== */
 .historias-cargando-historia {
   display: flex;
   flex-direction: column;
@@ -801,7 +788,6 @@ textarea {
   font-size: 0.9rem;
 }
 
-/* ==================== ÁRBOL VACÍO ==================== */
 .historias-arbol-vacio {
   text-align: center;
   padding: 50px 20px;
@@ -827,7 +813,6 @@ textarea {
   color: var(--text-faint);
 }
 
-/* ==================== NODO DEL ÁRBOL (spine visual) ==================== */
 .historias-panel-arbol-contenido {
   position: relative;
   padding-left: 4px;
@@ -1046,7 +1031,6 @@ textarea {
   cursor: not-allowed;
 }
 
-/* ==================== HIJOS DEL BOTÓN (rama con espina visual) ==================== */
 .historias-arbol-hijos {
   margin: 6px 0 10px 34px;
   padding-left: 22px;
@@ -1066,7 +1050,6 @@ textarea {
   letter-spacing: 0.04em;
 }
 
-/* ==================== RAMA DE OPCIÓN ==================== */
 .historias-arbol-rama-opcion {
   margin-bottom: 8px;
   padding: 12px 14px;
@@ -1154,7 +1137,6 @@ textarea {
   font-style: italic;
 }
 
-/* ==================== BADGES ==================== */
 .historias-badge-multimedia {
   font-size: 0.65rem;
   padding: 3px 8px;
@@ -1167,7 +1149,6 @@ textarea {
   font-weight: 600;
 }
 
-/* ==================== MODALES ==================== */
 .historias-editor-mensaje-overlay,
 .historias-editor-opcion-overlay,
 .historias-confirm-overlay,
@@ -1229,7 +1210,6 @@ textarea {
   align-items: center;
 }
 
-/* ==================== EDITOR OPCIONES ==================== */
 .historias-editor-opcion-modal {
   background: var(--color-card);
   padding: 26px;
@@ -1574,7 +1554,6 @@ textarea {
   color: var(--accent);
 }
 
-/* ==================== BOTÓN BLOQUEADO EN OPCIONES ==================== */
 .historias-btn-bloqueado-opcion,
 .historias-btn-bloqueado-opcion-item {
   background: var(--color-bloqueado-bg);
@@ -1604,9 +1583,7 @@ textarea {
   box-shadow: 0 4px 14px rgba(200, 163, 107, 0.2);
 }
 
-/* ==================== MODAL DE PRECIO PARA OPCIONES ==================== */
 
-/* ==================== EDITOR MENSAJE ==================== */
 .historias-editor-mensaje-modal {
   background: var(--color-card);
   padding: 26px;
@@ -1666,7 +1643,6 @@ textarea {
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
-/* ==================== EDITOR HISTORIA ==================== */
 .historias-editor-historia-modal {
   background: var(--color-card);
   padding: 26px;
@@ -1712,7 +1688,6 @@ textarea {
   box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
-/* ==================== EDITOR ACTIONS ==================== */
 .historias-editor-actions {
   display: flex;
   gap: 10px;
@@ -1774,7 +1749,6 @@ textarea {
   cursor: not-allowed;
 }
 
-/* ==================== MODALES DE CONFIRMACIÓN ==================== */
 .historias-confirm-modal {
   background: var(--color-card);
   padding: 32px 34px;
@@ -1860,7 +1834,6 @@ textarea {
   color: var(--accent-hover);
 }
 
-/* ==================== MENSAJE COMPLETO MODAL ==================== */
 .historias-mensaje-completo-modal {
   background: var(--color-card);
   padding: 26px;
@@ -2144,7 +2117,6 @@ textarea {
   color: var(--accent-hover);
 }
 
-/* ==================== ESTILO CLICKEABLE ==================== */
 .historias-clickeable {
   cursor: pointer;
   transition: all 0.2s var(--ease);
@@ -2154,7 +2126,6 @@ textarea {
   color: var(--accent-hover);
 }
 
-/* ==================== BOTONES CON CARGA ==================== */
 .historias-btn-con-carga {
   position: relative;
   overflow: hidden;
@@ -2212,9 +2183,7 @@ textarea {
   font-size: 0.9em;
 }
 
-/* ==================== MULTIMEDIA EN OPCIONES ==================== */
 
-/* ==================== NO SELECCIONADA ==================== */
 .historias-no-seleccionada {
   display: flex;
   align-items: center;
@@ -2247,7 +2216,6 @@ textarea {
   font-family: var(--font-body);
 }
 
-/* ==================== MODAL BLOQUEADO UNIFICADO ==================== */
 .historias-bloqueado-modal {
   background: var(--color-card);
   padding: 30px;
@@ -2372,7 +2340,6 @@ textarea {
   color: var(--danger);
 }
 
-/* ==================== CARGA DE MENSAJE COMPLETO ==================== */
 .historias-cargando-mensaje-completo,
 .historias-cargando-editor {
   display: flex;
@@ -2395,7 +2362,6 @@ textarea {
   font-size: 0.9rem;
 }
 
-/* ==================== ANIMACIONES ==================== */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -2425,7 +2391,6 @@ textarea {
   }
 }
 
-/* ==================== SCROLLBAR ==================== */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -2444,7 +2409,6 @@ textarea {
   background: var(--accent);
 }
 
-/* ==================== RESPONSIVE ==================== */
 @media (min-width: 1200px) {
   .historias-editor-opcion-modal {
     max-width: 900px;
@@ -2724,9 +2688,6 @@ textarea {
   }
 }
 
-/* ============================================================
-   AJUSTES NUMERIC INPUT SPINNERS
-   ============================================================ */
 .historias-bloqueado-modal input[type="number"],
 input[name="precio_estrellas"] {
   -moz-appearance: textfield;
@@ -2748,9 +2709,6 @@ input[name="precio_estrellas"] {
   cursor: text;
 }
 
-/* ============================================================
-   FLECHAS PARA MENSAJES DENTRO DE "MENSAJES POR OPCION"
-   ============================================================ */
 .historias-arbol-mensaje-hijo-acciones {
   display: inline-flex;
   align-items: center;
@@ -2759,9 +2717,6 @@ input[name="precio_estrellas"] {
   flex-shrink: 0;
 }
 
-/* ============================================================
-   OCULTAR ICONOS DE INFORMACION SUELTOS
-   ============================================================ */
 
 .historias-arbol-mensaje-hijo,
 .historias-arbol-mensaje-hijo-contenido {
@@ -2775,7 +2730,6 @@ input[name="precio_estrellas"] {
   display: none;
 }
 
-/* ==================== ESTADÍSTICAS DE ESTRELLAS DE LA SECUENCIA ==================== */
 .historias-estadisticas-estrellas-secuencia {
   margin: 0 0 8px;
   padding: 6px 8px;
@@ -2839,7 +2793,6 @@ input[name="precio_estrellas"] {
   font-size: 0.75rem;
 }
 
-/* ==================== CAMPOS BILINGÜES ==================== */
 .historias-bilingue-campos {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2950,7 +2903,6 @@ input[name="precio_estrellas"] {
   }
 }
 
-/* ==================== INTERFAZ BILINGÜE ==================== */
 .historias-bilingue-visual {
   display: flex;
   flex-direction: column;
