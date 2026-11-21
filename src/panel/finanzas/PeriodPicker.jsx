@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
+import { periodPresets } from "./finance";
+
 const date = (value) => new Date(value + "T00:00:00Z");
 const key = (day) => day.toISOString().slice(0, 10);
 const dayMs = 86_400_000;
@@ -33,12 +35,8 @@ export default function PeriodPicker({ value, onChange, disabled }) {
     </button>
     {open && <div id="hf-calendar" className="hf-calendar" role="group" aria-label="Calendario del período">
       <div className="hf-calendar-presets">
-        {[["Hoy", 1], ["Ayer", 0], ["Últimos 7 días", 7], ["Últimos 30 días", 30]].map(([label, days]) => {
-          const from = key(new Date(date(current).getTime() - (days ? days - 1 : 1) * dayMs));
-          const to = days ? current : from;
-          return <button type="button" key={label} aria-pressed={value.from === from && value.to === to}
-            onClick={() => select(from, to)}>{label}</button>;
-        })}
+        {periodPresets(current).map(([label, from, to]) => <button type="button" key={label}
+          aria-pressed={value.from === from && value.to === to} onClick={() => select(from, to)}>{label}</button>)}
       </div>
       <div className="hf-calendar-body">
         <div className="hf-calendar-month">

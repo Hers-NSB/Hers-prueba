@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dailyFinance, financeBreakdown, netSales, ONLYFANS, summarize } from "../src/panel/finanzas/finance.js";
+import { dailyFinance, financeBreakdown, netSales, ONLYFANS, periodPresets, summarize } from "../src/panel/finanzas/finance.js";
 import { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
@@ -104,11 +104,16 @@ test("importa solo el neto verificado y lo guarda en un lote sin reemplazar atri
       data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
     });
     if (url.includes("/42/api2/v2/earnings/chart?")) return Response.json({ data: { total: { total: "28.00", gross: 35 } } });
+    if (url.includes("/crm/reports/employees?")) {
+      assert.equal(new URL(url).searchParams.get("creatorIds"), null);
+      assert.equal(new URL(url).searchParams.get("fromDate"), "2026-11-19T04:00:00.000Z");
+      return Response.json({ data: [{ senderId: member, totalSalesSum: 12.51 }, { senderId: "__unknown__", totalSalesSum: 10 }] });
+    }
     return Response.json(null);
   }, false, Date.parse("2026-11-20T11:00:00Z"));
   assert.equal(result.creators, 1);
   const batch = JSON.parse(calls.at(-1)[1].body).p_data;
-  assert.deepEqual(batch, { p_day: "2026-11-19", p_sales: [{ creator_key: creator, creator_name: "Modelo", net: 28 }], p_attributions: null });
+  assert.deepEqual(batch, { p_day: "2026-11-19", p_sales: [{ creator_key: creator, creator_name: "Modelo", net: 28 }], p_attributions: null, p_employee_net: { [member]: 10.01 } });
   assert.equal(new URL(calls[2][0]).searchParams.get("startDate"), "2026-11-19 04:00:00");
   assert.deepEqual(await importNet("2026-11-21", env, () => assert.fail("No consultar en fechas futuras"),
     false, Date.parse("2026-11-20T11:00:00Z")), { day: "2026-11-21", future: true });
@@ -132,6 +137,7 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
         return Response.json({ list: later ? [row, reversed, chargeback, { ...row, id: "outside", createdAt: "2026-11-20T04:00:00Z" }] : [row],
           hasMore: !later, nextMarker: 123 });
       }
+      if (url.includes("/crm/reports/employees?")) return Response.json({ data: [] });
       if (url.includes("/crm/reports/creators?")) return Response.json({ data: [{ creatorId: creator, totalSalesCount: 1 }] });
       assert.equal(JSON.parse(options.body).p_action, "agencykey", "La prueba nunca escribe ventas");
       return Response.json(null);
@@ -147,4 +153,28 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
     assert.match(error.message, /1 de 1 modelos.*Día 2026-11-19/);
     return true;
   });
+});
+
+test("calcula quincenas y mes anterior cuando cambia el año y en febrero bisiesto", () => {
+  assert.deepEqual(periodPresets("2024-02-01"), [
+    ["Hoy", "2024-02-01", "2024-02-01"],
+    ["Ayer", "2024-01-31", "2024-01-31"],
+    ["Del 1-15", "2024-02-01", "2024-02-15"],
+    ["Del 16-Final de mes", "2024-02-16", "2024-02-29"],
+    ["Mes", "2024-02-01", "2024-02-29"],
+    ["Mes anterior", "2024-01-01", "2024-01-31"],
+  ]);
+  assert.deepEqual(periodPresets("2026-01-01").at(-1), ["Mes anterior", "2025-12-01", "2025-12-31"]);
+});
+
+test("el resultado resta las inversiones registradas y los gastos históricos", () => {
+  const movements = [
+    { day: "2026-11-18", kind: "expense", amount: "10.12" },
+    { day: "2026-11-18", kind: "investment", amount: "5.50" },
+    { day: "2026-11-18", kind: "income", amount: "30.62" },
+  ];
+  const [point] = dailyFinance({ movements, sales: [], commissions: [] });
+  assert.equal(point.income, 30.62);
+  assert.equal(point.expenses, 15.62);
+  assert.equal(point.profit, 15);
 });
