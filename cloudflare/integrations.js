@@ -25,7 +25,7 @@ export async function bridgeToken(secret) {
   return hex(await crypto.subtle.exportKey("raw", key));
 }
 
-async function seal(secret, service, kind, value) {
+export async function seal(secret, service, kind, value) {
   const key = await integrationKey(secret, "encryption", { name: "AES-GCM", length: 256 }, ["encrypt"]);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encrypted = await crypto.subtle.encrypt(
@@ -34,7 +34,7 @@ async function seal(secret, service, kind, value) {
   return `v1.${base64(iv)}.${base64(encrypted)}`;
 }
 
-async function unseal(secret, service, kind, value) {
+export async function unseal(secret, service, kind, value) {
   const [version, iv, encrypted] = value.split(".");
   if (version !== "v1") throw new Error("Versión de credencial desconocida");
   const key = await integrationKey(secret, "encryption", { name: "AES-GCM", length: 256 }, ["decrypt"]);
@@ -43,8 +43,11 @@ async function unseal(secret, service, kind, value) {
   ));
 }
 
-export async function bridge(project, env, action, data = {}, send = fetch) {
-  const response = await send(`${project}/rest/v1/rpc/hers_integration_worker`, {
+export const bridge = (project, env, action, data = {}, send = fetch) =>
+  workerRpc("hers_integration_worker", project, env, action, data, send);
+
+export async function workerRpc(name, project, env, action, data, send) {
+  const response = await send(`${project}/rest/v1/rpc/${name}`, {
     method: "POST",
     redirect: "manual",
     headers: { apikey: env.SUPABASE_PUBLISHABLE_KEY, "Content-Type": "application/json" },
@@ -108,7 +111,7 @@ async function readCredential(request) {
   return { service, kind, value };
 }
 
-export async function handleIntegrations(request, project, env, run, send = fetch, employees) {
+export async function handleIntegrations(request, project, env, run, send = fetch, directory) {
   const reference = crypto.randomUUID().slice(0, 12);
   const json = (payload, status = 200) => Response.json(payload, {
     status, headers: { "Cache-Control": "no-store", "X-HERS-Request-ID": reference },
@@ -126,6 +129,9 @@ export async function handleIntegrations(request, project, env, run, send = fetc
     if (request.headers.has("Origin") && request.headers.get("Origin") !== route.origin) {
       throw new IntegrationError(403, "Origen no permitido", "CON-ORIGIN");
     }
+    if (request.method === "GET" && action === "/agencykey-directory/callback" && directory) {
+      return directory.finish(request, project, env, send);
+    }
     const user = await admin(request, project, env, send);
     if (request.method === "GET" && action === "") return json(await bridge(project, env, "status", {}, send));
     if (request.method === "PUT" && action === "/credential") {
@@ -133,10 +139,11 @@ export async function handleIntegrations(request, project, env, run, send = fetc
       const ciphertext = await seal(env.HERS_INTEGRATIONS_SECRET, service, kind, value);
       return json(await bridge(project, env, "save", { service, kind, ciphertext, updated_by: user }, send));
     }
-    if (request.method === "GET" && action === "/employees" && employees) {
-      const result = await employees();
-      if (result.skipped) throw new IntegrationError(409, "Guarda primero la clave API de AgencyKey", "AK-KEY-MISSING");
-      return json(result);
+    if (request.method === "POST" && action === "/agencykey-directory/connect" && directory) {
+      return directory.begin(request, user, env, send);
+    }
+    if (request.method === "POST" && action === "/employees" && directory) {
+      return json(await directory.sync(project, env, send));
     }
     if (request.method === "POST" && ["/test", "/sync"].includes(action)) {
       let day;

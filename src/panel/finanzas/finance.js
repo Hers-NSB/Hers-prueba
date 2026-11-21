@@ -1,5 +1,5 @@
 export const ONLYFANS = "00000000-0000-4000-8000-000000000001";
-export const kinds = { income: "Ingreso", expense: "Gasto", investment: "Inversión" };
+export const kinds = { income: "Ingreso", expense: "Inversión", investment: "Inversión" };
 
 const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD" });
 export const usd = (value) => value == null ? "—" : money.format(value);
@@ -11,6 +11,21 @@ export function monthRange(offset = 0) {
   const year = now.getFullYear();
   const month = now.getMonth() + offset;
   return { from: dateKey(new Date(year, month, 1)), to: dateKey(new Date(year, month + 1, 0)) };
+}
+
+export function periodPresets(current) {
+  const [year, month] = current.split("-").map(Number);
+  const key = (day, offset = 0) => new Date(Date.UTC(year, month - 1 + offset, day)).toISOString().slice(0, 10);
+  const yesterday = new Date(Date.parse(current) - 86_400_000).toISOString().slice(0, 10);
+  const last = key(0, 1);
+  return [
+    ["Hoy", current, current],
+    ["Ayer", yesterday, yesterday],
+    ["Del 1-15", key(1), key(15)],
+    ["Del 16-Final de mes", key(16), last],
+    ["Mes", key(1), last],
+    ["Mes anterior", key(1, -1), key(0)],
+  ];
 }
 
 const cents = (amount) => Math.round(Number(amount) * 100);
@@ -56,8 +71,8 @@ export function dailyFinance({ movements, sales, commissions }, agencyByDay = ne
     return {
       date: Date.parse(day),
       income: manualIncome == null && vault == null ? null : ((manualIncome ?? 0) + (vault ?? 0)),
-      expenses: metricIf(rows.movements, "expense", totals.expense),
-      profit: hasOperatingAmounts(rows) || vault != null ? totals.profit + (vault ?? 0) : null,
+      expenses: investmentTotal(rows.movements, totals),
+      profit: hasOperatingAmounts(rows) || vault != null ? totals.afterInvestment + (vault ?? 0) : null,
       provisional: totals.withoutRate > 0,
       net: netSales(rows.sales, rows.movements),
     };
@@ -65,7 +80,11 @@ export function dailyFinance({ movements, sales, commissions }, agencyByDay = ne
 }
 
 export function hasOperatingAmounts({ movements, commissions }) {
-  return movements.some((row) => row.kind !== "investment") || commissions.some((row) => row.commission != null);
+  return movements.length > 0 || commissions.some((row) => row.commission != null);
+}
+
+export function investmentTotal(rows, totals) {
+  return rows.some((row) => row.kind !== "income") ? totals.expense + totals.investment : null;
 }
 
 export function metricIf(rows, kind, value) {
@@ -91,7 +110,7 @@ export function financeBreakdown({ movements, sales }, dimension) {
       add(id, "income", row.amount);
       if (row.net != null) add(id, "net", row.net);
     }
-    if (row.kind === "expense") add(id, "expenses", row.amount);
+    if (row.kind !== "income") add(id, "expenses", row.amount);
   }
   for (const row of sales) {
     if (row.net != null) add(dimension === "model" ? row.creator_id : ONLYFANS, "net", row.net);

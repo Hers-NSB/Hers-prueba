@@ -22,16 +22,18 @@ La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las m
 
 ## Finanzas y reparto
 
-- **Resumen** muestra las ventas netas, el ingreso de Agencia HERS, los gastos y la utilidad para el período seleccionado en el calendario.
-- **Extracción** permite registrar ingresos, gastos e inversiones en USD, crear categorías y editar movimientos.
-- **Empleados** permite agregar personas desde AgencyKey o manualmente, editar su nombre y rol, y retirarlas del listado conservando su historial.
-- En **Empleados**, selecciona **Vigente desde** y guarda los porcentajes de reparto de empleados, modelos, Dropper y Agencia HERS. Cada revisión queda en el historial. El reparto usa las ventas netas del día y asigna a la bóveda de Agencia HERS la parte que queda sin repartir.
+- **Resumen** muestra el ingreso, la inversión, la ganancia y las ventas netas. El selector admite fechas rápidas y rangos personalizados.
+- **Movimiento** permite filtrar el historial, registrar ingresos o inversiones en USD, administrar categorías y editar movimientos.
+- **Empleados** admite personas manuales y empleados activos de AgencyKey. Usa **Editar** para guardar un porcentaje, las modelos asignadas y la fecha de vigencia. El porcentaje de cada modelo solo usa el neto de su propia cuenta. Los nuevos repartos usan el neto de las cuentas asignadas y la bóveda recibe el saldo. Los días previos al primer reparto nuevo conservan el cálculo anterior.
+- Ejecuta `test/finance_movements_model_shares.integration.sql` en Supabase de pruebas para comprobar el registro, la edición, los permisos y las bajas del directorio. La prueba revierte todos sus cambios.
 
 ## Cloudflare y AgencyKey
 
-Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js`. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations` y `/api/admin/integrations/*`. La sincronización se realiza al pulsar **Actualizar** en Finanzas. El Worker se publica sin disparadores programados. La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
+Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js` y `cloudflare/agencykey-directory.js`. Activa la redacción de cadenas de consulta en Observabilidad del Worker para que los códigos OAuth queden fuera de sus registros. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations` y `/api/admin/integrations/*`. La sincronización se realiza al pulsar **Actualizar** en Finanzas. El Worker se publica sin disparadores programados. La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
 
 En **Administrador → Conectores**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda una clave API con acceso a los modelos, sus estadísticas de ingresos de OnlyFans y al reporte de empleados. **Probar conexión** consulta el último día cerrado sin guardar ventas. **Actualizar** en Finanzas sincroniza las fechas elegibles del período seleccionado.
+
+Para sincronizar el directorio, entra en **Finanzas → Empleados → Conectar directorio de AgencyKey** y autoriza HERS con una cuenta que tenga acceso al equipo completo y a las modelos de la agencia. Al abrir Empleados se actualizan los nombres y roles, y salen del listado las cuentas que ya no aparecen o están inactivas. Las ventas siguen usando la clave API de Conectores.
 
 El panel permite guardar o reemplazar claves API, tokens y contraseñas de otros servicios. El Worker usa actualmente la credencial de AgencyKey. La lista de credenciales devuelve el nombre, el tipo y la fecha de actualización. La contraseña de acceso a HERS pertenece a Supabase Auth.
 

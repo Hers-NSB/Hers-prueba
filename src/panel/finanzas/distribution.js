@@ -7,15 +7,6 @@ export function effectivePlan(plans, day) {
   return plans.findLast((plan) => plan.effective_on <= day);
 }
 
-export function distributionRecipients({ members, creators }) {
-  return [
-    ...members.map(({ id, name, role, archived_on }) => ({ id: `chatter:${id}`, name, role, archived_on })),
-    ...creators.map(({ id, name }) => ({ id: `model:${id}`, name, role: "Modelo" })),
-    { id: "dropper", name: "Dropper", role: "Dropper" },
-    { id: "hers", name: "Agencia HERS", role: "Agencia" },
-  ];
-}
-
 function allocateCents(amount, shares) {
   const sign = amount < 0n ? -1n : 1n;
   const magnitude = amount * sign;
@@ -58,5 +49,56 @@ export function calculateDistribution(sales, plans, members = []) {
     total: days.size ? Number(total) / 100 : null,
     agencyByDay,
     payouts: new Map([...payouts].map(([id, amount]) => [id, Number(amount) / 100])),
+  };
+}
+
+export const shareRecipient = ({ member_id, creator_id }) => member_id ? `chatter:${member_id}` : `model:${creator_id}`;
+
+export function effectiveShare(rates, recipient, day) {
+  return rates.findLast((rate) => shareRecipient(rate) === recipient && rate.effective_on <= day);
+}
+
+export function calculateModelDistribution(sales, plans, members, rates, availability = []) {
+  const firstDay = rates[0]?.effective_on;
+  if (!firstDay) return calculateDistribution(sales, plans, members);
+  const historic = calculateDistribution(sales.filter(({ day }) => day < firstDay), plans, members);
+  const archived = new Map(members.map(({ id, archived_on }) => [id, archived_on]));
+  const employment = Map.groupBy(availability, ({ member_id }) => member_id);
+  const byRecipient = Map.groupBy(rates, shareRecipient);
+  const payable = new Map();
+  const agency = new Map();
+  let total = 0n;
+  let recorded = false;
+  for (const { day, creator_id: creator, net } of sales) {
+    if (day < firstDay || net == null) continue;
+    recorded = true;
+    const amount = exactCents(net);
+    total += amount;
+    let remaining = amount;
+    for (const [recipient, versions] of byRecipient) {
+      const rate = versions.findLast(({ effective_on }) => effective_on <= day);
+      if (!rate?.percent) continue;
+      if (rate.member_id) {
+        const until = archived.get(rate.member_id);
+        const latest = employment.get(rate.member_id)?.findLast(({ effective_on }) => effective_on <= day);
+        if ((until && day >= until) || latest?.available === false || !rate.creator_ids.includes(creator)) continue;
+      } else if (rate.creator_id !== creator) continue;
+      const numerator = amount * BigInt(shareUnits(rate.percent));
+      const rounding = numerator < 0n ? -5000n : 5000n;
+      const payout = (numerator + rounding) / BigInt(fullShare);
+      payable.set(recipient, (payable.get(recipient) ?? 0n) + payout);
+      remaining -= payout;
+    }
+    agency.set(day, (agency.get(day) ?? 0n) + remaining);
+    payable.set("hers", (payable.get("hers") ?? 0n) + remaining);
+  }
+  const payouts = new Map(historic.payouts);
+  for (const [recipient, amount] of payable) {
+    payouts.set(recipient, Number(exactCents(payouts.get(recipient) ?? 0) + amount) / 100);
+  }
+  return {
+    total: recorded ? Number(exactCents(historic.total ?? 0) + total) / 100 : historic.total,
+    payouts,
+    agencyByDay: new Map([...historic.agencyByDay, ...Array.from(agency, ([day, amount]) => [day, Number(amount) / 100])]),
   };
 }

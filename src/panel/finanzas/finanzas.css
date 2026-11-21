@@ -104,13 +104,13 @@
 }
 
 .hf-kpi-label svg { flex: none; }
-.hf-overview-kpis [data-tone="expenses"] svg { color: var(--hf-expense); }
+.hf-overview-kpis [data-tone="expenses"] svg,
+.hf-overview-kpis [data-tone="expenses"] strong { color: var(--hf-expense); }
 .hf-overview-kpis [data-tone="profit"] svg,
 .hf-overview-kpis [data-tone="profit"] strong { color: var(--hf-profit); }
 .hf-overview-kpis [data-tone="sales"] strong { color: var(--hf-accent); }
 
-.hf-trends, .hf-breakdowns { display: grid; gap: .85rem; }
-.hf-trends { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+.hf-breakdowns { display: grid; gap: .85rem; }
 .hf-breakdowns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .hf-finance .hf-section { border-radius: 16px; }
 .hf-trend .hf-chart { width: 100%; height: 252px; margin-top: .5rem; }
@@ -146,7 +146,7 @@
 
 @container (max-width: 850px) {
   .hf-finance .hf-overview-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .hf-trends, .hf-breakdowns { grid-template-columns: minmax(0, 1fr); }
+  .hf-breakdowns { grid-template-columns: minmax(0, 1fr); }
 }
 
 @container (max-width: 480px) {
@@ -154,48 +154,58 @@
   .hf-finance .hf-trend { padding: .8rem; }
 }
 
-.hf-distribution-settings {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: .75rem 1.25rem;
-  margin-top: 1rem;
-}
-
-.hf-distribution-settings p { padding-bottom: .5rem; }
-.hf input.hf-share-input { width: 6rem; }
-.hf-distribution-actions { margin-top: .85rem; }
 .hf-distribution-version { padding: .65rem 0; border-bottom: 1px solid var(--hf-line); }
 .hf-distribution-version summary { cursor: pointer; }
 
 .hf-toolbar { display: flex; flex-wrap: wrap; align-items: start; gap: .8rem; margin-bottom: 1rem; }
-.hf-period { position: relative; display: grid; gap: .4rem; max-width: 100%; color: #a1a8b4; font-size: .9rem; }
+.hf-period { position: relative; display: grid; gap: .4rem; max-width: 100%; color: var(--hf-muted); font-size: .9rem; }
 .hf .hf-select-trigger, .hf-dialog .hf-select-trigger {
-  min-height: 42px; border-radius: 10px; border-color: #39393d; background: #202022; color: #f1f2f4;
+  min-height: 42px; border-radius: 10px; border-color: var(--hf-line); background: var(--hf-field); color: var(--hf-ink);
 }
 .hf .hf-period-trigger { justify-content: space-between; gap: 1.1rem; font-weight: 650; }
 .hf-calendar {
   position: absolute; inset: calc(100% + .45rem) auto auto 0; z-index: 5;
   display: grid; grid-template-columns: minmax(115px, .85fr) minmax(0, 1.5fr);
-  width: min(520px, calc(100cqw - 4px)); border: 1px solid #323235; border-radius: 20px;
-  background: #121214; color: #f0f1f3; box-shadow: 0 12px 30px #0008;
+  width: min(520px, calc(100cqw - 4px)); border: 1px solid var(--hf-line); border-radius: 20px;
+  background: var(--hf-surface); color: var(--hf-ink); box-shadow: 0 12px 30px #0008;
 }
-.hf-calendar-presets { display: grid; align-content: start; gap: .3rem; padding: .75rem; border-right: 1px solid #28282b; }
+.hf-calendar-presets { display: grid; align-content: start; gap: .3rem; padding: .75rem; border-right: 1px solid var(--hf-line); }
 .hf-calendar-body { padding: .7rem; min-width: 0; }
-.hf-calendar-month { display: grid; grid-template-columns: auto auto 1fr auto auto; gap: .15rem; align-items: center; text-align: center; color: #a9afba; text-transform: capitalize; }
+.hf-calendar-month { display: grid; grid-template-columns: auto auto 1fr auto auto; gap: .15rem; align-items: center; text-align: center; color: var(--hf-muted); text-transform: capitalize; }
 .hf-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
-.hf-calendar-grid > span { background: #202023; padding: .6rem .05rem; font-weight: 650; color: #a9afba; }
-.hf-calendar-grid > span:nth-child(6), .hf-calendar-grid > span:nth-child(7) { color: #ff6767; }
+.hf-calendar-grid > span { background: var(--hf-field); padding: .6rem .05rem; font-weight: 650; color: var(--hf-muted); }
+.hf-calendar-grid > span:nth-child(6), .hf-calendar-grid > span:nth-child(7) { color: var(--hf-accent); }
 .hf .hf-calendar button { min-height: 36px; padding: .25rem; border: 0; border-radius: 9px; background: transparent; }
 .hf .hf-calendar-presets button { justify-content: start; padding-inline: .55rem; text-align: left; }
 .hf .hf-calendar-grid button { justify-content: center; }
-.hf .hf-calendar button[aria-pressed="true"], .hf .hf-calendar button:hover:not(:disabled) { background: #252528; }
-.hf .hf-calendar button[data-other="true"] { color: #92939b; }
-.hf .hf-calendar > p { grid-column: 1 / -1; padding: .65rem .85rem; border-top: 1px solid #28282b; }
-.hf-notifications { padding: .5rem .75rem; border: 1px solid var(--hf-line); border-radius: 10px; font-size: .84rem; }
-.hf-notifications p { margin-top: .2rem; }
+.hf .hf-calendar button[aria-pressed="true"], .hf .hf-calendar button:hover:not(:disabled) { background: var(--hf-field); }
+.hf .hf-calendar button[data-other="true"] { color: var(--hf-muted); }
+.hf .hf-calendar > p { grid-column: 1 / -1; padding: .65rem .85rem; border-top: 1px solid var(--hf-line); }
 .hf-category { display: grid; gap: .35rem; }
 @container (max-width: 425px) {
   .hf-calendar { grid-template-columns: minmax(0, 1fr); }
   .hf-calendar-presets { grid-template-columns: repeat(2, 1fr); padding-bottom: 0; border-right: 0; }
 }
+
+.hf-category-panel, .hf-category-edit { display: grid; gap: .55rem; }
+.hf-category-panel {
+  background: var(--hf-surface); border: 1px solid var(--hf-line); border-radius: 10px; padding: .65rem;
+}
+.hf-category-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .35rem; }
+.hf-category-row button:first-child { justify-content: start; overflow-wrap: anywhere; }
+.hf-category-row button[aria-pressed="true"] { border-color: var(--hf-accent); color: var(--hf-accent); }
+.hf-movement-filters {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: .65rem;
+  align-items: end; margin-top: .9rem;
+}
+.hf-category-label { display: inline-block; cursor: help; text-decoration: underline dotted var(--hf-muted); }
+.hf-category-label [role="tooltip"] { display: none; }
+.hf-category-label:hover [role="tooltip"], .hf-category-label:focus [role="tooltip"] {
+  display: block; max-width: 26ch; margin-top: .25rem; overflow-wrap: anywhere;
+}
+.hf-updated { display: inline-flex; align-self: center; color: var(--hf-profit); }
+.hf-model-options { display: grid; gap: .45rem; border: 1px solid var(--hf-line); border-radius: 8px; color: var(--hf-muted); }
+.hf-dialog .hf-model-options label { display: flex; align-items: center; }
+.hf-dialog .hf-model-options input { width: 1rem; min-height: 1rem; accent-color: var(--hf-accent); }
+
+.hf-directory-actions { margin: .7rem 0; align-items: center; }

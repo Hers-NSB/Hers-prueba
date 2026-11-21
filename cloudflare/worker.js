@@ -1,3 +1,4 @@
+import { beginDirectory, finishDirectory, syncDirectory } from "./agencykey-directory.js";
 import { bridge, handleIntegrations, IntegrationError, storedAgencyKey } from "./integrations.js";
 
 const api = "https://app.agencykey.com/api/v1/public/crm/reports";
@@ -282,20 +283,6 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
     netTotal: sales.reduce((sum, row) => sum + Math.round(row.net * 100), 0) / 100 } : {}) };
 }
 
-async function listEmployees(env, send = fetch, instant = Date.now()) {
-  const key = await storedAgencyKey(project, env, send);
-  if (!key) return { skipped: true };
-  const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
-  const day = formatDay(instant, zone);
-  const start = new Date(Date.parse(day) - 29 * dayMs).toISOString().slice(0, 10);
-  const result = await queryAgencyKey(key, "/v1/public/crm/reports/employees", {
-    fromDate: reportPeriod(start, zone).fromDate, toDate: new Date(instant).toISOString(),
-  }, send, "AK-EMPLOYEES", "los empleados");
-  if (!Array.isArray(result?.data)) throw new IntegrationError(502, "AgencyKey devolvió un formato de empleados inesperado", "AK-EMPLOYEES-FORMAT");
-  return { employees: result.data.filter(({ senderId, senderName }) => isId(senderId) && isName(senderName))
-    .map(({ senderId, senderName }) => ({ id: senderId, name: senderName })) };
-}
-
 export default {
   fetch(request, env) {
     const path = new URL(request.url).pathname;
@@ -306,7 +293,8 @@ export default {
       });
     }
     if (path === "/api/admin/integrations" || path.startsWith("/api/admin/integrations/")) {
-      return handleIntegrations(request, project, env, (testOnly, day) => importNet(day, env, fetch, testOnly), fetch, () => listEmployees(env));
+      return handleIntegrations(request, project, env, (testOnly, day) => importNet(day, env, fetch, testOnly), fetch,
+        { begin: beginDirectory, finish: finishDirectory, sync: syncDirectory });
     }
     return env.ASSETS.fetch(request);
   },

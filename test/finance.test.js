@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dailyFinance, financeBreakdown, netSales, ONLYFANS, summarize } from "../src/panel/finanzas/finance.js";
+import { dailyFinance, financeBreakdown, netSales, ONLYFANS, periodPresets, summarize } from "../src/panel/finanzas/finance.js";
 import { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
@@ -147,4 +147,28 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
     assert.match(error.message, /1 de 1 modelos.*Día 2026-11-19/);
     return true;
   });
+});
+
+test("calcula quincenas y mes anterior cuando cambia el año y en febrero bisiesto", () => {
+  assert.deepEqual(periodPresets("2024-02-01"), [
+    ["Hoy", "2024-02-01", "2024-02-01"],
+    ["Ayer", "2024-01-31", "2024-01-31"],
+    ["Del 1-15", "2024-02-01", "2024-02-15"],
+    ["Del 16-Final de mes", "2024-02-16", "2024-02-29"],
+    ["Mes", "2024-02-01", "2024-02-29"],
+    ["Mes anterior", "2024-01-01", "2024-01-31"],
+  ]);
+  assert.deepEqual(periodPresets("2026-01-01").at(-1), ["Mes anterior", "2025-12-01", "2025-12-31"]);
+});
+
+test("el resultado resta las inversiones registradas y los gastos históricos", () => {
+  const movements = [
+    { day: "2026-11-18", kind: "expense", amount: "10.12" },
+    { day: "2026-11-18", kind: "investment", amount: "5.50" },
+    { day: "2026-11-18", kind: "income", amount: "30.62" },
+  ];
+  const [point] = dailyFinance({ movements, sales: [], commissions: [] });
+  assert.equal(point.income, 30.62);
+  assert.equal(point.expenses, 15.62);
+  assert.equal(point.profit, 15);
 });

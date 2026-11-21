@@ -12,3 +12,10 @@ Entorno web de pruebas de HERS. Fecha de verificación: 2026-11-21.
 - La rama `postulaciones-sin-emailjs` elimina EmailJS y los comentarios del código. El formulario conserva la confirmación en pantalla tras guardar.
 - Supabase de pruebas tiene aplicada la migración `20261121154801_applications`. Se verificó el envío anónimo y el acceso administrativo a las postulaciones y sus fotos. La prueba SQL se revirtió.
 - El formulario se comprobó con seis imágenes ficticias y respuestas simuladas de Supabase. El código del Worker se publicará después de integrar el PR.
+
+## Finanzas
+
+- La rama `finanzas-movimientos-reparto` modifica Resumen, Movimiento y Empleados. Los porcentajes vigentes se calculan con el neto de las modelos asignadas.
+- El directorio usa OAuth de AgencyKey. La primera conexión se autoriza en **Finanzas → Empleados**. Las bajas se reflejan al consultar el directorio y conservan el historial.
+- Se verificaron ESLint, 21 pruebas de JavaScript, la compilación y la prueba SQL con reversión sobre Supabase de pruebas.
+- Supabase de pruebas tiene las migraciones `20261121223206` y `20261121223243`. Siguiente comprobación: autorizar AgencyKey con una cuenta con acceso al directorio completo y abrir Empleados.
