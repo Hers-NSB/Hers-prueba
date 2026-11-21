@@ -9,9 +9,11 @@ const axisMoney = new Intl.NumberFormat("es-VE", { notation: "compact", maximumF
 const axis = { fill: "var(--hf-muted)", fontSize: 11 };
 const dayMs = 86_400_000;
 
-export default function FinanceCharts({ data, agencyByDay }) {
+export default function FinanceCharts({ data, agencyByDay, pendingDays }) {
   const title = "Resultado operativo";
-  const points = dailyFinance(data, agencyByDay).filter(({ profit }) => profit !== null);
+  const points = dailyFinance(data, agencyByDay).map((point) =>
+    pendingDays?.has(new Date(point.date).toISOString().slice(0, 10)) ? { ...point, income: null, profit: null } : point)
+    .filter(({ profit, expenses }) => profit !== null || expenses !== null);
   const day = points[0]?.date;
   const dates = points.length === 1 ? [day] : undefined;
   const domain = points.length === 1 ? [day - dayMs, day + dayMs] : ["dataMin", "dataMax"];

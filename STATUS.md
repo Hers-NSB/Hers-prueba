@@ -20,3 +20,4 @@ Entorno web de pruebas de HERS. Fecha de verificación: 2026-11-21.
 - Se verificaron ESLint, 21 pruebas de JavaScript, la compilación y la prueba SQL con reversión sobre Supabase de pruebas.
 - Supabase de pruebas tiene las migraciones `20261121223206` y `20261121223243`. Siguiente comprobación: autorizar AgencyKey con una cuenta con acceso al directorio completo y abrir Empleados.
 - La prueba OAuth del PR #8 encontró un modo de redirección incompatible con Workers. El ajuste se verificó en el runtime local de Cloudflare. Pasaron ESLint y 22 pruebas.
+- El PR #8 calcula el porcentaje de los chatters sobre todas sus ventas netas atribuidas en AgencyKey. HERS prueba tiene aplicada la migración `20261121231332`. Pasaron ESLint, 23 pruebas y la compilación. Para un chatter vinculado, abre **Finanzas → Resumen**, elige el período y pulsa **Actualizar** antes de revisar su ganancia en **Empleados**.

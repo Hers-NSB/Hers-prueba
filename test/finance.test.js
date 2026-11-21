@@ -104,11 +104,16 @@ test("importa solo el neto verificado y lo guarda en un lote sin reemplazar atri
       data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
     });
     if (url.includes("/42/api2/v2/earnings/chart?")) return Response.json({ data: { total: { total: "28.00", gross: 35 } } });
+    if (url.includes("/crm/reports/employees?")) {
+      assert.equal(new URL(url).searchParams.get("creatorIds"), null);
+      assert.equal(new URL(url).searchParams.get("fromDate"), "2026-11-19T04:00:00.000Z");
+      return Response.json({ data: [{ senderId: member, totalSalesSum: 12.51 }, { senderId: "__unknown__", totalSalesSum: 10 }] });
+    }
     return Response.json(null);
   }, false, Date.parse("2026-11-20T11:00:00Z"));
   assert.equal(result.creators, 1);
   const batch = JSON.parse(calls.at(-1)[1].body).p_data;
-  assert.deepEqual(batch, { p_day: "2026-11-19", p_sales: [{ creator_key: creator, creator_name: "Modelo", net: 28 }], p_attributions: null });
+  assert.deepEqual(batch, { p_day: "2026-11-19", p_sales: [{ creator_key: creator, creator_name: "Modelo", net: 28 }], p_attributions: null, p_employee_net: { [member]: 10.01 } });
   assert.equal(new URL(calls[2][0]).searchParams.get("startDate"), "2026-11-19 04:00:00");
   assert.deepEqual(await importNet("2026-11-21", env, () => assert.fail("No consultar en fechas futuras"),
     false, Date.parse("2026-11-20T11:00:00Z")), { day: "2026-11-21", future: true });
@@ -132,6 +137,7 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
         return Response.json({ list: later ? [row, reversed, chargeback, { ...row, id: "outside", createdAt: "2026-11-20T04:00:00Z" }] : [row],
           hasMore: !later, nextMarker: 123 });
       }
+      if (url.includes("/crm/reports/employees?")) return Response.json({ data: [] });
       if (url.includes("/crm/reports/creators?")) return Response.json({ data: [{ creatorId: creator, totalSalesCount: 1 }] });
       assert.equal(JSON.parse(options.body).p_action, "agencykey", "La prueba nunca escribe ventas");
       return Response.json(null);

@@ -27,21 +27,28 @@ begin
   end if;
 
   insert into public.finance_creators (name) values ('Modelo de prueba') returning id into v_creator;
-  perform public.finance_save_member_share(null, null, v_category, 'Chatter', current_date, 12.50, array[v_creator]);
+  perform public.finance_save_member_share(null, null, v_category, 'Team Leader', current_date, 12.50, array[v_creator]);
   select id into strict v_member from public.finance_members where name = v_category;
-  perform public.finance_save_member_share(v_member, null, v_category, 'Chatter', current_date + 1, 20, array[v_creator]);
+  perform public.finance_save_member_share(v_member, null, v_category, 'Team Leader', current_date + 1, 20, array[v_creator]);
   if (select array_agg(percent order by effective_on) from public.finance_model_shares where member_id = v_member)
       is distinct from array[12.50, 20.00] then
     raise exception 'No se conservaron las vigencias';
   end if;
   begin
-    perform public.finance_save_member_share(v_member, null, 'Nombre sin guardar', 'Chatter', current_date + 2, 20, array[gen_random_uuid()]);
+    perform public.finance_save_member_share(v_member, null, 'Nombre sin guardar', 'Team Leader', current_date + 2, 20, array[gen_random_uuid()]);
     raise exception 'Se aceptó un modelo inexistente';
   exception when check_violation then
     if not exists (select from public.finance_members where id = v_member and name = v_category) then
       raise exception 'Se guardó parcialmente una edición fallida';
     end if;
   end;
+  perform public.finance_save_member_share(null, null, v_category || ' chatter', 'Chatter', current_date, 8, '{}');
+  if not exists (
+    select from public.finance_model_shares r join public.finance_members m on r.member_id = m.id
+    where m.name = v_category || ' chatter' and r.percent = 8 and r.basis = 'employee_sales' and cardinality(r.creator_ids) = 0
+  ) then
+    raise exception 'El chatter debe cobrar sobre sus ventas sin asignar modelos';
+  end if;
 end;
 $$;
 

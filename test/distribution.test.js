@@ -68,3 +68,29 @@ test("calcula cada porcentaje sobre el neto de los modelos asignados y respeta s
   assert.equal(result.payouts.get("hers"), 329.07);
   assert.deepEqual([...result.agencyByDay.values()], [90, 164, 75.07]);
 });
+
+test("paga al chatter sobre todas sus ventas atribuidas y conserva la base de otros roles", () => {
+  const day = "2026-11-24";
+  const sales = [{ day, creator_id: "A", net: "1000.00" }, { day, creator_id: "B", net: "500.00" }];
+  const members = [{ id: "chatter", agencykey_id: "ak-chatter" }, { id: "lead" }];
+  const rates = [
+    { effective_on: day, member_id: "chatter", basis: "employee_sales", creator_ids: [], percent: "10.00" },
+    { effective_on: day, member_id: "lead", basis: "model_sales", creator_ids: ["B"], percent: "10.00" },
+    { effective_on: day, creator_id: "A", basis: "model_sales", creator_ids: [], percent: "40.00" },
+  ];
+
+  const result = calculateModelDistribution(sales, [], members, rates, [], [{ day, totals: { "ak-chatter": 320 } }]);
+  assert.equal(result.payouts.get("chatter:chatter"), 32);
+  assert.equal(result.payouts.get("chatter:lead"), 50);
+  assert.equal(result.payouts.get("model:A"), 400);
+  assert.equal(result.payouts.get("hers"), 1018);
+
+  const missing = calculateModelDistribution(sales, [], members, rates);
+  assert.ok(missing.pendingDays.has(day));
+  assert.equal(missing.payouts.has("chatter:chatter"), false);
+  assert.equal(missing.payouts.has("hers"), false);
+
+  const zero = calculateModelDistribution(sales, [], members, rates, [], [{ day, totals: {} }]);
+  assert.equal(zero.payouts.get("chatter:chatter"), 0);
+  assert.equal(zero.payouts.get("hers"), 1050);
+});

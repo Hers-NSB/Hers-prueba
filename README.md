@@ -24,7 +24,7 @@ La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las m
 
 - **Resumen** muestra el ingreso, la inversión, la ganancia y las ventas netas. El selector admite fechas rápidas y rangos personalizados.
 - **Movimiento** permite filtrar el historial, registrar ingresos o inversiones en USD, administrar categorías y editar movimientos.
-- **Empleados** admite personas manuales y empleados activos de AgencyKey. Usa **Editar** para guardar un porcentaje, las modelos asignadas y la fecha de vigencia. El porcentaje de cada modelo solo usa el neto de su propia cuenta. Los nuevos repartos usan el neto de las cuentas asignadas y la bóveda recibe el saldo. Los días previos al primer reparto nuevo conservan el cálculo anterior.
+- **Empleados** admite personas manuales y empleados activos de AgencyKey. Usa **Editar** para guardar un porcentaje y una fecha de vigencia. Los chatters vinculados a AgencyKey cobran sobre sus ventas netas atribuidas en todas las cuentas. Para los otros empleados, selecciona las modelos que les corresponden. Cada modelo cobra sobre el neto de su propia cuenta. La bóveda recibe el saldo después de los repartos. Los días previos al primer reparto nuevo conservan el cálculo anterior.
 - Ejecuta `test/finance_movements_model_shares.integration.sql` en Supabase de pruebas para comprobar el registro, la edición, los permisos y las bajas del directorio. La prueba revierte todos sus cambios.
 
 ## Cloudflare y AgencyKey

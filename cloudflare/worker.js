@@ -219,6 +219,23 @@ async function readTransactionsNet(key, creatorExternalId, bounds, send) {
   throw new IntegrationError(502, `La lectura de transacciones del ${day} quedó incompleta`, "AK-NET-TRANSACTIONS-PAGE");
 }
 
+function employeeNetTotals(report) {
+  const totals = new Map();
+  if (!Array.isArray(report?.data)) {
+    throw new IntegrationError(502, "AgencyKey devolvió un reporte de ventas por empleado inválido", "AK-EMPLOYEE-SALES-FORMAT");
+  }
+  for (const { senderId, totalSalesSum } of report.data) {
+    if (senderId === "__unknown__") continue;
+    if (!isId(senderId) || !Number.isFinite(totalSalesSum) || totals.has(senderId)) {
+      throw new IntegrationError(502, "AgencyKey devolvió ventas por empleado inválidas o repetidas", "AK-EMPLOYEE-SALES-ROW");
+    }
+    // El reporte devuelve ventas brutas. OnlyFans retiene el 20 %.
+    const netCents = Math.round(Math.abs(totalSalesSum) * 80);
+    totals.set(senderId, Math.sign(totalSalesSum) * netCents / 100);
+  }
+  return Object.fromEntries(totals);
+}
+
 export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
   const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
   const currentDay = formatDay(instant, zone);
@@ -278,8 +295,13 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
       throw new IntegrationError(502, `El gráfico y las transacciones no confirmaron el neto para ${unconfirmed} de ${entries.length} modelos · Día ${day} · Ventana UTC ${fromDate} a ${toDate}`, "AK-NET-EMPTY");
     }
   }
-  if (!testOnly) await bridge(project, env, "import", { p_day: day, p_sales: sales, p_attributions: null }, send);
-  return { day, creators: sales.length, attributions: 0, ...(testOnly ? { transactionModels,
+  const employeeReport = await queryAgencyKey(key, "/v1/public/crm/reports/employees",
+    { fromDate, toDate }, send, "AK-EMPLOYEE-SALES", "las ventas atribuidas a empleados");
+  const employeeNet = employeeNetTotals(employeeReport);
+  if (!testOnly) await bridge(project, env, "import", {
+    p_day: day, p_sales: sales, p_attributions: null, p_employee_net: employeeNet,
+  }, send);
+  return { day, creators: sales.length, attributions: Object.keys(employeeNet).length, ...(testOnly ? { transactionModels,
     netTotal: sales.reduce((sum, row) => sum + Math.round(row.net * 100), 0) / 100 } : {}) };
 }
 

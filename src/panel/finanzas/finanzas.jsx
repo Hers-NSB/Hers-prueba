@@ -4,14 +4,14 @@ import { supabase } from "../../lib/supabase";
 import { dateKey, financeBreakdown, hasOperatingAmounts, investmentTotal, kinds, metricIf, monthRange, netSales, summarize, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
-import { calculateModelDistribution, effectiveShare } from "./distribution";
+import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
 import CategoryPicker from "./CategoryPicker";
 import Distribution from "./Distribution";
 import "./finanzas.css";
 
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], allMovements: [] };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [] };
 const catalog = { platform: "Plataforma", creator: "Modelo" };
 const catalogTables = { platform: "finance_platforms", creator: "finance_creators" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
@@ -34,7 +34,7 @@ async function loadFinance({ from, to }) {
   if (error?.code === "42501" || !error && !allowed) return null;
   if (error) throw error;
   const inPeriod = (query) => query.gte("day", from).lte("day", to);
-  const [allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability] = await Promise.all([
+  const [allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet] = await Promise.all([
     readRows("finance_movements", ["day", "id"]),
     readRows("finance_agencykey_sales", ["day", "creator_id"], inPeriod),
     readRows("finance_creators", ["name", "id"]),
@@ -44,9 +44,10 @@ async function loadFinance({ from, to }) {
     readRows("finance_distribution_plans", ["effective_on", "revision"]),
     readRows("finance_model_shares", ["effective_on", "id"]),
     readRows("finance_member_availability", ["effective_on", "member_id"]),
+    readRows("finance_agencykey_employee_net", ["day"], inPeriod),
   ]);
   return { ...empty, movements: allMovements.filter(({ day }) => day >= from && day <= to),
-    allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability };
+    allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet };
 }
 
 export default function Finanzas() {
@@ -133,7 +134,7 @@ export default function Finanzas() {
   const reload = () => { setState("loading"); refresh((value) => value + 1); };
   const invalid = !filters.from || !filters.to || filters.from > filters.to;
   const totals = summarize(data);
-  const distribution = calculateModelDistribution(data.sales, data.distributionPlans, data.members, data.rates, data.availability);
+  const distribution = calculateModelDistribution(data.sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
 
   async function update() {
     if (updating || invalid) return;
@@ -218,14 +219,15 @@ function Breakdown({ data, dimension, title, label, catalog }) {
 function Overview({ totals, data, distribution }) {
   const { movements, sales } = data;
   const vault = distribution.payouts.get("hers");
+  const pending = Boolean(distribution.pendingDays?.size);
   const manualIncome = metricIf(movements, "income", totals.agency);
   const agencyIncome = manualIncome == null && vault == null ? null : (manualIncome ?? 0) + (vault ?? 0);
   const hasOperations = hasOperatingAmounts(data) || vault != null;
   const investment = investmentTotal(movements, totals);
   const cards = [
-    ["Ingreso de la agencia", agencyIncome, Wallet, "income"],
+    ["Ingreso de la agencia", pending ? null : agencyIncome, Wallet, "income"],
     ["Inversión", investment, ArrowUpRight, "expenses"],
-    ["Ganancia", hasOperations ? totals.afterInvestment + (vault ?? 0) : null, CircleDollarSign, "profit"],
+    ["Ganancia", !pending && hasOperations ? totals.afterInvestment + (vault ?? 0) : null, CircleDollarSign, "profit"],
     ["Ventas netas", netSales(sales, movements), BarChart3, "sales"],
   ];
   return <>
@@ -235,9 +237,9 @@ function Overview({ totals, data, distribution }) {
       <strong>{usd(value)}</strong>
     </article>)}</div>
     <Suspense fallback={<p className="hf-notice" role="status">Cargando gráficos…</p>}>
-      <FinanceCharts data={data} agencyByDay={distribution.agencyByDay} />
+      <FinanceCharts data={data} agencyByDay={distribution.agencyByDay} pendingDays={distribution.pendingDays} />
     </Suspense>
-    <dl className="hf-financial-detail"><div><dt>Bóveda de Agencia HERS</dt><dd>{usd(vault)}</dd></div></dl>
+    <dl className="hf-financial-detail"><div><dt>Bóveda de Agencia HERS</dt><dd>{pending ? "Pendiente de ventas de chatters" : usd(vault)}</dd></div></dl>
     <div className="hf-breakdowns">
       <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
       <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
@@ -318,12 +320,17 @@ function Employees({ data, directory, directoryError, connecting, onConnect, onR
       <button type="button" onClick={onRefresh}>Reintentar consulta</button>
       {!directoryError.message.startsWith("[AK-DIRECTORY-CONNECT]") && <p role="alert">{directoryError.message}</p>}
     </div>}
-    <Table headings={["Nombre", "Rol", "Origen", "Modelos asignados", "Porcentaje", "Ganancia del período", "Acciones"]} emptyText="Sin empleados registrados"
+    <Table headings={["Nombre", "Rol", "Origen", "Base del porcentaje", "Porcentaje", "Ganancia del período", "Acciones"]} emptyText="Sin empleados registrados"
       rows={rows.map(([row, type, recipient]) => {
         const rate = effectiveShare(data.rates, recipient, currentDay);
+        const byEmployee = rate ? rate.basis === "employee_sales" : type === "member" && isChatter(row.role);
+        const models = type === "modelShare" ? row.name : rate?.creator_ids.map((id) => findName(data.creators, id)).join(", ") || "—";
+        const payout = distribution.pendingRecipients?.has(recipient)
+          ? row.agencykey_id ? "Pendiente de sincronizar" : "Pendiente de vincular"
+          : usd(distribution.payouts.get(recipient));
         return [recipient, [row.name, row.role, row.agencykey_id ? "AgencyKey" : "Manual",
-          type === "modelShare" ? row.name : rate?.creator_ids.map((id) => findName(data.creators, id)).join(", ") || "—",
-          rate ? percentLabel(rate.percent) : "—", usd(distribution.payouts.get(recipient)),
+          byEmployee ? "Ventas propias en AgencyKey" : models,
+          rate ? percentLabel(rate.percent) : "—", payout,
           <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
             {type === "member" && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
       })} />
@@ -352,6 +359,7 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
   const candidate = candidates.find((entry) => entry.id === values.agencykey_id);
   const availableModels = data.creators.filter((creator) => isCurrent(creator) || values.creator_ids.includes(creator.id));
   const memberShare = type === "member" || type === "agencykey";
+  const byEmployee = memberShare && isChatter(candidate?.role ?? values.role);
   const field = (label, key, props) => <label>{label}<input {...props} value={values[key] ?? ""} onChange={(e) => set(key, e.target.value)} /></label>;
   const select = (label, key, rows) =>
     <Choice label={label} value={values[key]} rows={rows} onChange={(value) => set(key, value)} />;
@@ -374,11 +382,11 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
       } else if (type === "archive") {
         request = supabase.from("finance_members").update({ archived_on: today }).eq("id", row.id).select("id").single();
       } else if (memberShare) {
-        if (Number(values.percent) > 0 && !values.creator_ids.length) throw new Error("Selecciona al menos un modelo");
+        if (!byEmployee && Number(values.percent) > 0 && !values.creator_ids.length) throw new Error("Selecciona al menos un modelo");
         request = supabase.rpc("finance_save_member_share", {
           p_member_id: row?.id ?? null, p_agencykey_id: candidate?.id ?? null,
           p_name: candidate?.name ?? values.name, p_role: candidate?.role ?? values.role,
-          p_effective_on: values.effective_on, p_percent: Number(values.percent), p_creator_ids: values.creator_ids,
+          p_effective_on: values.effective_on, p_percent: Number(values.percent), p_creator_ids: byEmployee ? [] : values.creator_ids,
         });
       } else if (type === "modelShare") {
         request = supabase.from("finance_model_shares").upsert({
@@ -430,7 +438,9 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
           {field("Porcentaje", "percent", { type: "number", min: 0, max: 100, step: "0.01", required: true })}
           {field("Vigente desde", "effective_on", { type: "date", required: true })}
         </>}
-        {memberShare && <fieldset className="hf-model-options"><legend>Modelos asignados</legend>
+        {byEmployee && <p>Ventas netas atribuidas en todas las cuentas de AgencyKey.
+          {!(candidate?.id || row?.agencykey_id) && " Agrega al chatter desde AgencyKey para vincular sus ventas."}</p>}
+        {memberShare && !byEmployee && <fieldset className="hf-model-options"><legend>Modelos asignados</legend>
           {availableModels.map(({ id, name }) => <label key={id}>
             <input type="checkbox" checked={values.creator_ids.includes(id)} onChange={(event) =>
               set("creator_ids", event.target.checked ? [...values.creator_ids, id] : values.creator_ids.filter((value) => value !== id))} />
