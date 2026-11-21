@@ -1,13 +1,3 @@
-/*Importante hacer esto en mi jsx:
-Evitar y elminar funciones repetidas.
-Crear comentarios del nombre de las secciones del código.
-No poner comentarios explicativos.
-Eliminar partes del código que no se estén usando.
-Evitar y eliminar tener código incoherente.
-No usar . final en los textos ni usar el signo ¿
-Siempre usa iconos del paquete de emojis de React
-*/
-
 import { useState, useEffect, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import "./hers.css";
@@ -61,7 +51,6 @@ import {
   teamLogin,
   modelLogin,
 } from "./lib/supabase";
-import { sendApplicationNotification } from "./lib/emailjs";
 import AdminPanel from "./panel/AdminPanel.jsx";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -1413,15 +1402,6 @@ function ModelRegisterForm({ onSuccess }) {
         .insert(payload);
 
       if (insertError) throw insertError;
-
-      try {
-        await sendApplicationNotification();
-      } catch (emailError) {
-        console.error(
-          "No se pudo enviar la notificación por EmailJS:",
-          emailError,
-        );
-      }
 
       const successMsg = `Gracias ${form.nombre || "por tu registro"}`;
       setSubmitMessage(successMsg);

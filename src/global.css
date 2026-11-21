@@ -1,14 +1,3 @@
-/*Importante hacer esto en mi css:
-Evitar crear !important.
-Crear comentarios del nombre de las secciones del código.
-No poner comentarios explicativos.
-Evitar poner estilos repetidos o que pisen a otros estilos. 
-Usar un nombre de estilo único para este código y evitar que se parezca a otros.
-Eliminar estilos que ya no se estén usando e incoherentes.
-Revisar siempre que el css sea coherente con su jsx 
-NO cambiar estilos y colores de cosas que no te pedi que cambiaras
-*/
-
 @media (hover: none) and (pointer: coarse) {
   button,
   a,

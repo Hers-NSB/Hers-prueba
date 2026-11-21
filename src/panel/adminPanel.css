@@ -1,14 +1,3 @@
-/*Importante hacer esto en mi css:
-Evitar crear !important.
-Crear comentarios del nombre de las secciones del código.
-No poner comentarios explicativos.
-Evitar poner estilos repetidos o que pisen a otros estilos. 
-Usar un nombre de estilo único para este código y evitar que se parezca a otros.
-Eliminar estilos que ya no se estén usando e incoherentes.
-Revisar siempre que el css sea coherente con su jsx 
-NO cambiar estilos y colores de cosas que no te pedi que cambiaras
-*/
-
 .admin-overlay {
   --adminrose-50: #f1ebe4;
   --adminrose-100: #2a2420;
@@ -407,7 +396,6 @@ NO cambiar estilos y colores de cosas que no te pedi que cambiaras
   color: #dfc8b4;
 }
 
-/* CONTRACCIÓN DEL NAV */
 .admin-overlay .admin-sidebar__brand {
   position: relative;
 }
