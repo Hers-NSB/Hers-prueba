@@ -16,3 +16,9 @@ Verificado el 21 de noviembre de 2026.
 
 - La autorización inicial del directorio OAuth sigue pendiente. Abre **Finanzas → Empleados → Conectar directorio de AgencyKey** y autoriza una cuenta con acceso al equipo completo para verificar altas, bajas y roles.
 - Para consultar el reparto de chatters ya vinculados, guarda su porcentaje y vigencia en **Empleados**. Elige el período en **Resumen** y pulsa **Actualizar** para importar sus ventas atribuidas.
+
+## Finanzas y pagos quincenales en revisión
+
+- Rama `codex/finanzas-pagos-quincenales`. Actualiza Resumen, Movimiento, Empleados y Conectores. Cada corte queda en el historial individual. Confirmar un pago positivo crea una inversión vinculada por el mismo importe y protege sus datos contables.
+- Pasaron ESLint, la compilación, 23 pruebas JavaScript y cuatro pruebas de integración SQL sobre una base local aislada. El flujo de interfaz pasó en Chromium a 360, 768 y 1280 px con datos de prueba.
+- Tras integrar la rama, aplica la migración de pagos a Supabase de pruebas, publica el Worker `hers-prueba`, configura `5,20,35,50 * * * *` y autoriza el directorio desde Conectores.

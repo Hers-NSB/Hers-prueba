@@ -1,19 +1,18 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, BarChart3, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
+import { lazy, Suspense, useEffect, useState } from "react";
+import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { dateKey, financeBreakdown, hasOperatingAmounts, investmentTotal, kinds, metricIf, monthRange, netSales, summarize, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
 import CategoryPicker from "./CategoryPicker";
-import Distribution from "./Distribution";
+import PaymentHistory from "./PaymentHistory";
 import "./finanzas.css";
 
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [] };
-const catalog = { platform: "Plataforma", creator: "Modelo" };
-const catalogTables = { platform: "finance_platforms", creator: "finance_creators" };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [], currentPay: {}, payPeriod: null };
+const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
 const pageSize = 500;
 
@@ -34,7 +33,7 @@ async function loadFinance({ from, to }) {
   if (error?.code === "42501" || !error && !allowed) return null;
   if (error) throw error;
   const inPeriod = (query) => query.gte("day", from).lte("day", to);
-  const [allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet] = await Promise.all([
+  const [allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet, payroll] = await Promise.all([
     readRows("finance_movements", ["day", "id"]),
     readRows("finance_agencykey_sales", ["day", "creator_id"], inPeriod),
     readRows("finance_creators", ["name", "id"]),
@@ -45,8 +44,11 @@ async function loadFinance({ from, to }) {
     readRows("finance_model_shares", ["effective_on", "id"]),
     readRows("finance_member_availability", ["effective_on", "member_id"]),
     readRows("finance_agencykey_employee_net", ["day"], inPeriod),
+    supabase.rpc("finance_current_pay"),
   ]);
-  return { ...empty, movements: allMovements.filter(({ day }) => day >= from && day <= to),
+  if (payroll.error) throw payroll.error;
+  const { amounts: currentPay, ...payPeriod } = payroll.data;
+  return { ...empty, currentPay, payPeriod, movements: allMovements.filter(({ day }) => day >= from && day <= to),
     allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet };
 }
 
@@ -55,15 +57,14 @@ export default function Finanzas() {
   const [data, setData] = useState(empty);
   const [tab, setTab] = useState(tabs[0]);
   const [revision, refresh] = useState(0);
-  const [state, setState] = useState("loading");
+  const [access, setAccess] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [editor, setEditor] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [syncError, setSyncError] = useState("");
-  const [directory, setDirectory] = useState(null);
   const [directoryError, setDirectoryError] = useState(null);
   const [directoryRevision, refreshDirectory] = useState(0);
-  const [connecting, setConnecting] = useState(false);
-  const directoryPopup = useRef(null);
   const [movementFilters, setMovementFilters] = useState({});
 
   useEffect(() => {
@@ -72,12 +73,13 @@ export default function Finanzas() {
     loadFinance(filters).then((result) => {
       if (!active) return;
       setData(result ?? empty);
-      setState(result ? "ready" : "denied");
+      setAccess(Boolean(result));
+      setLoading(false);
     }).catch((error) => {
       if (!active) return;
       console.error("Finanzas", error.code || error.message);
-      setData(empty);
-      setState("error");
+      setLoadError(true);
+      setLoading(false);
     });
     return () => { active = false; };
   }, [filters, revision]);
@@ -85,11 +87,10 @@ export default function Finanzas() {
   useEffect(() => {
     if (tab !== "Empleados") return;
     const controller = new AbortController();
-    callApi("/employees", "POST", undefined, controller.signal).then((result) => {
+    callApi("/employees", "POST", undefined, controller.signal).then(() => {
       if (!controller.signal.aborted) {
-        setDirectory(result);
         setDirectoryError(null);
-        refresh((value) => value + 1);
+        reload();
       }
     }).catch((error) => {
       if (!controller.signal.aborted) setDirectoryError(error);
@@ -98,51 +99,42 @@ export default function Finanzas() {
   }, [tab, directoryRevision]);
 
   useEffect(() => {
-    function complete(event) {
-      if (event.origin !== window.location.origin || event.source !== directoryPopup.current ||
-          event.data?.type !== "hers-agencykey-directory") return;
-      if (event.data.connected) refreshDirectory((value) => value + 1);
-      else setDirectoryError(new Error("No se pudo conectar el directorio de AgencyKey"));
-    }
-    window.addEventListener("message", complete);
-    return () => window.removeEventListener("message", complete);
-  }, []);
-
-  async function connectDirectory() {
-    if (connecting) return;
-    const popup = window.open("about:blank", "hers-agencykey-directory", "popup,width=640,height=700");
-    directoryPopup.current = popup;
-    setConnecting(true);
-    try {
-      const { authorize } = await callApi("/agencykey-directory/connect", "POST");
-      if (popup) popup.location.replace(authorize);
-      else window.location.assign(authorize);
-    } catch (error) {
-      popup?.close();
-      setDirectoryError(error);
-    } finally {
-      setConnecting(false);
-    }
-  }
+    if (tab !== "Empleados" || !access) return;
+    const checkPeriod = () => {
+      if (document.visibilityState === "visible") refresh((value) => value + 1);
+    };
+    const timer = window.setInterval(checkPeriod, 60_000);
+    document.addEventListener("visibilitychange", checkPeriod);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", checkPeriod);
+    };
+  }, [access, tab]);
 
   const updateFilters = (period) => {
     if (period.from === filters.from && period.to === filters.to) return;
-    setState("loading");
+    setLoading(true);
+    setLoadError(false);
     setSyncError("");
     setFilters(period);
   };
-  const reload = () => { setState("loading"); refresh((value) => value + 1); };
+  function reload() {
+    setLoading(true);
+    setLoadError(false);
+    refresh((value) => value + 1);
+  }
   const invalid = !filters.from || !filters.to || filters.from > filters.to;
   const totals = summarize(data);
   const distribution = calculateModelDistribution(data.sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
 
   async function update() {
-    if (updating || invalid) return;
+    if (updating || (tab === "Resumen" && invalid)) return;
     setUpdating(true);
     setSyncError("");
     let synced = 0;
+    const range = tab === "Empleados" ? data.payPeriod : filters;
     try {
-      for (let timestamp = Date.parse(filters.from); timestamp <= Date.parse(filters.to); timestamp += 86_400_000) {
+      for (let timestamp = Date.parse(range?.from); timestamp <= Date.parse(range?.to); timestamp += 86_400_000) {
         const day = new Date(timestamp).toISOString().slice(0, 10);
         const result = await callApi("/sync", "POST", { day });
         if (result.future) break;
@@ -157,14 +149,15 @@ export default function Finanzas() {
     }
   }
 
+  const busy = loading || updating;
   return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
-      <div><h1>Finanzas</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
-      <button type="button" className="hf-select-trigger" onClick={update} disabled={updating || invalid || state !== "ready"}>
+      <div><h1>Finanzas {busy && <RefreshCw className="hf-refreshing" size={20} role="status" aria-label="Actualizando Finanzas" />}</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
+      <button type="button" className="hf-select-trigger" onClick={update} disabled={busy || (tab === "Resumen" && invalid) || !access}>
         <RefreshCw size={16} aria-hidden="true" /> {updating ? "Actualizando…" : "Actualizar"}
       </button>
     </header>
-    {state === "denied" ? <p role="alert" className="hf-notice">Tu cuenta no tiene acceso a Finanzas</p> : <>
+    {access === false ? <p role="alert" className="hf-notice">Tu cuenta no tiene acceso a Finanzas</p> : <>
       <nav className="hf-tabs" aria-label="Secciones de Finanzas">
         {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{item}</button>)}
       </nav>
@@ -172,17 +165,16 @@ export default function Finanzas() {
         <PeriodPicker value={filters} onChange={updateFilters} disabled={updating} />
       </div>}
       {syncError && <p className="hf-notice" role="alert">{syncError}</p>}
-      {invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
-      {!invalid && state === "loading" && <p className="hf-notice" role="status">Cargando Finanzas…</p>}
-      {!invalid && state === "error" && <p className="hf-notice" role="alert">No se pudieron cargar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
-      {!invalid && state === "ready" && <>
+      {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
+      {loadError && <p className="hf-notice" role="alert">No se pudieron actualizar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
+      {access && <div aria-busy={busy}>
         {tab === "Resumen" && <Overview totals={totals} data={data} distribution={distribution} />}
         {tab === "Movimiento" && <Movements data={data} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} />}
-        {tab === "Empleados" && <Employees data={data} directory={directory} directoryError={directoryError} connecting={connecting}
-          onConnect={connectDirectory} onRefresh={() => refreshDirectory((value) => value + 1)} onEdit={(type, row) => setEditor({ type, row })} distribution={distribution} />}
-      </>}
-      {editor && <Editor editor={editor} data={data} directory={directory} onClose={() => { setEditor(null); reload(); }}
+        {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
+          onEdit={(type, row) => setEditor({ type, row })} />}
+      </div>}
+      {editor && <Editor editor={editor} data={data} onChange={reload} onClose={() => setEditor(null)}
         onSaved={() => { setEditor(null); reload(); }} />}
 
     </>}
@@ -190,10 +182,17 @@ export default function Finanzas() {
 }
 
 function Choice({ label, value, rows, onChange, placeholder = "Sin asignar", required = false }) {
-  return <label>{label}<select className="hf-select-trigger" required={required} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
-    <option value="">{placeholder}</option>
-    {rows.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
-  </select></label>;
+  return <label>{label}<span className="hf-choice">
+    <select className="hf-select-trigger" required={required} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{placeholder}</option>
+      {rows.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
+    </select><ChevronDown size={17} aria-hidden="true" />
+  </span></label>;
+}
+
+function DateField({ label, value, onChange, required }) {
+  return <label>{label}<input className="hf-select-trigger" type="date" value={value ?? ""}
+    required={required} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function Table({ headings, rows, emptyText = "Sin registros para este período" }) {
@@ -207,12 +206,15 @@ const findName = (rows, id) => rows.find((row) => row.id === id)?.name || "—";
 
 function Breakdown({ data, dimension, title, label, catalog }) {
   const rows = financeBreakdown(data, dimension).map((row) => ({
-    ...row, name: row.id ? findName(catalog, row.id) : "Sin asignar",
+    ...row,
+    name: row.id ? findName(catalog, row.id) : "Sin asignar",
+    profit: row.expenses == null && row.net == null ? null
+      : (Math.round((row.expenses ?? 0) * 100) - Math.round((row.net ?? 0) * 100)) / 100,
   })).sort((a, b) => a.name.localeCompare(b.name, "es"));
   return <section className="hf-section">
     <h2>{title}</h2>
-    <Table headings={[label, "Ingreso agencia", "Inversión", "Ventas netas"]}
-      rows={rows.map(({ id, name, income, expenses, net }) => [id ?? "unassigned", [name, usd(income), usd(expenses), usd(net)]])} />
+    <Table headings={[label, "Ganancia", "Inversión", "Ventas netas"]}
+      rows={rows.map(({ id, name, profit, expenses, net }) => [id ?? "unassigned", [name, usd(profit), usd(expenses), usd(net)]])} />
   </section>;
 }
 
@@ -225,7 +227,7 @@ function Overview({ totals, data, distribution }) {
   const hasOperations = hasOperatingAmounts(data) || vault != null;
   const investment = investmentTotal(movements, totals);
   const cards = [
-    ["Ingreso de la agencia", pending ? null : agencyIncome, Wallet, "income"],
+    ["Bóveda de HERS", pending ? null : agencyIncome, Wallet, "income"],
     ["Inversión", investment, ArrowUpRight, "expenses"],
     ["Ganancia", !pending && hasOperations ? totals.afterInvestment + (vault ?? 0) : null, CircleDollarSign, "profit"],
     ["Ventas netas", netSales(sales, movements), BarChart3, "sales"],
@@ -236,10 +238,11 @@ function Overview({ totals, data, distribution }) {
       <span className="hf-kpi-label"><Icon size={18} aria-hidden="true" />{label}</span>
       <strong>{usd(value)}</strong>
     </article>)}</div>
-    <Suspense fallback={<p className="hf-notice" role="status">Cargando gráficos…</p>}>
+    <Suspense fallback={<section className="hf-section hf-trend" aria-busy="true">
+      <h2>Resultado operativo</h2><div className="hf-chart" />
+    </section>}>
       <FinanceCharts data={data} agencyByDay={distribution.agencyByDay} pendingDays={distribution.pendingDays} />
     </Suspense>
-    <dl className="hf-financial-detail"><div><dt>Bóveda de Agencia HERS</dt><dd>{pending ? "Pendiente de ventas de chatters" : usd(vault)}</dd></div></dl>
     <div className="hf-breakdowns">
       <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
       <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
@@ -249,13 +252,9 @@ function Overview({ totals, data, distribution }) {
 
 function Movements({ data, filters, onFilter, onEdit }) {
   const change = (key, value) => onFilter((current) => ({ ...current, [key]: value }));
-  const input = (label, key, type = "text") => <label>{label}
-    <input type={type} value={filters[key] ?? ""} onChange={(event) => change(key, event.target.value)} />
-  </label>;
   const select = (label, key, rows, placeholder = "Todos") => <Choice label={label} value={filters[key]}
     rows={rows} placeholder={placeholder} onChange={(value) => change(key, value)} />;
   const categories = [...new Set([...data.categories.map(({ name }) => name), ...data.allMovements.map(({ category }) => category)])].sort();
-  const matches = (value, term) => !term || String(value ?? "").toLocaleLowerCase("es").includes(term.trim().toLocaleLowerCase("es"));
   const rows = data.allMovements.filter((row) =>
     (!filters.from || row.day >= filters.from) &&
     (!filters.to || row.day <= filters.to) &&
@@ -263,20 +262,19 @@ function Movements({ data, filters, onFilter, onEdit }) {
     (!filters.category || row.category === filters.category) &&
     (!filters.creator || (row.creator_id ?? "none") === filters.creator) &&
     (!filters.platform || (row.platform_id ?? "none") === filters.platform) &&
-    matches(row.description, filters.description) &&
-    matches(Number(row.amount).toFixed(2), filters.amount?.replace(",", ".")) &&
     (!filters.updated || Boolean(row.updated_at) === (filters.updated === "yes")));
   return <section className="hf-section">
     <div className="hf-summary-head"><h2>Movimiento</h2><button type="button" className="hf-primary" onClick={() => onEdit()}><Plus size={16} /> Registrar movimiento</button></div>
     <div className="hf-movement-filters" role="group" aria-label="Filtros de movimientos">
-      {input("Desde", "from", "date")}
-      {input("Hasta", "to", "date")}
+      <fieldset className="hf-date-range">
+        <legend>Fechas</legend>
+        <DateField label="Desde" value={filters.from} onChange={(value) => change("from", value)} />
+        <DateField label="Hasta" value={filters.to} onChange={(value) => change("to", value)} />
+      </fieldset>
       {select("Tipo", "kind", [{ id: "investment", name: kinds.investment }, { id: "income", name: kinds.income }])}
       {select("Categoría", "category", categories.map((name) => ({ id: name, name })), "Todas")}
       {select("Modelo", "creator", [...data.creators, { id: "none", name: "Sin asignar" }])}
       {select("Plataforma", "platform", [...data.platforms, { id: "none", name: "Sin asignar" }], "Todas")}
-      {input("Importe (USD)", "amount")}
-      {input("Descripción", "description")}
       {select("Actualizado", "updated", [{ id: "yes", name: "Sí" }, { id: "no", name: "No" }])}
       <button type="button" onClick={() => onFilter({})}>Limpiar filtros</button>
     </div>
@@ -287,7 +285,8 @@ function Movements({ data, filters, onFilter, onEdit }) {
           {row.category}<small role="tooltip" id={`description-${row.id}`}>{row.description}</small>
         </span> : row.category,
         findName(data.creators, row.creator_id), findName(data.platforms, row.platform_id), usd(row.amount),
-        <div className="hf-actions"><button type="button" aria-label={`Editar ${kinds[row.kind]} del ${row.day}`} onClick={() => onEdit(row)}>Editar</button>
+        <div className="hf-actions">{row.finance_payment_id ? <span>Pago confirmado</span>
+          : <button type="button" aria-label={`Editar ${kinds[row.kind]} del ${row.day}`} onClick={() => onEdit(row)}>Editar</button>}
           {row.updated_at && <span className="hf-updated" title={`Actualizado el ${new Date(row.updated_at).toLocaleString("es-VE")}`}>
             <FileCheck size={17} aria-label="Movimiento actualizado" />
           </span>}
@@ -299,45 +298,45 @@ const isCurrent = (entry) => entry.agencykey_available !== false;
 const percentage = new Intl.NumberFormat("es-VE", { style: "percent", maximumFractionDigits: 2 });
 const percentLabel = (value) => percentage.format(Number(value) / 100);
 
-function Employees({ data, directory, directoryError, connecting, onConnect, onRefresh, onEdit, distribution }) {
-  const currentDay = dateKey(new Date());
+function Employees({ data, directoryError, onEdit }) {
+  const currentDay = data.payPeriod?.day ?? dateKey(new Date());
   const members = data.members.filter((row) => !row.archived_on && isCurrent(row));
-  const creators = data.creators.filter(isCurrent).map((row) => ({ ...row, role: "Modelo" }));
-  const rows = [
-    ...members.map((row) => [row, "member", `chatter:${row.id}`]),
-    ...creators.map((row) => [row, "modelShare", `model:${row.id}`]),
+  const creators = data.creators.filter(isCurrent);
+  const participants = [
+    ...data.members.map((row) => [row, "member", `chatter:${row.id}`, !row.archived_on && isCurrent(row)]),
+    ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isCurrent(row)]),
   ].sort(([a], [b]) => a.name.localeCompare(b.name, "es"));
+  const headings = ["Nombre", "Rol", "Origen", "Porcentaje", "Pago (USD)", "Acciones"];
+  const rows = (active) => participants.filter((entry) => entry[3] === active).map(([row, type, recipient]) => {
+    const rate = effectiveShare(data.rates, recipient, currentDay);
+    const eligible = type === "modelShare" || isChatter(row.role);
+    const payout = data.currentPay[recipient] ?? (data.payPeriod?.day === data.payPeriod?.from && row.agencykey_id ? 0 : null);
+    const amount = !eligible || !rate ? "—" : payout == null && !row.agencykey_id && type === "member"
+      ? "Pendiente de vincular" : payout == null ? "Pendiente de sincronizar" : usd(payout);
+    return [recipient, [row.name, row.role, row.agencykey_id ? "AgencyKey" : "Manual",
+      rate ? percentLabel(rate.percent) : "—", active ? amount : "—",
+      <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
+        {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
+  });
+  const inactive = rows(false);
   return <>
     <div className="hf-summary-head">
       <h2>Empleados</h2>
       <div className="hf-actions">
-        <button type="button" onClick={() => onEdit("agencykey")} disabled={!directory || Boolean(directoryError)}><Plus size={16} /> Agregar desde AgencyKey</button>
         <button type="button" onClick={() => onEdit("member")}><Plus size={16} /> Agregar empleado</button>
       </div>
     </div>
-    {directoryError && <div className="hf-actions hf-directory-actions">
-      <button type="button" onClick={onConnect} disabled={connecting}>Conectar directorio de AgencyKey</button>
-      <button type="button" onClick={onRefresh}>Reintentar consulta</button>
-      {!directoryError.message.startsWith("[AK-DIRECTORY-CONNECT]") && <p role="alert">{directoryError.message}</p>}
-    </div>}
-    <Table headings={["Nombre", "Rol", "Origen", "Base del porcentaje", "Porcentaje", "Ganancia del período", "Acciones"]} emptyText="Sin empleados registrados"
-      rows={rows.map(([row, type, recipient]) => {
-        const rate = effectiveShare(data.rates, recipient, currentDay);
-        const byEmployee = rate ? rate.basis === "employee_sales" : type === "member" && isChatter(row.role);
-        const models = type === "modelShare" ? row.name : rate?.creator_ids.map((id) => findName(data.creators, id)).join(", ") || "—";
-        const payout = distribution.pendingRecipients?.has(recipient)
-          ? row.agencykey_id ? "Pendiente de sincronizar" : "Pendiente de vincular"
-          : usd(distribution.payouts.get(recipient));
-        return [recipient, [row.name, row.role, row.agencykey_id ? "AgencyKey" : "Manual",
-          byEmployee ? "Ventas propias en AgencyKey" : models,
-          rate ? percentLabel(rate.percent) : "—", payout,
-          <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
-            {type === "member" && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
-      })} />
-    <Distribution data={data} />
+    <p className="hf-employee-count">{creators.length} modelos · {members.filter(({ role }) => isChatter(role)).length} chatters
+      {data.payPeriod && ` · Corte actual: ${data.payPeriod.from} a ${data.payPeriod.to}`}</p>
+    {directoryError && <p className="hf-notice" role="alert">{directoryError.message.startsWith("[AK-DIRECTORY-CONNECT]")
+      ? "Autoriza el directorio de AgencyKey en Conectores para sincronizar el listado."
+      : directoryError.message}</p>}
+    <Table headings={headings} rows={rows(true)} emptyText="Sin empleados registrados" />
+    {inactive.length > 0 && <details className="hf-section"><summary>Personas inactivas</summary>
+      <Table headings={headings} rows={inactive} />
+    </details>}
     <section className="hf-section">
       <div className="hf-summary-head"><h2>Catálogos</h2><div className="hf-actions">
-        <button type="button" onClick={() => onEdit("creator")}><Plus size={16} /> Agregar modelo</button>
         <button type="button" onClick={() => onEdit("platform")}><Plus size={16} /> Agregar plataforma</button>
       </div></div>
       <Table headings={["Plataforma"]} emptyText="Sin plataformas registradas" rows={data.platforms.map(({ id, name }) => [id, [name]])} />
@@ -345,21 +344,20 @@ function Employees({ data, directory, directoryError, connecting, onConnect, onR
   </>;
 }
 
-function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
+function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
   const today = dateKey(new Date());
+  const rateDay = data.payPeriod?.day ?? today;
   const recipient = type === "modelShare" ? `model:${row.id}` : row && `chatter:${row.id}`;
-  const share = effectiveShare(data.rates, recipient, today);
-  const initialValues = { day: today, effective_on: today, kind: "investment", percent: 0, creator_ids: [],
+  const share = effectiveShare(data.rates, recipient, rateDay);
+  const initialValues = { day: today, effective_on: rateDay, kind: "investment", percent: 0, creator_ids: [],
     ...row, ...(share && { percent: share.percent, creator_ids: share.creator_ids }) };
   const [values, setValues] = useState(initialValues);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setValues((current) => ({ ...current, [key]: value }));
-  const candidates = directory?.employees ?? [];
-  const candidate = candidates.find((entry) => entry.id === values.agencykey_id);
   const availableModels = data.creators.filter((creator) => isCurrent(creator) || values.creator_ids.includes(creator.id));
-  const memberShare = type === "member" || type === "agencykey";
-  const byEmployee = memberShare && isChatter(candidate?.role ?? values.role);
+  const memberShare = type === "member";
+  const byEmployee = memberShare && isChatter(values.role);
   const field = (label, key, props) => <label>{label}<input {...props} value={values[key] ?? ""} onChange={(e) => set(key, e.target.value)} /></label>;
   const select = (label, key, rows) =>
     <Choice label={label} value={values[key]} rows={rows} onChange={(value) => set(key, value)} />;
@@ -384,8 +382,8 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
       } else if (memberShare) {
         if (!byEmployee && Number(values.percent) > 0 && !values.creator_ids.length) throw new Error("Selecciona al menos un modelo");
         request = supabase.rpc("finance_save_member_share", {
-          p_member_id: row?.id ?? null, p_agencykey_id: candidate?.id ?? null,
-          p_name: candidate?.name ?? values.name, p_role: candidate?.role ?? values.role,
+          p_member_id: row?.id ?? null, p_agencykey_id: null,
+          p_name: values.name, p_role: values.role,
           p_effective_on: values.effective_on, p_percent: Number(values.percent), p_creator_ids: byEmployee ? [] : values.creator_ids,
         });
       } else if (type === "modelShare") {
@@ -393,7 +391,7 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
           creator_id: row.id, member_id: null, effective_on: values.effective_on, percent: Number(values.percent),
         }, { onConflict: "member_id,creator_id,effective_on" });
       } else {
-        request = supabase.from(catalogTables[type]).insert({ name: values.name.trim() });
+        request = supabase.from("finance_platforms").insert({ name: values.name.trim() });
       }
       const { error: failure } = await request;
       if (failure) throw failure;
@@ -405,7 +403,7 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
   };
 
   const title = { movement: row ? "Editar movimiento" : "Registrar movimiento", member: row ? "Editar empleado" : "Agregar empleado",
-    agencykey: "Agregar desde AgencyKey", archive: "Eliminar empleado", modelShare: "Editar porcentaje del modelo" };
+    archive: "Eliminar empleado", modelShare: "Editar porcentaje del modelo" };
   const kind = values.kind === "expense" ? "investment" : values.kind;
 
   return <dialog className="hf-dialog" aria-labelledby="hf-editor-title" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
@@ -413,33 +411,29 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
       <h2 id="hf-editor-title">{title[type] ?? `Agregar ${catalog[type]?.toLowerCase()}`}</h2>
       <div className="hf-form">
         {type === "movement" && <>
-          {field("Fecha", "day", { type: "date", required: true })}
-          <label>Tipo<select className="hf-select-trigger" value={kind} onChange={(e) => set("kind", e.target.value)}>
-            <option value="investment">Inversión</option><option value="income">Ingreso</option>
-          </select></label>
-          <CategoryPicker categories={data.categories} value={values.category} onChange={(value) => set("category", value)} />
-          {field("Descripción", "description", { maxLength: 500 })}
+          <DateField label="Fecha" value={values.day} onChange={(value) => set("day", value)} required />
+          <Choice label="Tipo" value={kind} rows={[{ id: "investment", name: "Inversión" }, { id: "income", name: "Ingreso" }]}
+            onChange={(value) => set("kind", value)} placeholder="Selecciona un tipo" required />
+          <CategoryPicker categories={data.categories} value={values.category} onChange={(value) => set("category", value)} onSaved={onChange} />
           {select("Modelo", "creator_id", data.creators)}
           {select("Plataforma", "platform_id", data.platforms)}
           {field(kind === "income" ? "Ingreso a agencia (USD)" : "Importe (USD)", "amount",
             { type: "number", step: "0.01", min: kind === "income" ? undefined : "0.01", required: true })}
+          <div className="hf-full-field">{field("Descripción", "description", { maxLength: 500 })}</div>
         </>}
         {type === "archive" && <p>Retirar a {row.name} del listado de empleados y conservar su historial</p>}
-        {type === "agencykey" && <Choice label="Empleado" value={candidate?.id} required placeholder="Selecciona un empleado"
-          rows={candidates.filter((entry) => !data.members.some((member) => !member.archived_on && member.agencykey_id === entry.id))}
-          onChange={(id) => set("agencykey_id", id)} />}
         {type === "member" && !row?.agencykey_id && <>
           {field("Nombre", "name", { maxLength: 120, required: true })}
           {field("Rol", "role", { maxLength: 120, required: true })}
         </>}
-        {(candidate || type === "modelShare" || type === "member" && row?.agencykey_id) &&
-          <p>{candidate?.name ?? row.name} · {candidate?.role ?? row.role}</p>}
+        {(type === "modelShare" || type === "member" && row?.agencykey_id) &&
+          <p>{row.name} · {row.role}</p>}
         {(memberShare || type === "modelShare") && <>
           {field("Porcentaje", "percent", { type: "number", min: 0, max: 100, step: "0.01", required: true })}
-          {field("Vigente desde", "effective_on", { type: "date", required: true })}
+          <DateField label="Vigente desde" value={values.effective_on} onChange={(value) => set("effective_on", value)} required />
         </>}
         {byEmployee && <p>Ventas netas atribuidas en todas las cuentas de AgencyKey.
-          {!(candidate?.id || row?.agencykey_id) && " Agrega al chatter desde AgencyKey para vincular sus ventas."}</p>}
+          {!row?.agencykey_id && " Se necesita una cuenta de AgencyKey para atribuir ventas."}</p>}
         {memberShare && !byEmployee && <fieldset className="hf-model-options"><legend>Modelos asignados</legend>
           {availableModels.map(({ id, name }) => <label key={id}>
             <input type="checkbox" checked={values.creator_ids.includes(id)} onChange={(event) =>
@@ -450,9 +444,10 @@ function Editor({ editor: { type, row }, data, directory, onClose, onSaved }) {
         </fieldset>}
         {catalog[type] && field("Nombre", "name", { maxLength: 120, required: true })}
       </div>
+      {row && (memberShare || type === "modelShare") && <PaymentHistory type={type} person={row.id} onConfirmed={onChange} />}
       {error && <p className="hf-notice" role="alert">{error}</p>}
       <div className="hf-actions"><button type="button" disabled={saving} onClick={onClose}>Cancelar</button>
-        <button type="submit" className="hf-primary" disabled={saving || (type === "agencykey" && !candidate)}>{saving ? "Guardando…" : type === "archive" ? "Eliminar" : "Guardar"}</button></div>
+        <button type="submit" className="hf-primary" disabled={saving || Boolean(row?.archived_on && memberShare)}>{saving ? "Guardando…" : type === "archive" ? "Eliminar" : "Guardar"}</button></div>
     </form>
   </dialog>;
 }

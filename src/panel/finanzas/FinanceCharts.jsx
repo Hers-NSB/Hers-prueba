@@ -12,8 +12,8 @@ const dayMs = 86_400_000;
 export default function FinanceCharts({ data, agencyByDay, pendingDays }) {
   const title = "Resultado operativo";
   const points = dailyFinance(data, agencyByDay).map((point) =>
-    pendingDays?.has(new Date(point.date).toISOString().slice(0, 10)) ? { ...point, income: null, profit: null } : point)
-    .filter(({ profit, expenses }) => profit !== null || expenses !== null);
+    pendingDays?.has(new Date(point.date).toISOString().slice(0, 10)) ? { ...point, income: null } : point)
+    .filter(({ income, expenses }) => income !== null || expenses !== null);
   const day = points[0]?.date;
   const dates = points.length === 1 ? [day] : undefined;
   const domain = points.length === 1 ? [day - dayMs, day + dayMs] : ["dataMin", "dataMax"];
@@ -32,13 +32,11 @@ export default function FinanceCharts({ data, agencyByDay, pendingDays }) {
             contentStyle={{ background: "var(--hf-bg)", border: "1px solid var(--hf-line)", borderRadius: 8 }}
             labelStyle={{ color: "var(--hf-ink)" }}
             labelFormatter={(value) => longDate.format(value)}
-            formatter={(value, name, item) => [usd(value),
-              item.dataKey === "profit" && item.payload.provisional ? `${name} (provisional)` : name]} />
+            formatter={(value) => usd(value)} />
           <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
           {[
             ["expenses", "Inversión", "var(--hf-expense)"],
             ["income", "Ingreso", "var(--hf-accent)"],
-            ["profit", "Ganancia", "var(--hf-profit)"],
           ].map(([dataKey, name, stroke]) => <Line key={dataKey} dataKey={dataKey} name={name} stroke={stroke}
             strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} connectNulls />)}
         </LineChart>
