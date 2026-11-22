@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { KeyRound, Plus, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import callApi from "./connectorApi";
 import { usd } from "../finanzas/finance";
@@ -15,6 +15,7 @@ export default function Integrations() {
   const [formError, setFormError] = useState("");
   const [action, setAction] = useState("");
   const [notice, setNotice] = useState(null);
+  const directoryPopup = useRef(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -23,6 +24,35 @@ export default function Integrations() {
     });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    function complete(event) {
+      if (event.origin !== window.location.origin || event.source !== directoryPopup.current ||
+          event.data?.type !== "hers-agencykey-directory") return;
+      setNotice(event.data.connected
+        ? { success: "Directorio de AgencyKey autorizado" }
+        : { error: "No se pudo autorizar el directorio de AgencyKey" });
+    }
+    window.addEventListener("message", complete);
+    return () => window.removeEventListener("message", complete);
+  }, []);
+
+  async function connectDirectory() {
+    if (action) return;
+    const popup = window.open("about:blank", "hers-agencykey-directory", "popup,width=640,height=700");
+    directoryPopup.current = popup;
+    setAction("directory");
+    try {
+      const { authorize } = await callApi("/agencykey-directory/connect", "POST");
+      if (popup) popup.location.replace(authorize);
+      else window.location.assign(authorize);
+    } catch (error) {
+      popup?.close();
+      setNotice({ error: error.message });
+    } finally {
+      setAction("");
+    }
+  }
 
   async function perform(operation) {
     setAction(operation);
@@ -80,6 +110,7 @@ export default function Integrations() {
           {data.sync && <div><dt>Último día importado</dt><dd>{data.sync.through_day}</dd></div>}
         </dl>
         <div className="hf-actions">
+          <button type="button" disabled={busy} onClick={connectDirectory}>Autorizar directorio de AgencyKey</button>
           {agencyKeySaved ? <>
             <button type="button" disabled={busy} onClick={() => perform("test")}>{action === "test" ? "Probando…" : "Probar conexión"}</button>
           </> : <button type="button" className="hf-primary" disabled={busy} onClick={() => edit()}>Configurar AgencyKey</button>}

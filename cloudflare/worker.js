@@ -1,5 +1,5 @@
 import { beginDirectory, finishDirectory, syncDirectory } from "./agencykey-directory.js";
-import { bridge, handleIntegrations, IntegrationError, storedAgencyKey } from "./integrations.js";
+import { bridge, handleIntegrations, IntegrationError, storedAgencyKey, workerRpc } from "./integrations.js";
 
 const api = "https://app.agencykey.com/api/v1/public/crm/reports";
 const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
@@ -236,7 +236,7 @@ function employeeNetTotals(report) {
   return Object.fromEntries(totals);
 }
 
-export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
+export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now(), closeDay = false) {
   const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
   const currentDay = formatDay(instant, zone);
   day ??= previousDay(instant, zone).day;
@@ -298,14 +298,32 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   const employeeReport = await queryAgencyKey(key, "/v1/public/crm/reports/employees",
     { fromDate, toDate }, send, "AK-EMPLOYEE-SALES", "las ventas atribuidas a empleados");
   const employeeNet = employeeNetTotals(employeeReport);
-  if (!testOnly) await bridge(project, env, "import", {
-    p_day: day, p_sales: sales, p_attributions: null, p_employee_net: employeeNet,
-  }, send);
+  if (!testOnly) {
+    const payload = { p_day: day, p_sales: sales, p_attributions: null, p_employee_net: employeeNet };
+    if (closeDay) await workerRpc("hers_payroll_worker", project, env, "import", payload, send);
+    else await bridge(project, env, "import", payload, send);
+  }
   return { day, creators: sales.length, attributions: Object.keys(employeeNet).length, ...(testOnly ? { transactionModels,
     netTotal: sales.reduce((sum, row) => sum + Math.round(row.net * 100), 0) / 100 } : {}) };
 }
 
 export default {
+  async scheduled(event, env) {
+    const report_zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
+    const scheduled = new Date(event.scheduledTime);
+    if (scheduled.getUTCHours() === 6 && scheduled.getUTCMinutes() === 5) {
+      try {
+        await syncDirectory(project, env);
+      } catch (error) {
+        if (error.code !== "AK-DIRECTORY-CONNECT") console.warn("Directorio de AgencyKey", error.code || error.name);
+      }
+    }
+    const next = await workerRpc("hers_payroll_worker", project, env, "next", { report_zone }, fetch);
+    if (next.day) {
+      const result = await importNet(next.day, env, fetch, false, event.scheduledTime, true);
+      if (result.skipped || result.future) throw new Error("No se pudo completar el día de pagos de AgencyKey");
+    }
+  },
   fetch(request, env) {
     const path = new URL(request.url).pathname;
     if (path === "/restablecer-contrasena" || path === "/restablecer-contrasena/") {
