@@ -139,6 +139,9 @@ export async function handleIntegrations(request, project, env, run, send = fetc
       const ciphertext = await seal(env.HERS_INTEGRATIONS_SECRET, service, kind, value);
       return json(await bridge(project, env, "save", { service, kind, ciphertext, updated_by: user }, send));
     }
+    if (request.method === "GET" && action === "/agencykey-directory" && directory) {
+      return json(await directory.status(project, env, send));
+    }
     if (request.method === "POST" && action === "/agencykey-directory/connect" && directory) {
       return await directory.begin(request, user, env, send);
     }

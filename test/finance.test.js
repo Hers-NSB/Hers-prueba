@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dailyFinance, financeBreakdown, netSales, ONLYFANS, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
+import { dailyFinance, financeBreakdown, missingAgencyKeyDays, netSales, ONLYFANS, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
 import { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
@@ -138,7 +138,7 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
           hasMore: !later, nextMarker: 123 });
       }
       if (url.includes("/crm/reports/employees?")) return Response.json({ data: [] });
-      if (url.includes("/crm/reports/creators?")) return Response.json({ data: [{ creatorId: creator, totalSalesCount: 1 }] });
+      if (url.includes("/crm/reports/creators?")) return Response.json({ data: rows === false ? [] : [{ creatorId: creator, totalSalesCount: 1, totalSalesSum: 35 }] });
       assert.equal(JSON.parse(options.body).p_action, "agencykey", "La prueba nunca escribe ventas");
       return Response.json(null);
     };
@@ -148,6 +148,9 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
   const fallback = await importNet("2026-11-19", env, send([]), true, instant);
   assert.equal(fallback.transactionModels, 1);
   assert.equal(fallback.netTotal, 28);
+  const inactive = await importNet("2026-11-19", env, send(false), true, instant);
+  assert.equal(inactive.creators, 1);
+  assert.equal(inactive.netTotal, 0);
   await assert.rejects(importNet("2026-11-19", env, send(null), true, instant), (error) => {
     assert.equal(error.code, "AK-NET-EMPTY");
     assert.match(error.message, /1 de 1 modelos.*Día 2026-11-19/);
@@ -186,4 +189,17 @@ test("calcula la ganancia sobre ventas netas y presenta importes sin centavos", 
   assert.equal(salesProfit(null, null), null);
   assert.equal(usd(100.49), usd(100));
   assert.equal(usd(100.50), usd(101));
+});
+
+test("elige los días incompletos y conserva los ceros confirmados", () => {
+  const sales = [
+    { day: "2026-11-01", creator_id: creator, net: 0 },
+    { day: "2026-11-02", creator_id: creator, net: null },
+  ];
+  const models = [
+    { id: creator, agencykey_id: "api-1" },
+    { id: member, agencykey_id: "api-2", agencykey_available: false },
+  ];
+  assert.deepEqual(missingAgencyKeyDays({ from: "2026-11-01", to: "2026-11-03" }, sales, models),
+    ["2026-11-02", "2026-11-03"]);
 });

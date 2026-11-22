@@ -1,4 +1,4 @@
-import { beginDirectory, finishDirectory, syncDirectory } from "./agencykey-directory.js";
+import { beginDirectory, directoryStatus, finishDirectory, syncDirectory } from "./agencykey-directory.js";
 import { bridge, handleIntegrations, IntegrationError, storedAgencyKey, workerRpc } from "./integrations.js";
 
 const api = "https://app.agencykey.com/api/v1/public/crm/reports";
@@ -286,11 +286,20 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   if (empty.length) {
     const report = await queryAgencyKey(key, "/v1/public/crm/reports/creators",
       { fromDate, toDate }, send, "AK-CRM", "el reporte CRM de contraste");
-    const byCreator = new Map((Array.isArray(report?.data) ? report.data : []).map((row) => [row?.creatorId, row]));
-    const unconfirmed = empty.filter((id) => {
-      const row = byCreator.get(id);
-      return money(row?.totalSalesCount) !== 0 || money(row?.totalSalesSum) !== 0;
-    }).length;
+    const byCreator = new Map();
+    for (const row of Array.isArray(report?.data) ? report.data : []) {
+      const count = money(row?.totalSalesCount);
+      const total = money(row?.totalSalesSum);
+      if (!isId(row?.creatorId) || count === null || total === null || byCreator.has(row.creatorId)) {
+        byCreator.clear();
+        break;
+      }
+      byCreator.set(row.creatorId, count !== 0 || total !== 0);
+    }
+    // The CRM can omit models without attributed sales. Require a valid report
+    // before using absence to corroborate an empty, fully paginated ledger.
+    const completeReport = byCreator.size > 0 || Array.isArray(report?.data) && report.data.length === 0;
+    const unconfirmed = empty.filter((id) => !completeReport || byCreator.get(id) === true).length;
     if (unconfirmed) {
       throw new IntegrationError(502, `El gráfico y las transacciones no confirmaron el neto para ${unconfirmed} de ${entries.length} modelos · Día ${day} · Ventana UTC ${fromDate} a ${toDate}`, "AK-NET-EMPTY");
     }
@@ -334,7 +343,7 @@ export default {
     }
     if (path === "/api/admin/integrations" || path.startsWith("/api/admin/integrations/")) {
       return handleIntegrations(request, project, env, (testOnly, day) => importNet(day, env, fetch, testOnly), fetch,
-        { begin: beginDirectory, finish: finishDirectory, sync: syncDirectory });
+        { begin: beginDirectory, finish: finishDirectory, status: directoryStatus, sync: syncDirectory });
     }
     return env.ASSETS.fetch(request);
   },
