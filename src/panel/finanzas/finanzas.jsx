@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { dateKey, financeBreakdown, hasOperatingAmounts, investmentTotal, kinds, metricIf, monthRange, netSales, summarize, usd } from "./finance";
+import { dateKey, financeBreakdown, investmentTotal, kinds, metricIf, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
@@ -61,6 +61,7 @@ export default function Finanzas() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [editor, setEditor] = useState(null);
+  const [payments, setPayments] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [syncError, setSyncError] = useState("");
   const [directoryError, setDirectoryError] = useState(null);
@@ -172,10 +173,13 @@ export default function Finanzas() {
         {tab === "Movimiento" && <Movements data={data} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
-          onEdit={(type, row) => setEditor({ type, row })} />}
+          onEdit={(type, row) => setEditor({ type, row })} onPayments={setPayments} />}
       </div>}
       {editor && <Editor editor={editor} data={data} onChange={reload} onClose={() => setEditor(null)}
         onSaved={() => { setEditor(null); reload(); }} />}
+      {payments && <PaymentHistory key={payments.recipient} {...payments}
+        rate={effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()))}
+        movements={data.allMovements} onConfirmed={reload} onClose={() => setPayments(null)} />}
 
     </>}
   </section>;
@@ -184,15 +188,10 @@ export default function Finanzas() {
 function Choice({ label, value, rows, onChange, placeholder = "Sin asignar", required = false }) {
   return <label>{label}<span className="hf-choice">
     <select className="hf-select-trigger" required={required} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{placeholder}</option>
+      {placeholder && <option value="">{placeholder}</option>}
       {rows.map(({ id, name }) => <option key={id} value={id}>{name}</option>)}
     </select><ChevronDown size={17} aria-hidden="true" />
   </span></label>;
-}
-
-function DateField({ label, value, onChange, required }) {
-  return <label>{label}<input className="hf-select-trigger" type="date" value={value ?? ""}
-    required={required} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 
 function Table({ headings, rows, emptyText = "Sin registros para este período" }) {
@@ -208,13 +207,12 @@ function Breakdown({ data, dimension, title, label, catalog }) {
   const rows = financeBreakdown(data, dimension).map((row) => ({
     ...row,
     name: row.id ? findName(catalog, row.id) : "Sin asignar",
-    profit: row.expenses == null && row.net == null ? null
-      : (Math.round((row.expenses ?? 0) * 100) - Math.round((row.net ?? 0) * 100)) / 100,
+    profit: salesProfit(row.net, row.expenses),
   })).sort((a, b) => a.name.localeCompare(b.name, "es"));
   return <section className="hf-section">
     <h2>{title}</h2>
     <Table headings={[label, "Ganancia", "Inversión", "Ventas netas"]}
-      rows={rows.map(({ id, name, profit, expenses, net }) => [id ?? "unassigned", [name, usd(profit), usd(expenses), usd(net)]])} />
+      rows={rows.map(({ id, name, profit, expenses, net }) => [id ?? "unassigned", [name, usd(profit == null ? null : Math.abs(profit)), usd(expenses), usd(net)]])} />
   </section>;
 }
 
@@ -224,13 +222,13 @@ function Overview({ totals, data, distribution }) {
   const pending = Boolean(distribution.pendingDays?.size);
   const manualIncome = metricIf(movements, "income", totals.agency);
   const agencyIncome = manualIncome == null && vault == null ? null : (manualIncome ?? 0) + (vault ?? 0);
-  const hasOperations = hasOperatingAmounts(data) || vault != null;
   const investment = investmentTotal(movements, totals);
+  const net = netSales(sales, movements);
   const cards = [
     ["Bóveda de HERS", pending ? null : agencyIncome, Wallet, "income"],
     ["Inversión", investment, ArrowUpRight, "expenses"],
-    ["Ganancia", !pending && hasOperations ? totals.afterInvestment + (vault ?? 0) : null, CircleDollarSign, "profit"],
-    ["Ventas netas", netSales(sales, movements), BarChart3, "sales"],
+    ["Ganancia", salesProfit(net, investment), CircleDollarSign, "profit"],
+    ["Ventas netas", net, BarChart3, "sales"],
   ];
   return <>
     <h2>Resumen del período</h2>
@@ -266,17 +264,16 @@ function Movements({ data, filters, onFilter, onEdit }) {
   return <section className="hf-section">
     <div className="hf-summary-head"><h2>Movimiento</h2><button type="button" className="hf-primary" onClick={() => onEdit()}><Plus size={16} /> Registrar movimiento</button></div>
     <div className="hf-movement-filters" role="group" aria-label="Filtros de movimientos">
-      <fieldset className="hf-date-range">
-        <legend>Fechas</legend>
-        <DateField label="Desde" value={filters.from} onChange={(value) => change("from", value)} />
-        <DateField label="Hasta" value={filters.to} onChange={(value) => change("to", value)} />
-      </fieldset>
+      <div className="hf-date-filter">
+        <PeriodPicker label="Fechas" value={filters} allowFuture onChange={({ from, to }) =>
+          onFilter((current) => ({ ...current, from, to }))} />
+        <button type="button" onClick={() => onFilter({})}>Limpiar filtros</button>
+      </div>
       {select("Tipo", "kind", [{ id: "investment", name: kinds.investment }, { id: "income", name: kinds.income }])}
       {select("Categoría", "category", categories.map((name) => ({ id: name, name })), "Todas")}
       {select("Modelo", "creator", [...data.creators, { id: "none", name: "Sin asignar" }])}
       {select("Plataforma", "platform", [...data.platforms, { id: "none", name: "Sin asignar" }], "Todas")}
       {select("Actualizado", "updated", [{ id: "yes", name: "Sí" }, { id: "no", name: "No" }])}
-      <button type="button" onClick={() => onFilter({})}>Limpiar filtros</button>
     </div>
     <Table headings={["Fecha", "Tipo", "Categoría", "Modelo", "Plataforma", "Importe", "Acción"]}
       emptyText="Sin movimientos para estos filtros"
@@ -298,7 +295,7 @@ const isCurrent = (entry) => entry.agencykey_available !== false;
 const percentage = new Intl.NumberFormat("es-VE", { style: "percent", maximumFractionDigits: 2 });
 const percentLabel = (value) => percentage.format(Number(value) / 100);
 
-function Employees({ data, directoryError, onEdit }) {
+function Employees({ data, directoryError, onEdit, onPayments }) {
   const currentDay = data.payPeriod?.day ?? dateKey(new Date());
   const members = data.members.filter((row) => !row.archived_on && isCurrent(row));
   const creators = data.creators.filter(isCurrent);
@@ -306,16 +303,17 @@ function Employees({ data, directoryError, onEdit }) {
     ...data.members.map((row) => [row, "member", `chatter:${row.id}`, !row.archived_on && isCurrent(row)]),
     ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isCurrent(row)]),
   ].sort(([a], [b]) => a.name.localeCompare(b.name, "es"));
-  const headings = ["Nombre", "Rol", "Origen", "Porcentaje", "Pago (USD)", "Acciones"];
+  const headings = ["Nombre", "Rol", "Porcentaje", "Pago (USD)", "Acciones"];
   const rows = (active) => participants.filter((entry) => entry[3] === active).map(([row, type, recipient]) => {
     const rate = effectiveShare(data.rates, recipient, currentDay);
     const eligible = type === "modelShare" || isChatter(row.role);
     const payout = data.currentPay[recipient] ?? (data.payPeriod?.day === data.payPeriod?.from && row.agencykey_id ? 0 : null);
     const amount = !eligible || !rate ? "—" : payout == null && !row.agencykey_id && type === "member"
       ? "Pendiente de vincular" : payout == null ? "Pendiente de sincronizar" : usd(payout);
-    return [recipient, [row.name, row.role, row.agencykey_id ? "AgencyKey" : "Manual",
+    return [recipient, [row.name, row.role,
       rate ? percentLabel(rate.percent) : "—", active ? amount : "—",
       <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
+        <button type="button" onClick={() => onPayments({ type, person: row, recipient })}>Pagos</button>
         {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
   });
   const inactive = rows(false);
@@ -336,9 +334,9 @@ function Employees({ data, directoryError, onEdit }) {
       <Table headings={headings} rows={inactive} />
     </details>}
     <section className="hf-section">
-      <div className="hf-summary-head"><h2>Catálogos</h2><div className="hf-actions">
+      <div className="hf-actions">
         <button type="button" onClick={() => onEdit("platform")}><Plus size={16} /> Agregar plataforma</button>
-      </div></div>
+      </div>
       <Table headings={["Plataforma"]} emptyText="Sin plataformas registradas" rows={data.platforms.map(({ id, name }) => [id, [name]])} />
     </section>
   </>;
@@ -411,9 +409,10 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
       <h2 id="hf-editor-title">{title[type] ?? `Agregar ${catalog[type]?.toLowerCase()}`}</h2>
       <div className="hf-form">
         {type === "movement" && <>
-          <DateField label="Fecha" value={values.day} onChange={(value) => set("day", value)} required />
+          <PeriodPicker label="Fecha" value={{ from: values.day }} single allowFuture
+            onChange={({ from }) => set("day", from)} />
           <Choice label="Tipo" value={kind} rows={[{ id: "investment", name: "Inversión" }, { id: "income", name: "Ingreso" }]}
-            onChange={(value) => set("kind", value)} placeholder="Selecciona un tipo" required />
+            onChange={(value) => set("kind", value)} placeholder={null} required />
           <CategoryPicker categories={data.categories} value={values.category} onChange={(value) => set("category", value)} onSaved={onChange} />
           {select("Modelo", "creator_id", data.creators)}
           {select("Plataforma", "platform_id", data.platforms)}
@@ -422,18 +421,21 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
           <div className="hf-full-field">{field("Descripción", "description", { maxLength: 500 })}</div>
         </>}
         {type === "archive" && <p>Retirar a {row.name} del listado de empleados y conservar su historial</p>}
-        {type === "member" && !row?.agencykey_id && <>
+        {memberShare && !row?.agencykey_id && <fieldset className="hf-edit-group">
+          <legend>Datos del empleado</legend>
           {field("Nombre", "name", { maxLength: 120, required: true })}
           {field("Rol", "role", { maxLength: 120, required: true })}
-        </>}
-        {(type === "modelShare" || type === "member" && row?.agencykey_id) &&
-          <p>{row.name} · {row.role}</p>}
-        {(memberShare || type === "modelShare") && <>
+        </fieldset>}
+        {(type === "modelShare" || memberShare && row?.agencykey_id) &&
+          <p className="hf-full-field">{row.name}{row.role && ` · ${row.role}`}</p>}
+        {(memberShare || type === "modelShare") && <fieldset className="hf-edit-group">
+          <legend>Porcentaje de pago</legend>
           {field("Porcentaje", "percent", { type: "number", min: 0, max: 100, step: "0.01", required: true })}
-          <DateField label="Vigente desde" value={values.effective_on} onChange={(value) => set("effective_on", value)} required />
-        </>}
-        {byEmployee && <p>Ventas netas atribuidas en todas las cuentas de AgencyKey.
-          {!row?.agencykey_id && " Se necesita una cuenta de AgencyKey para atribuir ventas."}</p>}
+          <PeriodPicker label="Vigente desde" value={{ from: values.effective_on }} single allowFuture
+            onChange={({ from }) => set("effective_on", from)} />
+          {byEmployee && <p className="hf-full-field">Ventas netas atribuidas en todas las cuentas de AgencyKey.
+            {!row?.agencykey_id && " Se necesita una cuenta de AgencyKey para atribuir ventas."}</p>}
+        </fieldset>}
         {memberShare && !byEmployee && <fieldset className="hf-model-options"><legend>Modelos asignados</legend>
           {availableModels.map(({ id, name }) => <label key={id}>
             <input type="checkbox" checked={values.creator_ids.includes(id)} onChange={(event) =>
@@ -444,7 +446,6 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
         </fieldset>}
         {catalog[type] && field("Nombre", "name", { maxLength: 120, required: true })}
       </div>
-      {row && (memberShare || type === "modelShare") && <PaymentHistory type={type} person={row.id} onConfirmed={onChange} />}
       {error && <p className="hf-notice" role="alert">{error}</p>}
       <div className="hf-actions"><button type="button" disabled={saving} onClick={onClose}>Cancelar</button>
         <button type="submit" className="hf-primary" disabled={saving || Boolean(row?.archived_on && memberShare)}>{saving ? "Guardando…" : type === "archive" ? "Eliminar" : "Guardar"}</button></div>

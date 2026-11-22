@@ -26,11 +26,13 @@ begin
     values (chatter_id, '2001-02-01', 25, 'employee_sales');
   insert into public.finance_agencykey_sales (creator_id, day, net)
     values (model_id, cutoff - 1, 125.25);
+  insert into public.finance_payments (period_start, period_end, creator_id, amount)
+    values ('2001-01-16', '2001-01-31', model_id, 50.13);
   update hers_private.finance_payroll set next_period = '2001-02-01';
   insert into hers_private.finance_final_days (day) select cutoff - n from generate_series(1, 14) as n;
 
   if public.hers_payroll_worker(token, 'next')->>'day' <> cutoff::text
-     or exists (select from public.finance_payments p where p.creator_id = model_id) then
+     or exists (select from public.finance_payments p where p.creator_id = model_id and p.period_end = cutoff) then
     raise exception 'Debe esperar al último día completo de la quincena';
   end if;
 
@@ -43,8 +45,19 @@ begin
   perform public.hers_payroll_worker(token, 'import', payload);
   if (select count(*) from public.finance_payments p
       where p.paid_at is null and p.period_end = cutoff
-        and ((p.creator_id = model_id and p.amount = 170.20) or (p.member_id = chatter_id and p.amount = 75))) <> 2 then
+        and ((p.creator_id = model_id and p.amount = 170.20 and p.net_sales = 225.25
+          and p.pay_rate_min = 70 and p.pay_rate_max = 80)
+          or (p.member_id = chatter_id and p.amount = 75 and p.net_sales = 100
+          and p.pay_rate_min = 75 and p.pay_rate_max = 75))) <> 2 then
     raise exception 'El cierre debe guardar una sola vez el neto con el descuento vigente';
+  end if;
+
+  update public.finance_model_shares set percent = 40 where creator_id = model_id and effective_on = cutoff;
+  if not exists (select from public.finance_payments where creator_id = model_id and period_end = cutoff
+      and net_sales = 225.25 and pay_rate_min = 70 and pay_rate_max = 80 and amount = 170.20)
+     or not exists (select from public.finance_payments where creator_id = model_id and period_end = '2001-01-31'
+      and net_sales is null and pay_rate_min is null and pay_rate_max is null and amount = 50.13) then
+    raise exception 'El historial debe conservar sus importes y los datos capturados al cierre';
   end if;
 
   if public.finance_pay_period_start('2028-02-29') <> date '2028-02-16'
@@ -86,6 +99,7 @@ begin
       join public.finance_payments p on p.id = m.finance_payment_id
       where p.id in (pay_id, chatter_pay_id)
         and p.paid_by = auth.uid() and m.amount = p.amount and m.kind = 'investment'
+        and m.category = case when p.creator_id is null then 'Equipo' else 'Modelo' end
         and m.day = (p.paid_at at time zone 'America/Halifax')::date
         and m.creator_id is not distinct from p.creator_id) <> 2 then
     raise exception 'Debe registrarse una inversión por el importe exacto en la fecha de confirmación';

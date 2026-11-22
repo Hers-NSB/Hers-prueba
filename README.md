@@ -26,11 +26,11 @@ La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las m
 
 ## Finanzas y pagos
 
-- **Resumen** muestra Bóveda de HERS, Inversión, Ganancia y Ventas netas. El gráfico Resultado operativo muestra Inversión e Ingreso. En **Por modelo** y **Por plataforma**, la columna Ganancia se calcula como Inversión menos Ventas netas.
-- **Movimiento** permite filtrar por fecha con Desde y Hasta en el mismo grupo. Al registrar un movimiento, abre **Categoría** para seleccionar, crear, editar o eliminar una categoría. La descripción es el último campo del formulario.
-- **Empleados** muestra el total de modelos y chatters, con el nombre, el rol y el origen de cada persona. En **Editar** puedes configurar el porcentaje y su fecha de vigencia, y consultar el historial individual de pagos.
+- **Resumen** muestra Bóveda de HERS, Inversión, Ganancia y Ventas netas. Ganancia es Ventas netas menos Inversión. **Resultado operativo** muestra Ingreso e Inversión en barras apiladas y destaca el ingreso máximo y mínimo del período. En **Por modelo** y **Por plataforma**, Ganancia muestra la diferencia entre Inversión y Ventas netas sin signo.
+- **Movimiento** permite elegir un rango con **Fechas** y restablecer todos los filtros con **Limpiar filtros**. Al registrar un movimiento, abre **Categoría** para seleccionar, crear, editar o eliminar una categoría. La descripción es el último campo del formulario.
+- **Empleados** muestra el total de modelos y chatters, con el nombre y el rol de cada persona. En **Editar** puedes configurar el porcentaje y su fecha de vigencia. **Pagos** abre el historial individual, con filtros de fechas y estado.
 - **Pago (USD)** muestra el neto individual menos el porcentaje vigente. Las quincenas van del 1 al 15 y del 16 al último día del mes, en la zona del reporte de AgencyKey. El importe vuelve a empezar con la nueva quincena. Cuando termina un período y se han importado todos sus días, los importes positivos quedan **Pendientes de pago**.
-- En **Editar → Historial de pagos**, la confirmación marca el corte como **Pagado** y suma el importe a **Inversión** en la fecha de confirmación. Cada pago queda vinculado a un solo movimiento.
+- En **Pagos**, la confirmación marca el corte como **Pagado** y registra un solo movimiento de **Inversión** en la fecha de confirmación. La categoría es **Equipo** para empleados y **Modelo** para modelos. Las ventas y el porcentaje histórico se guardan al cerrar cada corte nuevo.
 
 ## Cloudflare y AgencyKey
 

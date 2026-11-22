@@ -1,6 +1,12 @@
 # Estado de Hers-prueba
 
-Verificado el 21 de noviembre de 2026.
+Verificado el 22 de noviembre de 2026.
+
+## Finanzas y panel Pagos
+
+- Rama [codex/finanzas-panel-pagos](https://github.com/Hers-NSB/Hers-prueba/tree/codex/finanzas-panel-pagos). Incluye el resumen, los calendarios y filtros, la edición de categorías y el panel individual de pagos.
+- Comprobaciones de la rama: `npm run lint`, `npm run build`, `npm test` cuatro pruebas de integración SQL en PostgreSQL local y la revisión en Chromium de escritorio y móvil con respuestas simuladas.
+- Antes de publicar el frontend en Cloudflare, aplicar en Supabase de pruebas la migración `20261122160000_finance_payment_details`. Después, verificar un corte cerrado y su movimiento asociado en el entorno de pruebas.
 
 ## Finanzas
 

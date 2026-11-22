@@ -1,7 +1,7 @@
 export const ONLYFANS = "00000000-0000-4000-8000-000000000001";
 export const kinds = { income: "Ingreso", expense: "Inversión", investment: "Inversión" };
 
-const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD" });
+const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 export const usd = (value) => value == null ? "—" : money.format(value);
 export const dateKey = (date) =>
   [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
@@ -95,6 +95,10 @@ export function netSales(sales, movements = []) {
   const reported = [...sales, ...movements.filter((row) => row.kind === "income")]
     .filter((row) => row.net != null);
   return reported.length ? reported.reduce((sum, row) => sum + cents(row.net), 0) / 100 : null;
+}
+
+export function salesProfit(net, investment) {
+  return net == null && investment == null ? null : (cents(net) - cents(investment)) / 100;
 }
 
 export function financeBreakdown({ movements, sales }, dimension) {

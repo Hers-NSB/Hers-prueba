@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dailyFinance, financeBreakdown, netSales, ONLYFANS, periodPresets, summarize } from "../src/panel/finanzas/finance.js";
+import { dailyFinance, financeBreakdown, netSales, ONLYFANS, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
 import { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
@@ -177,4 +177,13 @@ test("el resultado resta las inversiones registradas y los gastos históricos", 
   assert.equal(point.income, 30.62);
   assert.equal(point.expenses, 15.62);
   assert.equal(point.profit, 15);
+});
+
+test("calcula la ganancia sobre ventas netas y presenta importes sin centavos", () => {
+  assert.equal(salesProfit(100.49, 20.11), 80.38);
+  assert.equal(salesProfit(20.11, 100.49), -80.38);
+  assert.equal(salesProfit(0, null), 0);
+  assert.equal(salesProfit(null, null), null);
+  assert.equal(usd(100.49), usd(100));
+  assert.equal(usd(100.50), usd(101));
 });
