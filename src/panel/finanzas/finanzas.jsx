@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { dateKey, financeBreakdown, hasOperatingAmounts, investmentTotal, kinds, metricIf, monthRange, netSales, summarize, usd } from "./finance";
+import { dateKey, financeBreakdown, hasOperatingAmounts, investmentTotal, kinds, missingAgencyKeyDays, monthRange, netSales, summarize, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
@@ -11,7 +11,7 @@ import "./finanzas.css";
 
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [], currentPay: {}, payPeriod: null };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [], allSales: [], currentPay: {}, payPeriod: null };
 const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
 const pageSize = 500;
@@ -33,9 +33,9 @@ async function loadFinance({ from, to }) {
   if (error?.code === "42501" || !error && !allowed) return null;
   if (error) throw error;
   const inPeriod = (query) => query.gte("day", from).lte("day", to);
-  const [allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet, payroll] = await Promise.all([
+  const [allMovements, allSales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet, payroll] = await Promise.all([
     readRows("finance_movements", ["day", "id"]),
-    readRows("finance_agencykey_sales", ["day", "creator_id"], inPeriod),
+    readRows("finance_agencykey_sales", ["day", "creator_id"]),
     readRows("finance_creators", ["name", "id"]),
     readRows("finance_platforms", ["name", "id"]),
     readRows("finance_members", ["name", "id"]),
@@ -49,7 +49,7 @@ async function loadFinance({ from, to }) {
   if (payroll.error) throw payroll.error;
   const { amounts: currentPay, ...payPeriod } = payroll.data;
   return { ...empty, currentPay, payPeriod, movements: allMovements.filter(({ day }) => day >= from && day <= to),
-    allMovements, sales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet };
+    allMovements, allSales, sales: allSales.filter(({ day }) => day >= from && day <= to), creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet };
 }
 
 export default function Finanzas() {
@@ -111,13 +111,14 @@ export default function Finanzas() {
     };
   }, [access, tab]);
 
-  const updateFilters = (period) => {
+  async function updateFilters(period) {
     if (period.from === filters.from && period.to === filters.to) return;
     setLoading(true);
     setLoadError(false);
     setSyncError("");
     setFilters(period);
-  };
+    await syncDays(missingAgencyKeyDays(period, data.allSales, data.creators));
+  }
   function reload() {
     setLoading(true);
     setLoadError(false);
@@ -127,26 +128,40 @@ export default function Finanzas() {
   const totals = summarize(data);
   const distribution = calculateModelDistribution(data.sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
 
-  async function update() {
-    if (updating || (tab === "Resumen" && invalid)) return;
+  async function syncDays(days) {
+    if (!days.length) return;
     setUpdating(true);
     setSyncError("");
     let synced = 0;
-    const range = tab === "Empleados" ? data.payPeriod : filters;
+    const errors = [];
     try {
-      for (let timestamp = Date.parse(range?.from); timestamp <= Date.parse(range?.to); timestamp += 86_400_000) {
-        const day = new Date(timestamp).toISOString().slice(0, 10);
-        const result = await callApi("/sync", "POST", { day });
-        if (result.future) break;
-        synced += 1;
+      for (const day of days) {
+        try {
+          const result = await callApi("/sync", "POST", { day });
+          if (result.future) break;
+          synced += 1;
+        } catch (error) {
+          errors.push(error.message);
+          if (/\[(?:CON-|AK-KEY-MISSING)/.test(error.message)) break;
+        }
       }
-    } catch (error) {
-      setSyncError(synced ? `${synced} días actualizados. ${error.message}` : error.message);
+      if (errors.length) setSyncError([
+        synced > 0 && `Días actualizados: ${synced}.`,
+        errors.length > 1 && `Días con error: ${errors.length}.`,
+        errors[0],
+      ].filter(Boolean).join(" "));
     } finally {
       reload();
-      if (tab === "Empleados") refreshDirectory((value) => value + 1);
       setUpdating(false);
     }
+  }
+
+  async function update() {
+    if (updating || (tab === "Resumen" && invalid)) return;
+    const range = tab === "Empleados" ? data.payPeriod : filters;
+    const days = missingAgencyKeyDays(range, [], []);
+    await syncDays(days);
+    if (tab === "Empleados") refreshDirectory((value) => value + 1);
   }
 
   const busy = loading || updating;
@@ -162,7 +177,7 @@ export default function Finanzas() {
         {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{item}</button>)}
       </nav>
       {tab === "Resumen" && <div className="hf-toolbar">
-        <PeriodPicker value={filters} onChange={updateFilters} disabled={updating} />
+        <PeriodPicker value={filters} onChange={updateFilters} disabled={busy || !access} />
       </div>}
       {syncError && <p className="hf-notice" role="alert">{syncError}</p>}
       {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
@@ -222,12 +237,15 @@ function Overview({ totals, data, distribution }) {
   const { movements, sales } = data;
   const vault = distribution.payouts.get("hers");
   const pending = Boolean(distribution.pendingDays?.size);
-  const manualIncome = metricIf(movements, "income", totals.agency);
-  const agencyIncome = manualIncome == null && vault == null ? null : (manualIncome ?? 0) + (vault ?? 0);
   const hasOperations = hasOperatingAmounts(data) || vault != null;
   const investment = investmentTotal(movements, totals);
+  const history = { movements: data.allMovements, sales: data.allSales, commissions: [] };
+  const historicalNet = netSales(history.sales, history.movements);
+  const historicalInvestment = investmentTotal(history.movements, summarize(history));
+  const balance = historicalNet == null && historicalInvestment == null ? null
+    : (Math.round((historicalNet ?? 0) * 100) - Math.round((historicalInvestment ?? 0) * 100)) / 100;
   const cards = [
-    ["Bóveda de HERS", pending ? null : agencyIncome, Wallet, "income"],
+    ["Bóveda de HERS", balance, Wallet, "income"],
     ["Inversión", investment, ArrowUpRight, "expenses"],
     ["Ganancia", !pending && hasOperations ? totals.afterInvestment + (vault ?? 0) : null, CircleDollarSign, "profit"],
     ["Ventas netas", netSales(sales, movements), BarChart3, "sales"],
@@ -256,8 +274,7 @@ function Movements({ data, filters, onFilter, onEdit }) {
     rows={rows} placeholder={placeholder} onChange={(value) => change(key, value)} />;
   const categories = [...new Set([...data.categories.map(({ name }) => name), ...data.allMovements.map(({ category }) => category)])].sort();
   const rows = data.allMovements.filter((row) =>
-    (!filters.from || row.day >= filters.from) &&
-    (!filters.to || row.day <= filters.to) &&
+    (!filters.period || (row.day >= filters.period.from && row.day <= filters.period.to)) &&
     (!filters.kind || (row.kind === "expense" ? "investment" : row.kind) === filters.kind) &&
     (!filters.category || row.category === filters.category) &&
     (!filters.creator || (row.creator_id ?? "none") === filters.creator) &&
@@ -266,11 +283,7 @@ function Movements({ data, filters, onFilter, onEdit }) {
   return <section className="hf-section">
     <div className="hf-summary-head"><h2>Movimiento</h2><button type="button" className="hf-primary" onClick={() => onEdit()}><Plus size={16} /> Registrar movimiento</button></div>
     <div className="hf-movement-filters" role="group" aria-label="Filtros de movimientos">
-      <fieldset className="hf-date-range">
-        <legend>Fechas</legend>
-        <DateField label="Desde" value={filters.from} onChange={(value) => change("from", value)} />
-        <DateField label="Hasta" value={filters.to} onChange={(value) => change("to", value)} />
-      </fieldset>
+      <PeriodPicker value={filters.period} label="Fechas" onChange={(period) => change("period", period)} />
       {select("Tipo", "kind", [{ id: "investment", name: kinds.investment }, { id: "income", name: kinds.income }])}
       {select("Categoría", "category", categories.map((name) => ({ id: name, name })), "Todas")}
       {select("Modelo", "creator", [...data.creators, { id: "none", name: "Sin asignar" }])}
@@ -306,7 +319,7 @@ function Employees({ data, directoryError, onEdit }) {
     ...data.members.map((row) => [row, "member", `chatter:${row.id}`, !row.archived_on && isCurrent(row)]),
     ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isCurrent(row)]),
   ].sort(([a], [b]) => a.name.localeCompare(b.name, "es"));
-  const headings = ["Nombre", "Rol", "Origen", "Porcentaje", "Pago (USD)", "Acciones"];
+  const headings = ["Nombre", "Rol", "Origen", "Porcentaje", "Pago ($)", "Acciones"];
   const rows = (active) => participants.filter((entry) => entry[3] === active).map(([row, type, recipient]) => {
     const rate = effectiveShare(data.rates, recipient, currentDay);
     const eligible = type === "modelShare" || isChatter(row.role);
@@ -417,7 +430,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
           <CategoryPicker categories={data.categories} value={values.category} onChange={(value) => set("category", value)} onSaved={onChange} />
           {select("Modelo", "creator_id", data.creators)}
           {select("Plataforma", "platform_id", data.platforms)}
-          {field(kind === "income" ? "Ingreso a agencia (USD)" : "Importe (USD)", "amount",
+          {field(kind === "income" ? "Ingreso a agencia ($)" : "Importe ($)", "amount",
             { type: "number", step: "0.01", min: kind === "income" ? undefined : "0.01", required: true })}
           <div className="hf-full-field">{field("Descripción", "description", { maxLength: 500 })}</div>
         </>}

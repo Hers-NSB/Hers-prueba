@@ -1,7 +1,7 @@
 export const ONLYFANS = "00000000-0000-4000-8000-000000000001";
 export const kinds = { income: "Ingreso", expense: "Inversión", investment: "Inversión" };
 
-const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD" });
+const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol" });
 export const usd = (value) => value == null ? "—" : money.format(value);
 export const dateKey = (date) =>
   [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
@@ -119,4 +119,21 @@ export function financeBreakdown({ movements, sales }, dimension) {
     id, income: income == null ? null : income / 100, expenses: expenses == null ? null : expenses / 100,
     net: net == null ? null : net / 100,
   }));
+}
+
+export function missingAgencyKeyDays(range, sales, creators) {
+  const expected = creators.filter(({ agencykey_id, agencykey_available }) => agencykey_id && agencykey_available !== false);
+  const confirmed = new Map();
+  for (const { day, creator_id, net } of sales) {
+    if (net == null) continue;
+    if (!confirmed.has(day)) confirmed.set(day, new Set());
+    confirmed.get(day).add(creator_id);
+  }
+  const days = [];
+  for (let timestamp = Date.parse(range?.from); timestamp <= Date.parse(range?.to); timestamp += 86_400_000) {
+    const day = new Date(timestamp).toISOString().slice(0, 10);
+    const models = confirmed.get(day);
+    if (!models || expected.some(({ id }) => !models.has(id))) days.push(day);
+  }
+  return days;
 }
