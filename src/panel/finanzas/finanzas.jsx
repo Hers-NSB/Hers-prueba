@@ -11,7 +11,7 @@ import "./finanzas.css";
 
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [], allSales: [], currentPay: {}, payPeriod: null };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [], allSales: [], currentPay: {}, currentPaySales: {}, payPeriod: null };
 const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
 const pageSize = 500;
@@ -47,8 +47,8 @@ async function loadFinance({ from, to }) {
     supabase.rpc("finance_current_pay"),
   ]);
   if (payroll.error) throw payroll.error;
-  const { amounts: currentPay, ...payPeriod } = payroll.data;
-  return { ...empty, currentPay, payPeriod, movements: allMovements.filter(({ day }) => day >= from && day <= to),
+  const { amounts: currentPay, sales: currentPaySales = {}, ...payPeriod } = payroll.data;
+  return { ...empty, currentPay, currentPaySales, payPeriod, movements: allMovements.filter(({ day }) => day >= from && day <= to),
     allMovements, allSales, sales: allSales.filter(({ day }) => day >= from && day <= to), creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet };
 }
 
@@ -194,7 +194,9 @@ export default function Finanzas() {
         onSaved={() => { setEditor(null); reload(); }} />}
       {payments && <PaymentHistory key={payments.recipient} {...payments}
         rate={effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()))}
-        movements={data.allMovements} onConfirmed={reload} onClose={() => setPayments(null)} />}
+        currentPeriod={payments.eligible ? data.payPeriod : null}
+        currentAmount={data.currentPay[payments.recipient]} currentNet={data.currentPaySales[payments.recipient]}
+        financeRevision={revision} movements={data.allMovements} onConfirmed={reload} onClose={() => setPayments(null)} />}
 
     </>}
   </section>;
@@ -325,7 +327,7 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     return [recipient, [row.name, row.role,
       rate ? percentLabel(rate.percent) : "—", active ? amount : "—",
       <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
-        <button type="button" onClick={() => onPayments({ type, person: row, recipient })}>Pagos</button>
+        <button type="button" onClick={() => onPayments({ type, person: row, recipient, eligible })}>Pagos</button>
         {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
   });
   const inactive = rows(false);

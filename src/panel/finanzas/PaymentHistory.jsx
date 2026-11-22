@@ -6,8 +6,10 @@ import { usd } from "./finance";
 import PeriodPicker from "./PeriodPicker";
 
 const moneyDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "short", timeZone: "UTC" });
+const longDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "long", timeZone: "UTC" });
 const percentFormat = new Intl.NumberFormat("es-VE", { style: "percent", maximumFractionDigits: 2 });
-const date = (value) => moneyDate.format(new Date(`${value}T00:00:00Z`));
+const utcDate = (value) => new Date(`${value}T00:00:00Z`);
+const date = (value) => moneyDate.format(utcDate(value));
 const percent = (value) => percentFormat.format(Number(value) / 100);
 const period = (row) => `${date(row.period_start)} – ${date(row.period_end)}`;
 const canPay = (row) => !row.paid_at && Number(row.amount) > 0;
@@ -26,7 +28,23 @@ function PaymentFacts({ row }) {
   </dl>;
 }
 
-export default function PaymentHistory({ type, person, rate, movements, onConfirmed, onClose }) {
+function CurrentPeriod({ id, period, net, amount }) {
+  const { from, to, importedDays, totalDays } = period;
+  return <section className="hf-current-pay" aria-labelledby={id}>
+    <header><h3 id={id}>Quincena actual</h3><span>En curso</span></header>
+    <p className="hf-current-pay-dates">{longDate.formatRange(utcDate(from), utcDate(to))}</p>
+    <dl>
+      <div><dt>Ventas netas acumuladas</dt><dd>{usd(net)}</dd></div>
+      <div><dt>Pago estimado</dt><dd>{usd(amount)}</dd></div>
+    </dl>
+    {importedDays != null && totalDays > 0 && <div className="hf-current-pay-progress">
+      <progress value={importedDays} max={totalDays} aria-labelledby={`${id}-progress`} />
+      <span id={`${id}-progress`}>{importedDays} de {totalDays} días importados para el cierre</span>
+    </div>}
+  </section>;
+}
+
+export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, movements, onConfirmed, onClose }) {
   const id = useId();
   const [records, setRecords] = useState([]);
   const [loadError, setLoadError] = useState("");
@@ -65,7 +83,7 @@ export default function PaymentHistory({ type, person, rate, movements, onConfir
     }
     readHistory();
     return () => controller.abort();
-  }, [type, person.id, revision]);
+  }, [type, person.id, revision, financeRevision]);
 
   async function confirm() {
     if (busy) return;
@@ -108,10 +126,11 @@ export default function PaymentHistory({ type, person, rate, movements, onConfir
       <button type="button" aria-label="Cerrar pagos" disabled={busy} onClick={onClose}><X size={18} /></button>
     </header>
     <div className="hf-payment-content" aria-busy={loading || busy}>
+      {currentPeriod && <CurrentPeriod id={`${id}-current`} period={currentPeriod} net={currentNet} amount={currentAmount} />}
       <div className="hf-kpis hf-payment-kpis">
         <article><span>Pendiente</span><strong>{usd(total(shown.filter(canPay), "amount") ?? (loading ? null : 0))}</strong></article>
         <article><span>Pagado</span><strong>{usd(total(shown.filter((row) => row.paid_at), "amount") ?? (loading ? null : 0))}</strong></article>
-        <article><span>Ventas netas</span><strong>{usd(total(shown, "net_sales"))}</strong></article>
+        <article><span>Ventas de cortes cerrados</span><strong>{usd(total(shown, "net_sales"))}</strong></article>
       </div>
       <div className="hf-payment-filters">
         <PeriodPicker label="Fechas" value={range} onChange={setRange} />
@@ -129,7 +148,8 @@ export default function PaymentHistory({ type, person, rate, movements, onConfir
         setLoading(true);
         reload((value) => value + 1);
       }}>Reintentar</button></p>}
-      {!shown.length && !loadError && <p>{loading ? "Cargando cortes…" : "Sin cortes para estos filtros"}</p>}
+      {!shown.length && !loadError && <p>{loading ? "Cargando cortes…"
+        : records.length ? "Sin cortes para estos filtros" : "Todavía no hay cortes cerrados."}</p>}
       {shown.length > 0 && <div className="hf-table hf-payment-table"><table aria-labelledby={`${id}-history`}>
         <thead><tr>{["Período", "Ventas", "% pago", "Pago", "Estado", "Acción"].map((label) =>
           <th scope="col" key={label}>{label}</th>)}</tr></thead>

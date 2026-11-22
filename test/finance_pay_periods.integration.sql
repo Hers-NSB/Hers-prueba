@@ -80,6 +80,12 @@ begin
      or exists (select from public.finance_payments) then
     raise exception 'Un chatter no puede confirmar ni ver pagos';
   end if;
+  begin
+    perform public.finance_current_pay();
+    raise exception 'Un chatter no puede consultar la quincena actual';
+  exception when insufficient_privilege then
+    null;
+  end;
 end;
 $$;
 
@@ -115,6 +121,60 @@ begin
     select creator_id from public.finance_payments where id = pay_id
   )::text) then
     raise exception 'El total actual no debe incluir cortes anteriores';
+  end if;
+end;
+$$;
+
+reset role;
+do $$
+declare
+  report_day date;
+  start_day date;
+  model uuid;
+  employee uuid;
+  employee_key text;
+begin
+  select (statement_timestamp() at time zone report_zone)::date into report_day from hers_private.finance_payroll;
+  start_day := public.finance_pay_period_start(report_day);
+  select creator_id into strict model from public.finance_payments where id = current_setting('hers.test.payment_model')::uuid;
+  select p.member_id, m.agencykey_id into strict employee, employee_key
+    from public.finance_payments p join public.finance_members m on m.id = p.member_id
+    where p.id = current_setting('hers.test.payment_chatter')::uuid;
+
+  insert into public.finance_agencykey_sales (creator_id, day, net) values (model, report_day, 250.25);
+  insert into public.finance_agencykey_employee_net (day, totals) values (report_day, jsonb_build_object(employee_key, 80.40))
+    on conflict (day) do update set totals = finance_agencykey_employee_net.totals || excluded.totals;
+  insert into hers_private.finance_final_days (day)
+    select report_day - 1 where report_day > start_day on conflict do nothing;
+
+  perform set_config('hers.test.current_report_day', report_day::text, true);
+  perform set_config('hers.test.current_model', 'model:' || model, true);
+  perform set_config('hers.test.current_chatter', 'chatter:' || employee, true);
+end;
+$$;
+
+set local role authenticated;
+do $$
+declare
+  current_pay jsonb := public.finance_current_pay();
+  report_day date := current_setting('hers.test.current_report_day')::date;
+  start_day date := (current_pay->>'from')::date;
+  model_key text := current_setting('hers.test.current_model');
+  employee_key text := current_setting('hers.test.current_chatter');
+begin
+  if (current_pay->'sales'->>model_key)::numeric is distinct from 250.25
+     or (current_pay->'sales'->>employee_key)::numeric is distinct from 80.40
+     or (current_pay->'amounts'->>model_key)::numeric is distinct from 150.15
+     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 60.30 then
+    raise exception 'La quincena actual debe mostrar las ventas y el pago estimado de cada persona';
+  end if;
+  if (current_pay->>'importedDays')::integer is distinct from (report_day > start_day)::integer
+     or (current_pay->>'totalDays')::integer is distinct from (current_pay->>'to')::date - start_day + 1 then
+    raise exception 'El avance de la quincena debe contar solo los días confirmados del período actual';
+  end if;
+  if exists (select from public.finance_payments where period_start = start_day
+      and (('model:' || creator_id) = model_key or ('chatter:' || member_id) = employee_key)) then
+    raise exception 'Consultar el estimado no debe generar cortes';
   end if;
 end;
 $$;

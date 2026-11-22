@@ -7,6 +7,7 @@ Verificado el 22 de noviembre de 2026.
 - Rama [codex/finanzas-panel-pagos](https://github.com/Hers-NSB/Hers-prueba/tree/codex/finanzas-panel-pagos). Incluye el resumen, los calendarios y filtros, la edición de categorías y el panel individual de pagos.
 - Comprobaciones de la rama: `npm run lint`, `npm run build`, `npm test`, cuatro pruebas de integración SQL en PostgreSQL local y la revisión en Chromium de escritorio y móvil con respuestas simuladas.
 - Supabase de pruebas registra la migración `20261122203513_finance_payment_details`. Cloudflare Workers sirve la versión 23 al 100 % desde el commit `1d0cc785`, con los cambios de Finanzas y Conectores de la versión 22. La comprobación de un pago real queda pendiente del primer corte registrado.
+- El PR incorpora la tarjeta **Quincena actual**. Antes de publicarla, aplicar la migración `20261122211000_finance_current_pay_progress` en Supabase de pruebas.
 
 ## Finanzas
 
