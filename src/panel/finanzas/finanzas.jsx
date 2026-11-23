@@ -311,26 +311,28 @@ const percentLabel = (value) => percentage.format(Number(value) / 100);
 
 function Employees({ data, directoryError, onEdit, onPayments }) {
   const currentDay = data.payPeriod?.day ?? dateKey(new Date());
-  const members = data.members.filter((row) => !row.archived_on && isCurrent(row));
+  const chatters = data.members.filter(({ role }) => isChatter(role));
   const creators = data.creators.filter(isCurrent);
   const participants = [
     ...data.members.map((row) => [row, "member", `chatter:${row.id}`, !row.archived_on && isCurrent(row)]),
     ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isCurrent(row)]),
   ].sort(([a], [b]) => a.name.localeCompare(b.name, "es"));
   const headings = ["Nombre", "Rol", "Porcentaje", "Ventas netas ($)", "Pago ($)", "Acciones"];
-  const rows = (active) => participants.filter((entry) => entry[3] === active).map(([row, type, recipient]) => {
+  const showInMainTable = ([row, type, , active]) => active || (type === "member" && isChatter(row.role));
+  const toRow = ([row, type, recipient, active]) => {
     const rate = effectiveShare(data.rates, recipient, currentDay);
     const eligible = type === "modelShare" || isChatter(row.role);
     const payout = data.currentPay[recipient] ?? (data.payPeriod?.day === data.payPeriod?.from && row.agencykey_id ? 0 : null);
     const amount = !eligible || !rate ? "—" : payout == null && !row.agencykey_id && type === "member"
       ? "Pendiente de vincular" : payout == null ? "Pendiente de sincronizar" : usd(payout);
-    return [recipient, [row.name, row.role,
+    return [recipient, [active ? row.name : <>{row.name} <small className="hf-employee-status">Inactivo</small></>, row.role,
       rate ? percentLabel(rate.percent) : "—", active && eligible ? usd(data.currentPaySales[recipient]) : "—", active ? amount : "—",
       <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
         <button type="button" onClick={() => onPayments({ type, person: row, recipient, eligible })}>Pagos</button>
         {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
-  });
-  const inactive = rows(false);
+  };
+  const mainRows = participants.filter(showInMainTable).map(toRow);
+  const inactive = participants.filter((entry) => !showInMainTable(entry)).map(toRow);
   return <>
     <div className="hf-summary-head">
       <h2>Empleados</h2>
@@ -338,12 +340,12 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
         <button type="button" onClick={() => onEdit("member")}><Plus size={16} /> Agregar empleado</button>
       </div>
     </div>
-    <p className="hf-employee-count">{creators.length} modelos · {members.filter(({ role }) => isChatter(role)).length} chatters
+    <p className="hf-employee-count">{creators.length} modelos · {chatters.length} chatters
       {data.payPeriod && ` · Corte actual: ${data.payPeriod.from} a ${data.payPeriod.to}`}</p>
     {directoryError && <p className="hf-notice" role="alert">{directoryError.message.startsWith("[AK-DIRECTORY-CONNECT]")
       ? "Autoriza el directorio de AgencyKey en Conectores para sincronizar el listado."
       : directoryError.message}</p>}
-    <Table headings={headings} rows={rows(true)} emptyText="Sin empleados registrados" />
+    <Table headings={headings} rows={mainRows} emptyText="Sin empleados registrados" />
     {inactive.length > 0 && <details className="hf-section"><summary>Personas inactivas</summary>
       <Table headings={headings} rows={inactive} />
     </details>}

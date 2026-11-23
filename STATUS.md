@@ -13,6 +13,8 @@ Verificado el 22 de noviembre de 2026.
 
 - Supabase registra `20261123020150_finance_current_pay_direct_percentage`. El porcentaje configurado se aplica directamente a las ventas netas de cada día. La migración no modificó cortes registrados. La versión 26 de Cloudflare sirve el 100 % del tráfico desde el commit `8e90864c`.
 
+- Supabase registra `20261123021955_finance_directory_inactive_chatters`. La tabla Empleados incluye los chatters desactivados con la etiqueta **Inactivo**. Se sincronizaron dos chatters activos y uno inactivo.
+
 ## Finanzas
 
 - El [PR #9](https://github.com/Hers-NSB/Hers-prueba/pull/9) está integrado en `main` desde el commit `5c47d33`.

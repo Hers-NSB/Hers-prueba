@@ -201,4 +201,30 @@ begin
 end;
 $$;
 
+reset role;
+do $$
+declare
+  disabled_key text := gen_random_uuid()::text;
+  enabled_key text := gen_random_uuid()::text;
+  disabled_id uuid;
+  snapshot jsonb;
+begin
+  snapshot := jsonb_build_object('creators', '[]'::jsonb, 'employees', jsonb_build_array(
+    jsonb_build_object('id', enabled_key, 'name', 'Activo', 'role', 'Chatter', 'active', true),
+    jsonb_build_object('id', disabled_key, 'name', 'Desactivado', 'role', 'Team Leader, Chatter', 'active', false)
+  ));
+  perform hers_private.apply_agencykey_directory(snapshot);
+  perform hers_private.apply_agencykey_directory(snapshot);
+  select id into strict disabled_id from public.finance_members
+    where agencykey_id = disabled_key and not agencykey_available;
+  if not exists (select from public.finance_member_availability where member_id = disabled_id and not available) then
+    raise exception 'Un chatter recién importado que está desactivado debe conservar ese estado';
+  end if;
+  perform hers_private.apply_agencykey_directory(jsonb_set(snapshot, '{employees,1,active}', 'true'));
+  if not exists (select from public.finance_members where id = disabled_id and agencykey_available) then
+    raise exception 'La reactivación debe conservar el mismo empleado';
+  end if;
+end;
+$$;
+
 rollback;

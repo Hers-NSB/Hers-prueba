@@ -210,6 +210,7 @@
   .hf-choice option:is(:hover, :focus-visible, :checked) { background: var(--hf-field); }
 }
 .hf-full-field, .hf-model-options { grid-column: 1 / -1; min-width: 0; }
+.hf-employee-status { display: inline-block; margin-inline-start: .35rem; white-space: nowrap; }
 .hf .hf-employee-count { margin-top: .55rem; font-size: .9rem; }
 @container (max-width: 365px) {
   .hf-finance .hf-overview-kpis { grid-template-columns: minmax(0, 1fr); }
