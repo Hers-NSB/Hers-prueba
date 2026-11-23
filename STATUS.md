@@ -4,16 +4,16 @@ Verificado el 23 de noviembre de 2026.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **32** de Cloudflare Workers al **100 %**. Código publicado `defefe9` del [PR #14](https://github.com/Hers-NSB/Hers-prueba/pull/14), versión `a5c4b234-84b1-4b19-8dfe-d9e3d7aa4348`.
-- Supabase de pruebas tiene aplicadas las migraciones hasta `20261123161750_finance_whole_pay_current_period`. El historial también contiene `20261123043232_finance_inactive_chatter_pay`, que cubre la comisión de chatters inactivos.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **33** de Cloudflare Workers al **100 %**. Código publicado `875a867` del [PR #15](https://github.com/Hers-NSB/Hers-prueba/pull/15), versión `c18f4685-9379-4582-80f0-71353d6c1767`.
+- Supabase de pruebas tiene aplicadas las migraciones hasta `20261123174135_finance_overview_totals`.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
-## Cambios preparados para el próximo despliegue
+## Cambios publicados en el PR #15
 
 - La portada carga el panel administrativo y sus secciones según se abren. Se retiraron el panel de Historias, sus estilos, su imagen y sus accesos.
 - Finanzas consulta ventas y movimientos del rango en Supabase. La bóveda usa `finance_overview_totals`, Movimiento muestra 50 filas por página y cada corte carga su movimiento vinculado.
 - Se retiró el importador anterior de AgencyKey. GitHub Actions ejecuta las integraciones SQL y `cloudflare/deploy.json` registra el cron, las rutas y los bindings del Worker.
-- Aplica `20261123174135_finance_overview_totals.sql` antes de desplegar esta versión.
+- GitHub Actions pasó. La portada y los recursos publicados coincidieron con el build. Se verificaron las respuestas 401 de Conectores sin sesión, 410 de la ruta retirada y 404 del recurso retirado de Historias. La consulta de la bóveda respondió en Supabase de pruebas con el rol de administrador. Se comprobó el panel de Finanzas con datos simulados.
 
 ## Finanzas y Conectores
 
