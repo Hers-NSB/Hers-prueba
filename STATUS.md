@@ -8,6 +8,13 @@ Verificado el 23 de noviembre de 2026.
 - Supabase de pruebas tiene aplicadas las migraciones hasta `20261123161750_finance_whole_pay_current_period`. El historial también contiene `20261123043232_finance_inactive_chatter_pay`, que cubre la comisión de chatters inactivos.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
+## Cambios preparados para el próximo despliegue
+
+- La portada carga el panel administrativo y sus secciones según se abren. Se retiraron el panel de Historias, sus estilos, su imagen y sus accesos.
+- Finanzas consulta ventas y movimientos del rango en Supabase. La bóveda usa `finance_overview_totals`, Movimiento muestra 50 filas por página y cada corte carga su movimiento vinculado.
+- Se retiró el importador anterior de AgencyKey. GitHub Actions ejecuta las integraciones SQL y `cloudflare/deploy.json` registra el cron, las rutas y los bindings del Worker.
+- Aplica `20261123174135_finance_overview_totals.sql` antes de desplegar esta versión.
+
 ## Finanzas y Conectores
 
 - **Empleados** muestra las ventas netas de la quincena en las tablas **Modelos** y **Otros empleados**. Los chatters desactivados conservan su historial y los importes que les correspondan según las ventas y la vigencia del porcentaje.

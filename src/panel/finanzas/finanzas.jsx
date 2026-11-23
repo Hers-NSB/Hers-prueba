@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { dateKey, financeBreakdown, investmentTotal, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
@@ -12,17 +12,20 @@ import "./finanzas.css";
 
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], allMovements: [], allSales: [], currentPay: {}, currentPaySales: {}, payPeriod: null };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], balance: null, movementCategories: [], currentPay: {}, currentPaySales: {}, payPeriod: null };
 const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
 const pageSize = 500;
+const movementPageSize = 50;
 
-async function readRows(table, ordering, signal, filter = (query) => query) {
+async function readRows(table, ordering, signal, filter = (query) => query, columns = "*") {
   const rows = [];
   for (let start = 0; ; start += pageSize) {
-    let query = filter(supabase.from(table).select("*"));
+    let query = filter(supabase.from(table).select(columns));
     for (const column of ordering) query = query.order(column);
-    const { data, error } = await query.range(start, start + pageSize - 1).abortSignal(signal);
+    query = query.range(start, start + pageSize - 1);
+    if (signal) query = query.abortSignal(signal);
+    const { data, error } = await query;
     if (error) throw error;
     rows.push(...data);
     if (data.length < pageSize) return rows;
@@ -36,14 +39,32 @@ async function readPayroll(signal) {
   return { currentPay, currentPaySales, payPeriod };
 }
 
-async function loadFinance({ from, to }, signal) {
+function inPeriod({ from, to }) {
+  return (query) => query.gte("day", from).lte("day", to);
+}
+
+async function readOverviewTotals(signal) {
+  const { data, error } = await supabase.rpc("finance_overview_totals").abortSignal(signal);
+  if (error) throw error;
+  return data;
+}
+
+async function loadOverview(range, signal) {
+  const dateFilter = inPeriod(range);
+  const [movements, sales, employeeNet] = await Promise.all([
+    readRows("finance_movements", ["day", "id"], signal, dateFilter),
+    readRows("finance_agencykey_sales", ["day", "creator_id"], signal, dateFilter),
+    readRows("finance_agencykey_employee_net", ["day"], signal, dateFilter),
+  ]);
+  return { movements, sales, employeeNet };
+}
+
+async function loadFinance(range, signal) {
   const { data: allowed, error } = await supabase.rpc("finance_is_admin").abortSignal(signal);
   if (error?.code === "42501" || !error && !allowed) return null;
   if (error) throw error;
-  const inPeriod = (query) => query.gte("day", from).lte("day", to);
-  const [allMovements, allSales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet, payroll] = await Promise.all([
-    readRows("finance_movements", ["day", "id"], signal),
-    readRows("finance_agencykey_sales", ["day", "creator_id"], signal),
+  const [period, creators, platforms, members, categories, distributionPlans, rates, availability, payroll, overview] = await Promise.all([
+    loadOverview(range, signal),
     readRows("finance_creators", ["name", "id"], signal),
     readRows("finance_platforms", ["name", "id"], signal),
     readRows("finance_members", ["name", "id"], signal),
@@ -51,11 +72,10 @@ async function loadFinance({ from, to }, signal) {
     readRows("finance_distribution_plans", ["effective_on", "revision"], signal),
     readRows("finance_model_shares", ["effective_on", "id"], signal),
     readRows("finance_member_availability", ["effective_on", "member_id"], signal),
-    readRows("finance_agencykey_employee_net", ["day"], signal, inPeriod),
     readPayroll(signal),
+    readOverviewTotals(signal),
   ]);
-  return { ...empty, ...payroll, movements: allMovements.filter(({ day }) => day >= from && day <= to),
-    allMovements, allSales, sales: allSales.filter(({ day }) => day >= from && day <= to), creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet };
+  return { ...period, ...payroll, ...overview, creators, platforms, members, categories, distributionPlans, rates, availability };
 }
 
 export default function Finanzas() {
@@ -63,6 +83,7 @@ export default function Finanzas() {
   const [data, setData] = useState(empty);
   const [tab, setTab] = useState(tabs[0]);
   const [revision, refresh] = useState(0);
+  const loadedRevision = useRef(null);
   const [access, setAccess] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -79,10 +100,14 @@ export default function Finanzas() {
   useEffect(() => {
     if (!filters.from || !filters.to || filters.from > filters.to) return;
     const controller = new AbortController();
-    loadFinance(filters, controller.signal).then((result) => {
+    const read = loadedRevision.current === revision ? loadOverview : loadFinance;
+    read(filters, controller.signal).then((result) => {
       if (controller.signal.aborted) return;
-      setData(result ?? empty);
-      setAccess(Boolean(result));
+      if (read === loadFinance) {
+        loadedRevision.current = result ? revision : null;
+        setAccess(Boolean(result));
+      }
+      setData((current) => result ? { ...current, ...result } : empty);
       setLoading(false);
     }).catch((error) => {
       if (controller.signal.aborted) return;
@@ -133,15 +158,28 @@ export default function Finanzas() {
     };
   }, [access, busy, tab]);
 
+  async function findDaysToSync(range, today, refreshToday = false) {
+    if (!range?.from || !range.to) return [];
+    const sales = range.from === filters.from && range.to === filters.to ? data.sales
+      : await readRows("finance_agencykey_sales", ["day", "creator_id"], undefined, inPeriod(range), "day,creator_id,net");
+    return missingAgencyKeyDays(range, sales, data.creators, today, refreshToday);
+  }
+
   async function updateFilters(period) {
     if (period.from === filters.from && period.to === filters.to) return;
     setLoading(true);
     setLoadError(false);
     setSyncError("");
-    setFilters(period);
-    const synced = await syncDays(missingAgencyKeyDays(period, data.allSales, data.creators, data.payPeriod?.day));
-    if (synced) reload();
+    try {
+      const synced = await syncDays(await findDaysToSync(period, data.payPeriod?.day));
+      if (synced) refresh((value) => value + 1);
+    } catch {
+      setSyncError("No se pudo comprobar qué días faltan por sincronizar");
+    } finally {
+      setFilters(period);
+    }
   }
+
   function reload() {
     setLoading(true);
     setLoadError(false);
@@ -181,8 +219,14 @@ export default function Finanzas() {
     if (updating || (tab === "Resumen" && invalid)) return;
     const today = data.payPeriod?.day ?? dateKey(new Date());
     const range = tab === "Empleados" ? data.payPeriod : filters;
-    const days = missingAgencyKeyDays(range, data.allSales, data.creators, today, true);
-    await syncDays(days);
+    setUpdating(true);
+    try {
+      await syncDays(await findDaysToSync(range, today, true));
+    } catch {
+      setSyncError("No se pudo comprobar qué días faltan por sincronizar");
+    } finally {
+      setUpdating(false);
+    }
     if (tab === "Empleados") {
       setLoading(true);
       refreshDirectory((value) => (value ?? 0) + 1);
@@ -216,7 +260,7 @@ export default function Finanzas() {
       {loadError && <p className="hf-notice" role="alert">No se pudieron actualizar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
       {access && <div aria-busy={busy}>
         {tab === "Resumen" && <Overview data={data} range={filters} />}
-        {tab === "Movimiento" && <Movements data={data} filters={movementFilters} onFilter={setMovementFilters}
+        {tab === "Movimiento" && <Movements data={data} revision={revision} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
           onEdit={(type, row) => setEditor({ type, row })} onPayments={setPayments} />}
@@ -225,7 +269,7 @@ export default function Finanzas() {
         rate={paymentRate}
         currentPeriod={payments.type === "modelShare" || isChatter(paymentPerson.role) || paymentRate ? data.payPeriod : null}
         currentAmount={data.currentPay[payments.recipient]} currentNet={data.currentPaySales[payments.recipient]}
-        financeRevision={revision} movements={data.allMovements}
+        financeRevision={revision}
         onEdit={() => setEditor({ type: payments.type, row: paymentPerson })}
         onArchive={() => setEditor({ type: "archive", row: paymentPerson })} onConfirmed={reload} onClose={() => setPayments(null)} />}
       {editor && <Editor editor={editor} data={data} onChange={reload} onClose={() => setEditor(null)}
@@ -272,10 +316,8 @@ function Overview({ data, range }) {
   const distribution = calculateModelDistribution(sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
   const investment = investmentTotal(movements, totals);
   const net = netSales(sales, movements);
-  const history = { movements: data.allMovements, sales: data.allSales, commissions: [] };
-  const balance = salesProfit(netSales(history.sales, history.movements), investmentTotal(history.movements, summarize(history)));
   const cards = [
-    ["Bóveda de HERS", balance, Wallet, "income"],
+    ["Bóveda de HERS", data.balance, Wallet, "income"],
     ["Inversión", investment, ArrowUpRight, "expenses"],
     ["Ganancia", salesProfit(net, investment), CircleDollarSign, "profit"],
     ["Ventas netas", net, BarChart3, "sales"],
@@ -298,25 +340,64 @@ function Overview({ data, range }) {
   </>;
 }
 
-function Movements({ data, filters, onFilter, onEdit }) {
-  const change = (key, value) => onFilter((current) => ({ ...current, [key]: value }));
-  const select = (label, key, rows, placeholder = "Todos") => <Choice label={label} value={filters[key]}
-    rows={rows} placeholder={placeholder} onChange={(value) => change(key, value)} />;
-  const categories = [...new Set([...data.categories.map(({ name }) => name), ...data.allMovements.map(({ category }) => category)])].sort();
-  const rows = data.allMovements.filter((row) =>
-    (!filters.from || row.day >= filters.from) && (!filters.to || row.day <= filters.to) &&
-    (!filters.kind || (row.kind === "expense" ? "investment" : row.kind) === filters.kind) &&
-    (!filters.category || row.category === filters.category) &&
-    (!filters.creator || (row.creator_id ?? "none") === filters.creator) &&
-    (!filters.platform || (row.platform_id ?? "none") === filters.platform) &&
-    (!filters.updated || Boolean(row.updated_at) === (filters.updated === "yes")));
+function Movements({ data, revision, filters, onFilter, onEdit }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, retry] = useState(0);
+  const [page, setPage] = useState(0);
+  const hasNext = rows.length > movementPageSize;
+  useEffect(() => {
+    const { from, to, kind, category, creator, platform, updated } = filters;
+    const controller = new AbortController();
+    const filter = (initialQuery) => {
+      let query = initialQuery;
+      if (from) query = query.gte("day", from);
+      if (to) query = query.lte("day", to);
+      if (kind) query = kind === "investment" ? query.in("kind", ["investment", "expense"]) : query.eq("kind", kind);
+      if (category) query = query.eq("category", category);
+      if (creator) query = creator === "none" ? query.is("creator_id", null) : query.eq("creator_id", creator);
+      if (platform) query = platform === "none" ? query.is("platform_id", null) : query.eq("platform_id", platform);
+      if (updated) query = updated === "yes" ? query.not("updated_at", "is", null) : query.is("updated_at", null);
+      return query;
+    };
+    async function readPage() {
+      const start = page * movementPageSize;
+      try {
+        const { data, error } = await filter(supabase.from("finance_movements").select("*"))
+          .order("day", { ascending: false }).order("id", { ascending: false })
+          .range(start, start + movementPageSize).abortSignal(controller.signal);
+        if (controller.signal.aborted) return;
+        if (error) throw error;
+        setRows(data);
+        setError(false);
+      } catch {
+        if (!controller.signal.aborted) setError(true);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+    readPage();
+    return () => controller.abort();
+  }, [filters, revision, attempt, page]);
+
+  function applyFilter(change) {
+    setLoading(true);
+    setError(false);
+    setPage(0);
+    onFilter(change);
+  }
+
+  const select = (label, key, options, placeholder = "Todos") => <Choice label={label} value={filters[key]}
+    rows={options} placeholder={placeholder} onChange={(value) => applyFilter((current) => ({ ...current, [key]: value }))} />;
+  const categories = [...new Set([...data.categories.map(({ name }) => name), ...data.movementCategories])].sort();
   return <section className="hf-section">
     <div className="hf-summary-head"><h2>Movimiento</h2><button type="button" className="hf-primary" onClick={() => onEdit()}><Plus size={16} /> Registrar movimiento</button></div>
     <div className="hf-movement-filters" role="group" aria-label="Filtros de movimientos">
       <div className="hf-date-filter">
         <PeriodPicker label="Fechas" value={filters} allowFuture onChange={({ from, to }) =>
-          onFilter((current) => ({ ...current, from, to }))} />
-        <button type="button" onClick={() => onFilter({})}>Limpiar filtros</button>
+          (from !== filters.from || to !== filters.to) && applyFilter((current) => ({ ...current, from, to }))} />
+        <button type="button" onClick={() => applyFilter({})}>Limpiar filtros</button>
       </div>
       {select("Tipo", "kind", [{ id: "investment", name: kinds.investment }, { id: "income", name: kinds.income }])}
       {select("Categoría", "category", categories.map((name) => ({ id: name, name })), "Todas")}
@@ -324,9 +405,14 @@ function Movements({ data, filters, onFilter, onEdit }) {
       {select("Plataforma", "platform", [...data.platforms, { id: "none", name: "Otros" }], "Todas")}
       {select("Actualizado", "updated", [{ id: "yes", name: "Sí" }, { id: "no", name: "No" }])}
     </div>
+    {error ? <p className="hf-notice" role="alert">No se pudieron consultar los movimientos <button type="button" onClick={() => {
+      setLoading(true);
+      setError(false);
+      retry((value) => value + 1);
+    }}>Reintentar</button></p> : loading ? <p role="status">Cargando movimientos…</p> :
     <Table headings={["Fecha", "Tipo", "Categoría", "Modelo", "Plataforma", "Importe", "Acción"]}
       emptyText="Sin movimientos para estos filtros"
-      rows={[...rows].reverse().map((row) => [row.id, [row.day, kinds[row.kind],
+      rows={rows.slice(0, movementPageSize).map((row) => [row.id, [row.day, kinds[row.kind],
         <CategoryDescription name={row.category} description={row.description} />,
         row.creator_id ? findName(data.creators, row.creator_id) : "Otros",
         row.platform_id ? findName(data.platforms, row.platform_id) : "Otros", usd(row.amount),
@@ -335,7 +421,18 @@ function Movements({ data, filters, onFilter, onEdit }) {
           {row.updated_at && <span className="hf-updated" title={`Actualizado el ${new Date(row.updated_at).toLocaleString("es-VE")}`}>
             <FileCheck size={17} aria-label="Movimiento actualizado" />
           </span>}
-        </div>]])} />
+        </div>]])} />}
+    {(page > 0 || hasNext) && <nav className="hf-actions" aria-label="Páginas de movimientos">
+      <button type="button" disabled={loading || page === 0} onClick={() => {
+        setLoading(true);
+        setPage(page - 1);
+      }}>Anterior</button>
+      <span>Página {page + 1}</span>
+      <button type="button" disabled={loading || error || !hasNext} onClick={() => {
+        setLoading(true);
+        setPage(page + 1);
+      }}>Siguiente</button>
+    </nav>}
   </section>;
 }
 

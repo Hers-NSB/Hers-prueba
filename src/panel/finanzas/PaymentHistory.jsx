@@ -45,7 +45,7 @@ function CurrentPeriod({ id, period, net, amount }) {
   </section>;
 }
 
-export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, movements, onEdit, onArchive, onConfirmed, onClose }) {
+export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, onEdit, onArchive, onConfirmed, onClose }) {
   const id = useId();
   const [records, setRecords] = useState([]);
   const [loadError, setLoadError] = useState("");
@@ -69,7 +69,8 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
       const pageSize = 500;
       try {
         for (let start = 0; ; start += pageSize) {
-          const { data, error } = await supabase.from("finance_payments").select("*").eq(field, person.id)
+          const { data, error } = await supabase.from("finance_payments")
+            .select("*, movement:finance_movements!finance_movements_finance_payment_id_fkey(id,day)").eq(field, person.id)
             .order("period_start", { ascending: false }).order("id")
             .range(start, start + pageSize - 1).abortSignal(controller.signal);
           if (controller.signal.aborted) return;
@@ -146,8 +147,6 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
 
   const shown = records.filter((row) =>
     (!range.from || row.period_end >= range.from) && (!range.to || row.period_start <= range.to));
-  const movementByPayment = new Map(movements.filter((row) => row.finance_payment_id)
-    .map((row) => [row.finance_payment_id, row]));
   const activeRate = rate ? percent(rate.percent) : "—";
   const editableManual = type === "member" && !person.agencykey_id && isActiveFinanceEntry(person);
 
@@ -206,7 +205,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
         <thead><tr>{["Período", "Ventas", "% pago", "Pago", "Estado", "Acción"].map((label) =>
           <th scope="col" key={label}>{label}</th>)}</tr></thead>
         <tbody>{shown.map((row) => {
-          const movement = movementByPayment.get(row.id);
+          const movement = row.movement;
           const paidDate = row.paid_at && (movement ? date(movement.day) : new Date(row.paid_at).toLocaleDateString("es-VE"));
           const state = row.paid_at ? "Pagado" : canPay(row) ? "Pendiente" : "Sin importe";
           return <tr key={row.id}>

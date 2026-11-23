@@ -16,14 +16,14 @@ npm test
 
 El proyecto de pruebas nace vacío. Aplica las migraciones de `supabase/migrations` y despliega `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Equipo → Administrador e inicia sesión con el correo completo. El inicio de sesión de pruebas también acepta el nombre de una cuenta del dominio `@hers-prueba.example`. Una sesión tiene que renovarse si cambia su rol.
 
-Ejecuta las pruebas SQL en el SQL Editor de **Hers prueba**. Cada prueba revierte sus datos al terminar.
+GitHub Actions ejecuta las pruebas SQL en una instancia local desechable de Supabase. Para ejecutarlas en **Hers prueba**, aplica primero las migraciones pendientes. Cada prueba revierte sus datos al terminar.
 
 - `test/finance.integration.sql` y `test/integrations.integration.sql` prueban los permisos, las vigencias, las importaciones y el almacenamiento de credenciales.
 - `test/finance_movements_model_shares.integration.sql` prueba los movimientos, las categorías y las bajas del directorio.
 - `test/finance_pay_periods.integration.sql` prueba el cierre quincenal, los porcentajes de pago, el avance de la quincena, la importación de chatters inactivos y que confirmar dos veces un pago genere una sola inversión.
 - `test/finance_current_period.integration.sql` comprueba los pagos por modelos asignados, los cambios de porcentaje en la quincena, los permisos y las descripciones de categorías.
 
-La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las migraciones configuran la tabla de Postulaciones y su almacenamiento privado de fotos. Historias y el acceso de modelos requieren su configuración propia en el proyecto de pruebas.
+La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las migraciones configuran la tabla de Postulaciones y su almacenamiento privado de fotos. El acceso de modelos requiere su configuración propia en el proyecto de pruebas.
 
 ## Estructura y continuidad
 
@@ -47,7 +47,7 @@ Después de cada conjunto de cambios, actualiza [STATUS.md](STATUS.md) con los a
 
 ### Despliegue del entorno
 
-Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js` y `cloudflare/agencykey-directory.js`. Activa la redacción de cadenas de consulta en Observabilidad del Worker para que los códigos OAuth queden fuera de sus registros. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations`, `/api/admin/integrations/*` y `/restablecer-contrasena` (con y sin la barra final). Aplica las migraciones pendientes a Supabase de pruebas antes de publicar el Worker. El disparador del entorno es `5,20,35,50 * * * *` (UTC). El Worker empieza por el día completo pendiente más antiguo. Si una consulta de transacciones devuelve 502, 503 o 504, reintenta esa consulta dos veces con pausas de uno y tres segundos. Si se agotan los intentos, deja el día pendiente y prueba el siguiente día disponible de la misma quincena en ese ciclo. El cierre requiere todos los días completos. La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
+Consulta [cloudflare/deploy.json](cloudflare/deploy.json) para los módulos, las rutas, los bindings, la observabilidad y el cron vigentes. Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js` y `cloudflare/agencykey-directory.js`. Activa la redacción de cadenas de consulta en Observabilidad del Worker para que los códigos OAuth queden fuera de sus registros. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations`, `/api/admin/integrations/*` y `/restablecer-contrasena` (con y sin la barra final). Aplica las migraciones pendientes a Supabase de pruebas antes de publicar el Worker. El disparador del entorno es `5,20,35,50 * * * *` (UTC). El Worker empieza por el día completo pendiente más antiguo. Si una consulta de transacciones devuelve 502, 503 o 504, reintenta esa consulta dos veces con pausas de uno y tres segundos. Si se agotan los intentos, deja el día pendiente y prueba el siguiente día disponible de la misma quincena en ese ciclo. El cierre requiere todos los días completos. La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
 
 Después de publicar, confirma que el Worker sirve el HTML y los recursos del build, que `/api/admin/integrations` devuelve 401 sin sesión y que la ruta retirada `/restablecer-contrasena` devuelve 410. Registra la versión activa y la última migración aplicada en [STATUS.md](STATUS.md).
 
