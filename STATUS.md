@@ -4,9 +4,13 @@ Verificado el 23 de noviembre de 2026.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **33** de Cloudflare Workers al **100 %**. Código publicado `875a867` del [PR #15](https://github.com/Hers-NSB/Hers-prueba/pull/15), versión `c18f4685-9379-4582-80f0-71353d6c1767`.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **34** de Cloudflare Workers al **100 %**. Código publicado `2b5e6f7` del [PR #16](https://github.com/Hers-NSB/Hers-prueba/pull/16), versión `a91b19aa-4dd8-4b15-a7b3-c3a84b82f4a6`.
 - Supabase de pruebas tiene aplicadas las migraciones hasta `20261123174135_finance_overview_totals`.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
+
+## Cambios publicados en el PR #16
+
+- Resultado operativo muestra las ventas netas diarias antes del reparto como Ingreso y la inversión como segunda serie. El 23 de noviembre la serie de Ingreso toma $110,40 y lo muestra como $110. Pasaron GitHub Actions, la prueba de regresión y la comparación de los recursos publicados con el build.
 
 ## Cambios publicados en el PR #15
 
