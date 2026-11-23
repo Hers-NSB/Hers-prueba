@@ -4,7 +4,7 @@ Verificado el 23 de noviembre de 2026.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **31** de Cloudflare Workers al **100 %**. Código publicado `f5bbe19` del [PR #14](https://github.com/Hers-NSB/Hers-prueba/pull/14), versión `fb90e003-3e23-444e-b4ca-9531ea223a8c`.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **32** de Cloudflare Workers al **100 %**. Código publicado `defefe9` del [PR #14](https://github.com/Hers-NSB/Hers-prueba/pull/14), versión `a5c4b234-84b1-4b19-8dfe-d9e3d7aa4348`.
 - Supabase de pruebas tiene aplicadas las migraciones hasta `20261123161750_finance_whole_pay_current_period`. El historial también contiene `20261123043232_finance_inactive_chatter_pay`, que cubre la comisión de chatters inactivos.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
@@ -25,7 +25,7 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ### 23 de noviembre de 2026 · Importes del gráfico
 
-Resultado operativo muestra Ingreso e Inversión en dólares enteros, con el mismo estilo en todas las fechas.
+Resultado operativo muestra Ingreso e Inversión en dólares enteros, con el mismo estilo en todas las fechas. Chromium comprobó el tooltip y el ancho del gráfico a 320, 768 y 1440 px. GitHub Actions pasó y los recursos publicados coinciden con el build.
 
 ### 23 de noviembre de 2026 · Pagos en dólares enteros
 
