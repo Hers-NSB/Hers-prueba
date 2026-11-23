@@ -4,7 +4,7 @@ import { supabase } from "../../lib/supabase";
 import { dateKey, financeBreakdown, investmentTotal, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
-import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
+import { effectiveShare, isChatter } from "./distribution";
 import CategoryPicker from "./CategoryPicker";
 import CategoryDescription from "./CategoryDescription";
 import PaymentHistory from "./PaymentHistory";
@@ -12,7 +12,7 @@ import "./finanzas.css";
 
 const FinanceCharts = lazy(() => import("./FinanceCharts"));
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], distributionPlans: [], rates: [], availability: [], employeeNet: [], balance: null, movementCategories: [], currentPay: {}, currentPaySales: {}, payPeriod: null };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], rates: [], balance: null, movementCategories: [], currentPay: {}, currentPaySales: {}, payPeriod: null };
 const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
 const pageSize = 500;
@@ -51,31 +51,28 @@ async function readOverviewTotals(signal) {
 
 async function loadOverview(range, signal) {
   const dateFilter = inPeriod(range);
-  const [movements, sales, employeeNet] = await Promise.all([
+  const [movements, sales] = await Promise.all([
     readRows("finance_movements", ["day", "id"], signal, dateFilter),
     readRows("finance_agencykey_sales", ["day", "creator_id"], signal, dateFilter),
-    readRows("finance_agencykey_employee_net", ["day"], signal, dateFilter),
   ]);
-  return { movements, sales, employeeNet };
+  return { movements, sales };
 }
 
 async function loadFinance(range, signal) {
   const { data: allowed, error } = await supabase.rpc("finance_is_admin").abortSignal(signal);
   if (error?.code === "42501" || !error && !allowed) return null;
   if (error) throw error;
-  const [period, creators, platforms, members, categories, distributionPlans, rates, availability, payroll, overview] = await Promise.all([
+  const [period, creators, platforms, members, categories, rates, payroll, overview] = await Promise.all([
     loadOverview(range, signal),
     readRows("finance_creators", ["name", "id"], signal),
     readRows("finance_platforms", ["name", "id"], signal),
     readRows("finance_members", ["name", "id"], signal),
     readRows("finance_categories", ["name"], signal),
-    readRows("finance_distribution_plans", ["effective_on", "revision"], signal),
     readRows("finance_model_shares", ["effective_on", "id"], signal),
-    readRows("finance_member_availability", ["effective_on", "member_id"], signal),
     readPayroll(signal),
     readOverviewTotals(signal),
   ]);
-  return { ...period, ...payroll, ...overview, creators, platforms, members, categories, distributionPlans, rates, availability };
+  return { ...period, ...payroll, ...overview, creators, platforms, members, categories, rates };
 }
 
 export default function Finanzas() {
@@ -313,7 +310,6 @@ function Breakdown({ data, dimension, title, label, catalog }) {
 function Overview({ data, range }) {
   const { movements, sales } = data;
   const totals = summarize(data);
-  const distribution = calculateModelDistribution(sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
   const investment = investmentTotal(movements, totals);
   const net = netSales(sales, movements);
   const cards = [
@@ -331,7 +327,7 @@ function Overview({ data, range }) {
     <Suspense fallback={<section className="hf-section hf-trend" aria-busy="true">
       <h2>Resultado operativo</h2><div className="hf-chart" />
     </section>}>
-      <FinanceCharts data={data} range={range} agencyByDay={distribution.agencyByDay} pendingDays={distribution.pendingDays} />
+      <FinanceCharts data={data} range={range} />
     </Suspense>
     <div className="hf-breakdowns">
       <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
