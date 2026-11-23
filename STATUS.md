@@ -1,36 +1,21 @@
 # Estado de Hers-prueba
 
-Verificado el 22 de noviembre de 2026.
+Verificado el 22 de noviembre de 2026, hora de la sesión.
 
-## Finanzas y panel Pagos
+## Despliegue
 
-- Rama [codex/finanzas-panel-pagos](https://github.com/Hers-NSB/Hers-prueba/tree/codex/finanzas-panel-pagos). Incluye el resumen, los calendarios y filtros, la edición de categorías y el panel individual de pagos.
-- Comprobaciones de la rama: `npm run lint`, `npm run build`, `npm test`, cuatro pruebas de integración SQL en PostgreSQL local y la revisión en Chromium de escritorio y móvil con respuestas simuladas.
-- Supabase de pruebas registra la migración `20261122203513_finance_payment_details`. Cloudflare Workers sirvió la versión 23 desde el commit `1d0cc785`, con los cambios de Finanzas y Conectores de la versión 22. La comprobación de un pago real queda pendiente del primer corte registrado.
-- La tarjeta **Quincena actual** se publicó en la versión 24 de Cloudflare, desde el commit `864d8dfe`. Supabase registra la migración `20261122205627_finance_current_pay_progress`. La consulta devuelve 6 de 15 días importados para la quincena del 16 al 30 de noviembre.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión 27 de Cloudflare Workers al 100 % del tráfico. El código funcional desplegado corresponde al commit `78198dd` del [PR #11](https://github.com/Hers-NSB/Hers-prueba/pull/11).
+- Supabase de pruebas tiene aplicadas todas las migraciones del repositorio, hasta `20261123021955_finance_directory_inactive_chatters`.
+- La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
-- Supabase registra `20261123015138_finance_current_pay_independent_sales`. Empleados y Pagos muestran las ventas netas de la quincena aunque falte definir el porcentaje. La consulta devuelve ventas para cinco modelos y dos chatters. Cloudflare Workers publicó la versión 25 desde el commit `ce514885`.
+## Finanzas y Conectores
 
-- Supabase registra `20261123020150_finance_current_pay_direct_percentage`. El porcentaje configurado se aplica directamente a las ventas netas de cada día. La migración no modificó cortes registrados. La versión 26 de Cloudflare sirve el 100 % del tráfico desde el commit `8e90864c`.
-
-- Supabase registra `20261123021955_finance_directory_inactive_chatters`. La tabla Empleados incluye los chatters desactivados con la etiqueta **Inactivo**. Se sincronizaron dos chatters activos y uno inactivo.
-
-## Finanzas
-
-- El [PR #9](https://github.com/Hers-NSB/Hers-prueba/pull/9) está integrado en `main` desde el commit `5c47d33`.
-- El [Worker de HERS prueba](https://hers-prueba.datosenviados07.workers.dev/) sirvió la versión 21 al 100 % del tráfico. Supabase de pruebas registra la migración `20261122003428_finance_pay_periods`.
-- Cloudflare tiene activo el disparador `5,20,35,50 * * * *` (UTC). El primer período incorporado comienza el 16 de noviembre. La primera importación automática quedaba pendiente de verificar.
-- Pasaron GitHub Actions y la prueba SQL de cierre, permisos y confirmación sin duplicados, con reversión en Supabase de pruebas. Se verificaron el panel publicado y la consulta de ventas de AgencyKey desde **Conectores**.
-- El directorio queda disponible para activación manual desde **Conectores → Autorizar directorio de AgencyKey**.
+- **Empleados** muestra las ventas netas de la quincena por modelo y chatter. La tabla principal incluye los chatters desactivados con la etiqueta **Inactivo** y acceso a su historial. Se verificaron dos chatters activos y uno inactivo.
+- **Pagos** muestra las ventas acumuladas, el pago estimado y los días importados. El pago aplica directamente el porcentaje vigente en cada fecha de venta. Para la quincena actual, los porcentajes acordados están vigentes desde el 16 de noviembre.
+- El cierre quincenal genera automáticamente los cortes. Cuando se confirma un pago, se registra una sola inversión en **Equipo** para empleados o en **Modelo** para modelos.
+- El avance verificado de la quincena del 16 al 30 de noviembre es de 6 de 15 días importados. La base tiene 0 cortes registrados. La comprobación de un pago real queda pendiente del primer cierre.
+- Se validaron el cierre y la confirmación con pruebas SQL, además de la interfaz de escritorio y móvil con datos simulados.
 
 ## Postulaciones
 
-- El [PR #7](https://github.com/Hers-NSB/Hers-prueba/pull/7) está integrado. El formulario guarda en Supabase y muestra la confirmación en pantalla.
-- Supabase de pruebas tiene aplicada la migración `20261121154801_applications`. Se verificaron el envío anónimo y el acceso administrativo con una prueba SQL que revirtió sus cambios.
-
-## Finanzas y Conectores · 22 de noviembre de 2026
-
-- La rama `codex/finanzas-conectores` reúne el selector de fechas de Movimiento, los desplegables de Finanzas, la Bóveda histórica y la importación automática de días incompletos al cambiar el rango de Resumen.
-- El Worker de pruebas sirvió la versión 22 y Supabase de pruebas tiene aplicada la migración `20261122160759_finance_directory_status`.
-- Las 24 pruebas, lint y build pasaron. Se verificaron la autorización del directorio y la importación del 2 de noviembre desde el panel. AgencyKey y Finanzas mostraron un neto de $4,80 para ese día.
-- Siguiente paso en GitHub: revisar el PR de `codex/finanzas-conectores`.
+El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar. Se verificaron el envío anónimo y el acceso administrativo con una prueba SQL que revierte sus datos. [PR #7](https://github.com/Hers-NSB/Hers-prueba/pull/7).

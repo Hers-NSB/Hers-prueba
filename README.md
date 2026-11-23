@@ -20,7 +20,7 @@ Ejecuta las pruebas SQL en el SQL Editor de **Hers prueba**. Cada prueba reviert
 
 - `test/finance.integration.sql` y `test/integrations.integration.sql` prueban los permisos, las vigencias, las importaciones y el almacenamiento de credenciales.
 - `test/finance_movements_model_shares.integration.sql` prueba los movimientos, las categorías y las bajas del directorio.
-- `test/finance_pay_periods.integration.sql` prueba el cierre quincenal, los permisos y que confirmar dos veces un pago genere una sola inversión.
+- `test/finance_pay_periods.integration.sql` prueba el cierre quincenal, los porcentajes de pago, el avance de la quincena, la importación de chatters inactivos y que confirmar dos veces un pago genere una sola inversión.
 
 La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las migraciones configuran la tabla de Postulaciones y su almacenamiento privado de fotos. Historias y el acceso de modelos requieren su configuración propia en el proyecto de pruebas.
 
@@ -28,9 +28,10 @@ La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las m
 
 - **Resumen** muestra Bóveda de HERS, Inversión, Ganancia y Ventas netas. Ganancia es Ventas netas menos Inversión. **Resultado operativo** muestra Ingreso e Inversión en barras apiladas y destaca el ingreso máximo y mínimo del período. En **Por modelo** y **Por plataforma**, Ganancia muestra la diferencia entre Inversión y Ventas netas sin signo.
 - **Movimiento** permite elegir un rango con **Fechas** y restablecer todos los filtros con **Limpiar filtros**. Al registrar un movimiento, abre **Categoría** para seleccionar, crear, editar o eliminar una categoría. La descripción es el último campo del formulario.
-- **Empleados** muestra el total de modelos y chatters, con el nombre y el rol de cada persona. En **Editar** puedes configurar el porcentaje y su fecha de vigencia. **Pagos** muestra la quincena actual de modelos y chatters, con ventas acumuladas, pago estimado y días importados para el cierre. El historial individual tiene filtros de fechas y estado.
-- **Pago ($)** muestra las ventas netas individuales multiplicadas por el porcentaje de pago vigente. Si el porcentaje cambia durante el corte, se aplica el vigente en cada fecha de venta. Las quincenas van del 1 al 15 y del 16 al último día del mes, en la zona del reporte de AgencyKey. El importe vuelve a empezar con la nueva quincena. Cuando termina un período y se han importado todos sus días, los importes positivos quedan **Pendientes de pago**.
-- En **Pagos**, la confirmación marca el corte como **Pagado** y registra un solo movimiento de **Inversión** en la fecha de confirmación. La categoría es **Equipo** para empleados y **Modelo** para modelos. Las ventas y el porcentaje histórico se guardan al cerrar cada corte nuevo.
+- **Empleados** muestra el nombre, el rol, el porcentaje y las ventas netas de la quincena. Los chatters desactivados aparecen en la tabla principal con la etiqueta **Inactivo** y acceso a su historial en **Pagos**. En **Editar** puedes configurar el porcentaje y su fecha de vigencia.
+- **Pago ($)** aplica el porcentaje configurado a las ventas netas individuales. Con $5.000 en ventas netas y un porcentaje del 20 %, el pago es de $1.000. Si el porcentaje cambia durante el corte, se usa el vigente en cada fecha de venta. Las ventas importadas se muestran aunque todavía falte configurar el porcentaje de pago.
+- **Pagos** muestra las ventas netas acumuladas, el pago estimado y los días importados de la quincena en curso. Las quincenas van del 1 al 15 y del 16 al último día del mes en la zona de reporte de AgencyKey. Cuando termina el período y se han importado todos sus días, HERS cierra el corte automáticamente. El historial ofrece filtros por fecha y estado, y habilita **Pagar** en los cortes pendientes con importe positivo.
+- La confirmación marca el corte como **Pagado** y registra un solo movimiento de **Inversión** en la fecha de confirmación. La categoría es **Equipo** para empleados y **Modelo** para modelos. Las ventas y el porcentaje histórico se guardan al cerrar cada corte nuevo.
 
 ## Cloudflare y AgencyKey
 
@@ -40,9 +41,9 @@ Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/
 
 ### Sincronización de AgencyKey
 
-En **Administrador → Conectores**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda una clave API con acceso a los modelos, sus estadísticas de ingresos de OnlyFans y al reporte de empleados. **Probar conexión** consulta el último día cerrado sin guardar ventas. Para importar datos, selecciona el período en **Finanzas → Resumen** y pulsa **Actualizar**. Para sincronizar la quincena actual, pulsa **Actualizar** desde **Empleados**.
+En **Administrador → Conectores**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda una clave API con acceso a los modelos, sus estadísticas de ingresos de OnlyFans y al reporte de empleados. **Probar conexión** consulta el último día cerrado sin guardar ventas. Al cambiar el rango en **Finanzas → Resumen**, se importan los días con datos incompletos. Pulsa **Actualizar** para solicitar otra sincronización del período. Para sincronizar la quincena actual, pulsa **Actualizar** desde **Empleados**.
 
-La activación del directorio es opcional. Cuando quieras conectarlo, abre **Conectores → Autorizar directorio de AgencyKey** y usa una cuenta con acceso a todo el equipo y a los modelos de la agencia. Una vez autorizado, al abrir **Empleados** se sincronizan los modelos y chatters activos. Las cuentas inactivas conservan su historial en **Personas inactivas**. La importación de ventas usa la clave API de Conectores.
+La activación del directorio es opcional. Cuando quieras conectarlo, abre **Conectores → Autorizar directorio de AgencyKey** y usa una cuenta con acceso a todo el equipo y a los modelos de la agencia. Una vez autorizado, al abrir **Empleados** se sincronizan los modelos y los chatters, incluidos los que estén desactivados en AgencyKey. Los modelos inactivos se pueden consultar en **Personas inactivas**. La importación de ventas usa la clave API de Conectores.
 
 El panel permite guardar o reemplazar claves API, tokens y contraseñas de otros servicios. El Worker usa actualmente la credencial de AgencyKey. La lista de credenciales devuelve el nombre, el tipo y la fecha de actualización. La contraseña de acceso a HERS pertenece a Supabase Auth.
 
