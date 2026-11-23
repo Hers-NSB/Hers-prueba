@@ -6,6 +6,7 @@ import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
 import CategoryPicker from "./CategoryPicker";
+import CategoryDescription from "./CategoryDescription";
 import PaymentHistory from "./PaymentHistory";
 import "./finanzas.css";
 
@@ -165,6 +166,9 @@ export default function Finanzas() {
     if (tab === "Empleados") refreshDirectory((value) => value + 1);
   }
 
+  const paymentPerson = payments && (payments.type === "modelShare" ? data.creators : data.members)
+    .find(({ id }) => id === payments.person.id);
+  const paymentRate = payments && effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()));
   const busy = loading || updating;
   return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
@@ -190,19 +194,20 @@ export default function Finanzas() {
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
           onEdit={(type, row) => setEditor({ type, row })} onPayments={setPayments} />}
       </div>}
+      {payments && paymentPerson && <PaymentHistory key={payments.recipient} {...payments} person={paymentPerson}
+        rate={paymentRate}
+        currentPeriod={payments.type === "modelShare" || isChatter(paymentPerson.role) || paymentRate ? data.payPeriod : null}
+        currentAmount={data.currentPay[payments.recipient]} currentNet={data.currentPaySales[payments.recipient]}
+        financeRevision={revision} movements={data.allMovements}
+        onEdit={() => setEditor({ type: payments.type, row: paymentPerson })} onConfirmed={reload} onClose={() => setPayments(null)} />}
       {editor && <Editor editor={editor} data={data} onChange={reload} onClose={() => setEditor(null)}
         onSaved={() => { setEditor(null); reload(); }} />}
-      {payments && <PaymentHistory key={payments.recipient} {...payments}
-        rate={effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()))}
-        currentPeriod={payments.eligible ? data.payPeriod : null}
-        currentAmount={data.currentPay[payments.recipient]} currentNet={data.currentPaySales[payments.recipient]}
-        financeRevision={revision} movements={data.allMovements} onConfirmed={reload} onClose={() => setPayments(null)} />}
 
     </>}
   </section>;
 }
 
-function Choice({ label, value, rows, onChange, placeholder = "Sin asignar", required = false }) {
+function Choice({ label, value, rows, onChange, placeholder = "Otros", required = false }) {
   return <label>{label}<span className="hf-choice">
     <select className="hf-select-trigger" required={required} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
       {placeholder && <option value="">{placeholder}</option>}
@@ -211,10 +216,10 @@ function Choice({ label, value, rows, onChange, placeholder = "Sin asignar", req
   </span></label>;
 }
 
-function Table({ headings, rows, emptyText = "Sin registros para este período" }) {
-  return rows.length ? <div className="hf-table" tabIndex={0}><table>
-    <thead><tr>{headings.map((heading) => <th key={heading} scope="col">{heading}</th>)}</tr></thead>
-    <tbody>{rows.map(([id, cells]) => <tr key={id}>{cells.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}</tbody>
+function Table({ headings, rows, labelledBy, emptyText = "Sin registros para este período" }) {
+  return rows.length ? <div className="hf-table" tabIndex={0}><table role="table" aria-labelledby={labelledBy}>
+    <thead role="rowgroup"><tr role="row">{headings.map((heading) => <th key={heading} scope="col">{heading}</th>)}</tr></thead>
+    <tbody role="rowgroup">{rows.map(([id, cells]) => <tr role="row" key={id}>{cells.map((cell, index) => <td role="cell" key={index} data-label={headings[index]}>{cell}</td>)}</tr>)}</tbody>
   </table></div> : <p className="hf-empty">{emptyText}</p>;
 }
 
@@ -223,7 +228,7 @@ const findName = (rows, id) => rows.find((row) => row.id === id)?.name || "—";
 function Breakdown({ data, dimension, title, label, catalog }) {
   const rows = financeBreakdown(data, dimension).map((row) => ({
     ...row,
-    name: row.id ? findName(catalog, row.id) : "Sin asignar",
+    name: row.id ? findName(catalog, row.id) : "Otros",
     profit: salesProfit(row.net, row.expenses),
   })).sort((a, b) => a.name.localeCompare(b.name, "es"));
   return <section className="hf-section">
@@ -267,9 +272,10 @@ function Movements({ data, filters, onFilter, onEdit }) {
   const change = (key, value) => onFilter((current) => ({ ...current, [key]: value }));
   const select = (label, key, rows, placeholder = "Todos") => <Choice label={label} value={filters[key]}
     rows={rows} placeholder={placeholder} onChange={(value) => change(key, value)} />;
+  const descriptions = new Map(data.categories.map(({ name, description }) => [name.toLowerCase(), description]));
   const categories = [...new Set([...data.categories.map(({ name }) => name), ...data.allMovements.map(({ category }) => category)])].sort();
   const rows = data.allMovements.filter((row) =>
-    (!filters.period || (row.day >= filters.period.from && row.day <= filters.period.to)) &&
+    (!filters.from || row.day >= filters.from) && (!filters.to || row.day <= filters.to) &&
     (!filters.kind || (row.kind === "expense" ? "investment" : row.kind) === filters.kind) &&
     (!filters.category || row.category === filters.category) &&
     (!filters.creator || (row.creator_id ?? "none") === filters.creator) &&
@@ -285,17 +291,16 @@ function Movements({ data, filters, onFilter, onEdit }) {
       </div>
       {select("Tipo", "kind", [{ id: "investment", name: kinds.investment }, { id: "income", name: kinds.income }])}
       {select("Categoría", "category", categories.map((name) => ({ id: name, name })), "Todas")}
-      {select("Modelo", "creator", [...data.creators, { id: "none", name: "Sin asignar" }])}
-      {select("Plataforma", "platform", [...data.platforms, { id: "none", name: "Sin asignar" }], "Todas")}
+      {select("Modelo", "creator", [...data.creators, { id: "none", name: "Otros" }])}
+      {select("Plataforma", "platform", [...data.platforms, { id: "none", name: "Otros" }], "Todas")}
       {select("Actualizado", "updated", [{ id: "yes", name: "Sí" }, { id: "no", name: "No" }])}
     </div>
     <Table headings={["Fecha", "Tipo", "Categoría", "Modelo", "Plataforma", "Importe", "Acción"]}
       emptyText="Sin movimientos para estos filtros"
       rows={[...rows].reverse().map((row) => [row.id, [row.day, kinds[row.kind],
-        row.description ? <span className="hf-category-label" tabIndex={0} aria-describedby={`description-${row.id}`}>
-          {row.category}<small role="tooltip" id={`description-${row.id}`}>{row.description}</small>
-        </span> : row.category,
-        findName(data.creators, row.creator_id), findName(data.platforms, row.platform_id), usd(row.amount),
+        <CategoryDescription name={row.category} description={descriptions.get(row.category.toLowerCase())} />,
+        row.creator_id ? findName(data.creators, row.creator_id) : "Otros",
+        row.platform_id ? findName(data.platforms, row.platform_id) : "Otros", usd(row.amount),
         <div className="hf-actions">{row.finance_payment_id ? <span>Pago confirmado</span>
           : <button type="button" aria-label={`Editar ${kinds[row.kind]} del ${row.day}`} onClick={() => onEdit(row)}>Editar</button>}
           {row.updated_at && <span className="hf-updated" title={`Actualizado el ${new Date(row.updated_at).toLocaleString("es-VE")}`}>
@@ -318,21 +323,22 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isCurrent(row)]),
   ].sort(([a], [b]) => a.name.localeCompare(b.name, "es"));
   const headings = ["Nombre", "Rol", "Porcentaje", "Ventas netas ($)", "Pago ($)", "Acciones"];
-  const showInMainTable = ([row, type, , active]) => active || (type === "member" && isChatter(row.role));
+  const isModel = ([row, type]) => type === "modelShare"
+    || row.role?.split(",").some((role) => role.trim().toLowerCase() === "modelo");
   const toRow = ([row, type, recipient, active]) => {
     const rate = effectiveShare(data.rates, recipient, currentDay);
-    const eligible = type === "modelShare" || isChatter(row.role);
+    const eligible = type === "modelShare" || isChatter(row.role) || Boolean(rate);
     const payout = data.currentPay[recipient] ?? (data.payPeriod?.day === data.payPeriod?.from && row.agencykey_id ? 0 : null);
-    const amount = !eligible || !rate ? "—" : payout == null && !row.agencykey_id && type === "member"
+    const amount = !eligible || !rate ? "—" : payout == null && rate.basis === "employee_sales" && !row.agencykey_id
       ? "Pendiente de vincular" : payout == null ? "Pendiente de sincronizar" : usd(payout);
     return [recipient, [active ? row.name : <>{row.name} <small className="hf-employee-status">Inactivo</small></>, row.role,
-      rate ? percentLabel(rate.percent) : "—", active && eligible ? usd(data.currentPaySales[recipient]) : "—", active ? amount : "—",
-      <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
-        <button type="button" onClick={() => onPayments({ type, person: row, recipient, eligible })}>Pagos</button>
+      rate ? percentLabel(rate.percent) : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
+      <div className="hf-actions">
+        <button type="button" onClick={() => onPayments({ type, person: row, recipient })}>Pagos</button>
         {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
   };
-  const mainRows = participants.filter(showInMainTable).map(toRow);
-  const inactive = participants.filter((entry) => !showInMainTable(entry)).map(toRow);
+  const models = participants.filter(isModel).map(toRow);
+  const otherEmployees = participants.filter((entry) => !isModel(entry)).map(toRow);
   return <>
     <div className="hf-summary-head">
       <h2>Empleados</h2>
@@ -345,10 +351,14 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     {directoryError && <p className="hf-notice" role="alert">{directoryError.message.startsWith("[AK-DIRECTORY-CONNECT]")
       ? "Autoriza el directorio de AgencyKey en Conectores para sincronizar el listado."
       : directoryError.message}</p>}
-    <Table headings={headings} rows={mainRows} emptyText="Sin empleados registrados" />
-    {inactive.length > 0 && <details className="hf-section"><summary>Personas inactivas</summary>
-      <Table headings={headings} rows={inactive} />
-    </details>}
+    <section className="hf-section" aria-labelledby="hf-models-title">
+      <h2 id="hf-models-title">Modelos</h2>
+      <Table labelledBy="hf-models-title" headings={headings} rows={models} emptyText="Sin modelos registrados" />
+    </section>
+    <section className="hf-section" aria-labelledby="hf-other-employees-title">
+      <h2 id="hf-other-employees-title">Otros empleados</h2>
+      <Table labelledBy="hf-other-employees-title" headings={headings} rows={otherEmployees} emptyText="Sin otros empleados registrados" />
+    </section>
     <section className="hf-section">
       <div className="hf-actions">
         <button type="button" onClick={() => onEdit("platform")}><Plus size={16} /> Agregar plataforma</button>
@@ -363,7 +373,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
   const rateDay = data.payPeriod?.day ?? today;
   const recipient = type === "modelShare" ? `model:${row.id}` : row && `chatter:${row.id}`;
   const share = effectiveShare(data.rates, recipient, rateDay);
-  const initialValues = { day: today, effective_on: rateDay, kind: "investment", percent: 0, creator_ids: [],
+  const initialValues = { day: today, kind: "investment", percent: 0, creator_ids: [],
     ...row, ...(share && { percent: share.percent, creator_ids: share.creator_ids }) };
   const [values, setValues] = useState(initialValues);
   const [saving, setSaving] = useState(false);
@@ -386,24 +396,22 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
       if (type === "movement") {
         const { day, kind, category, description, creator_id, platform_id, amount } = values;
         if (!category) throw new Error("Selecciona una categoría");
-        const payload = { day, kind, category, description: description?.trim() || "",
+        const payload = { day, kind, category, description: description ?? "",
           creator_id: creator_id || null, platform_id: platform_id || null, amount,
           gross: kind === "income" ? row?.gross ?? null : null, net: kind === "income" ? row?.net ?? null : null };
         const table = supabase.from("finance_movements");
         request = row ? table.update(payload).eq("id", row.id).select("id").single() : table.insert(payload);
       } else if (type === "archive") {
         request = supabase.from("finance_members").update({ archived_on: today }).eq("id", row.id).select("id").single();
-      } else if (memberShare) {
-        if (!byEmployee && Number(values.percent) > 0 && !values.creator_ids.length) throw new Error("Selecciona al menos un modelo");
-        request = supabase.rpc("finance_save_member_share", {
-          p_member_id: row?.id ?? null, p_agencykey_id: null,
-          p_name: values.name, p_role: values.role,
-          p_effective_on: values.effective_on, p_percent: Number(values.percent), p_creator_ids: byEmployee ? [] : values.creator_ids,
+      } else if (memberShare || type === "modelShare") {
+        if (memberShare && !byEmployee && Number(values.percent) > 0 && !values.creator_ids.length) {
+          throw new Error("Selecciona al menos un modelo");
+        }
+        request = supabase.rpc("finance_save_current_pay_rate", {
+          p_member_id: memberShare ? row?.id ?? null : null, p_creator_id: type === "modelShare" ? row.id : null,
+          p_name: memberShare ? values.name : null, p_role: memberShare ? values.role : null,
+          p_percent: Number(values.percent), p_creator_ids: memberShare && !byEmployee ? values.creator_ids : [],
         });
-      } else if (type === "modelShare") {
-        request = supabase.from("finance_model_shares").upsert({
-          creator_id: row.id, member_id: null, effective_on: values.effective_on, percent: Number(values.percent),
-        }, { onConflict: "member_id,creator_id,effective_on" });
       } else {
         request = supabase.from("finance_platforms").insert({ name: values.name.trim() });
       }
@@ -420,7 +428,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
     archive: "Eliminar empleado", modelShare: "Editar porcentaje del modelo" };
   const kind = values.kind === "expense" ? "investment" : values.kind;
 
-  return <dialog className="hf-dialog" aria-labelledby="hf-editor-title" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
+  return <dialog className="hf-dialog hf-finance-dialog" aria-labelledby="hf-editor-title" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
     <form onSubmit={save}>
       <h2 id="hf-editor-title">{title[type] ?? `Agregar ${catalog[type]?.toLowerCase()}`}</h2>
       <div className="hf-form">
@@ -434,7 +442,10 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
           {select("Plataforma", "platform_id", data.platforms)}
           {field(kind === "income" ? "Ingreso a agencia ($)" : "Importe ($)", "amount",
             { type: "number", step: "0.01", min: kind === "income" ? undefined : "0.01", required: true })}
-          <div className="hf-full-field">{field("Descripción", "description", { maxLength: 500 })}</div>
+          <label className="hf-full-field">Descripción
+            <textarea maxLength={500} rows={3} value={values.description ?? ""}
+              onChange={(event) => set("description", event.target.value)} />
+          </label>
         </>}
         {type === "archive" && <p>Retirar a {row.name} del listado de empleados y conservar su historial</p>}
         {memberShare && !row?.agencykey_id && <fieldset className="hf-edit-group">
@@ -447,8 +458,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
         {(memberShare || type === "modelShare") && <fieldset className="hf-edit-group">
           <legend>Porcentaje de pago</legend>
           {field("Porcentaje", "percent", { type: "number", min: 0, max: 100, step: "0.01", required: true })}
-          <PeriodPicker label="Vigente desde" value={{ from: values.effective_on }} single allowFuture
-            onChange={({ from }) => set("effective_on", from)} />
+          <p className="hf-full-field">El porcentaje se aplica a toda la quincena actual.</p>
           {byEmployee && <p className="hf-full-field">Ventas netas atribuidas en todas las cuentas de AgencyKey.
             {!row?.agencykey_id && " Se necesita una cuenta de AgencyKey para atribuir ventas."}</p>}
         </fieldset>}

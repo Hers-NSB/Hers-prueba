@@ -123,6 +123,7 @@ export default function AdminPanel({ onClose }) {
             <button
               className={`admin-nav-item ${activeSection === "finance" ? "is-active" : ""}`}
               onClick={() => goTo("finance")}
+              aria-label="Finanzas"
             >
               <BarChart3 size={18} />
               <span>Finanzas</span>

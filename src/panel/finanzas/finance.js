@@ -109,7 +109,7 @@ export function financeBreakdown({ movements, sales }, dimension) {
     group.set(id, row);
   };
   for (const row of movements) {
-    const id = dimension === "model" ? row.creator_id : row.platform_id;
+    const id = (dimension === "model" ? row.creator_id : row.platform_id) ?? null;
     if (row.kind === "income") {
       add(id, "income", row.amount);
       if (row.net != null) add(id, "net", row.net);

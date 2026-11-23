@@ -44,7 +44,7 @@ function CurrentPeriod({ id, period, net, amount }) {
   </section>;
 }
 
-export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, movements, onConfirmed, onClose }) {
+export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, movements, onEdit, onConfirmed, onClose }) {
   const id = useId();
   const [records, setRecords] = useState([]);
   const [loadError, setLoadError] = useState("");
@@ -52,7 +52,6 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
   const [notice, setNotice] = useState("");
   const [revision, reload] = useState(0);
   const [range, setRange] = useState({});
-  const [status, setStatus] = useState("");
   const [confirming, setConfirming] = useState(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -111,19 +110,21 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
   }
 
   const shown = records.filter((row) =>
-    (!range.from || row.period_end >= range.from) && (!range.to || row.period_start <= range.to))
-    .filter((row) => !status || (status === "paid" ? row.paid_at : canPay(row)));
+    (!range.from || row.period_end >= range.from) && (!range.to || row.period_start <= range.to));
   const movementByPayment = new Map(movements.filter((row) => row.finance_payment_id)
     .map((row) => [row.finance_payment_id, row]));
   const activeRate = rate ? percent(rate.percent) : "—";
 
-  return <dialog className="hf-dialog hf-payment-panel" aria-labelledby={id}
+  return <dialog className="hf-dialog hf-finance-dialog hf-payment-panel" aria-labelledby={id}
     ref={(node) => { if (node && !node.open) node.showModal(); }}
     onCancel={(event) => { event.preventDefault(); if (!busy && !confirming) onClose(); }}>
     <header className="hf-payment-header">
       <div><h2 id={id}>Pagos de {person.name}</h2>
         <p>{type === "modelShare" ? "Modelo" : "Empleado"} · Porcentaje de pago vigente {activeRate}</p></div>
-      <button type="button" aria-label="Cerrar pagos" disabled={busy} onClick={onClose}><X size={18} /></button>
+      <div className="hf-actions">
+        <button type="button" disabled={busy} onClick={onEdit}>Editar</button>
+        <button type="button" aria-label="Cerrar pagos" disabled={busy} onClick={onClose}><X size={18} /></button>
+      </div>
     </header>
     <div className="hf-payment-content" aria-busy={loading || busy}>
       {currentPeriod && <CurrentPeriod id={`${id}-current`} period={currentPeriod} net={currentNet} amount={currentAmount} />}
@@ -134,10 +135,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
       </div>
       <div className="hf-payment-filters">
         <PeriodPicker label="Fechas" value={range} onChange={setRange} />
-        <label>Estado<select value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="">Todos</option><option value="pending">Pendientes</option><option value="paid">Pagados</option>
-        </select></label>
-        <button type="button" onClick={() => { setRange({}); setStatus(""); }}>Limpiar filtros</button>
+        <button type="button" onClick={() => setRange({})}>Limpiar filtros</button>
       </div>
       <h3 id={`${id}-history`}>Historial de pagos</h3>
       {notice && <p role="status">{notice}</p>}
@@ -178,7 +176,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
         })}</tbody>
       </table></div>}
     </div>
-    {confirming && createPortal(<dialog className="hf-dialog" aria-labelledby={`${id}-confirm`}
+    {confirming && createPortal(<dialog className="hf-dialog hf-finance-dialog" aria-labelledby={`${id}-confirm`}
       ref={(node) => { if (node && !node.open) node.showModal(); }}
       onCancel={(event) => { event.preventDefault(); event.stopPropagation(); closeConfirmation(); }}>
       <h2 id={`${id}-confirm`}>Confirmar pago</h2>

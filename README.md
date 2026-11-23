@@ -21,16 +21,26 @@ Ejecuta las pruebas SQL en el SQL Editor de **Hers prueba**. Cada prueba reviert
 - `test/finance.integration.sql` y `test/integrations.integration.sql` prueban los permisos, las vigencias, las importaciones y el almacenamiento de credenciales.
 - `test/finance_movements_model_shares.integration.sql` prueba los movimientos, las categorías y las bajas del directorio.
 - `test/finance_pay_periods.integration.sql` prueba el cierre quincenal, los porcentajes de pago, el avance de la quincena, la importación de chatters inactivos y que confirmar dos veces un pago genere una sola inversión.
+- `test/finance_current_period.integration.sql` comprueba los pagos por modelos asignados, los cambios de porcentaje en la quincena, los permisos y las descripciones de categorías.
 
 La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las migraciones configuran la tabla de Postulaciones y su almacenamiento privado de fotos. Historias y el acceso de modelos requieren su configuración propia en el proyecto de pruebas.
 
+## Estructura y continuidad
+
+- `src/` contiene la portada y el panel de administración. `src/panel/finanzas/` contiene Resumen, Movimiento, Empleados y Pagos. `src/panel/integrations/` contiene Conectores.
+- `cloudflare/` contiene el Worker, la importación de estadísticas y el directorio de AgencyKey. `supabase/` contiene las migraciones y las funciones del proyecto.
+- `test/` contiene las pruebas de JavaScript y las pruebas de integración SQL.
+
+Después de cada conjunto de cambios, actualiza [STATUS.md](STATUS.md) con los archivos, decisiones, verificaciones y pendientes. Revisa también este README y actualízalo cuando cambie el uso, la instalación, la configuración o la estructura.
+
 ## Finanzas y pagos
 
-- **Resumen** muestra Bóveda de HERS, Inversión, Ganancia y Ventas netas. Ganancia es Ventas netas menos Inversión. **Resultado operativo** muestra Ingreso e Inversión en barras apiladas y destaca el ingreso máximo y mínimo del período. En **Por modelo** y **Por plataforma**, Ganancia muestra la diferencia entre Inversión y Ventas netas sin signo.
-- **Movimiento** permite elegir un rango con **Fechas** y restablecer todos los filtros con **Limpiar filtros**. Al registrar un movimiento, abre **Categoría** para seleccionar, crear, editar o eliminar una categoría. La descripción es el último campo del formulario.
-- **Empleados** muestra el nombre, el rol, el porcentaje y las ventas netas de la quincena. Los chatters desactivados aparecen en la tabla principal con la etiqueta **Inactivo** y acceso a su historial en **Pagos**. En **Editar** puedes configurar el porcentaje y su fecha de vigencia.
-- **Pago ($)** aplica el porcentaje configurado a las ventas netas individuales. Con $5.000 en ventas netas y un porcentaje del 20 %, el pago es de $1.000. Si el porcentaje cambia durante el corte, se usa el vigente en cada fecha de venta. Las ventas importadas se muestran aunque todavía falte configurar el porcentaje de pago.
-- **Pagos** muestra las ventas netas acumuladas, el pago estimado y los días importados de la quincena en curso. Las quincenas van del 1 al 15 y del 16 al último día del mes en la zona de reporte de AgencyKey. Cuando termina el período y se han importado todos sus días, HERS cierra el corte automáticamente. El historial ofrece filtros por fecha y estado, y habilita **Pagar** en los cortes pendientes con importe positivo.
+- **Resumen** muestra Bóveda de HERS, Inversión, Ganancia y Ventas netas. Ganancia es Ventas netas menos Inversión. **Resultado operativo** muestra Ingreso e Inversión en barras apiladas sin desplazamiento horizontal y destaca el ingreso máximo del período. Consulta la fecha y los importes de cada barra con el puntero o las flechas del teclado. En **Por modelo** y **Por plataforma**, Ganancia muestra la diferencia entre Inversión y Ventas netas sin signo.
+- **Movimiento** permite filtrar por **Fechas**, **Tipo**, **Categoría**, **Modelo**, **Plataforma** y **Actualizado**. Los movimientos sin modelo o plataforma se muestran como **Otros**. La descripción del movimiento admite varias líneas. En **Categoría** puedes seleccionar, crear, editar o eliminar y guardar una descripción propia. Pasa el cursor, enfoca o toca la categoría para consultar su descripción cuando exista.
+- **Empleados** separa **Modelos** y **Otros empleados**. Los chatters desactivados conservan el acceso a sus ventas, pagos e historial con la etiqueta **Inactivo**.
+- En **Pagos → Editar** puedes ajustar el porcentaje y los datos editables de la persona. El porcentaje guardado rige toda la quincena actual. Los cortes cerrados conservan el importe y el porcentaje registrados.
+- **Pago ($)** aplica el porcentaje configurado al neto de la base correspondiente. Para los chatters vinculados, toma las ventas atribuidas por AgencyKey. Para los empleados con modelos asignados, toma las ventas netas diarias de esos modelos y suma la comisión de cada uno al centavo.
+- **Pagos** muestra las ventas netas acumuladas, el pago estimado y los días importados de la quincena en curso. Las quincenas van del 1 al 15 y del 16 al último día del mes en la zona de reporte de AgencyKey. HERS cierra el corte al terminar el período y confirmar la importación de todos sus días. El historial se puede filtrar por fecha y habilita **Pagar** en los cortes pendientes con importe positivo.
 - La confirmación marca el corte como **Pagado** y registra un solo movimiento de **Inversión** en la fecha de confirmación. La categoría es **Equipo** para empleados y **Modelo** para modelos. Las ventas y el porcentaje histórico se guardan al cerrar cada corte nuevo.
 
 ## Cloudflare y AgencyKey
@@ -39,11 +49,13 @@ La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las m
 
 Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js` y `cloudflare/agencykey-directory.js`. Activa la redacción de cadenas de consulta en Observabilidad del Worker para que los códigos OAuth queden fuera de sus registros. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations`, `/api/admin/integrations/*` y `/restablecer-contrasena` (con y sin la barra final). Aplica las migraciones pendientes a Supabase de pruebas antes de publicar el Worker. El disparador del entorno es `5,20,35,50 * * * *` (UTC). El Worker importa un día completo pendiente por ejecución y vuelve a intentarlo en la siguiente si falla. La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
 
+Después de publicar, confirma que el Worker sirve el HTML y los recursos del build, que `/api/admin/integrations` devuelve 401 sin sesión y que la ruta retirada `/restablecer-contrasena` devuelve 410. Registra la versión activa y la última migración aplicada en [STATUS.md](STATUS.md).
+
 ### Sincronización de AgencyKey
 
 En **Administrador → Conectores**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda una clave API con acceso a los modelos, sus estadísticas de ingresos de OnlyFans y al reporte de empleados. **Probar conexión** consulta el último día cerrado sin guardar ventas. Al cambiar el rango en **Finanzas → Resumen**, se importan los días con datos incompletos. Pulsa **Actualizar** para solicitar otra sincronización del período. Para sincronizar la quincena actual, pulsa **Actualizar** desde **Empleados**.
 
-La activación del directorio es opcional. Cuando quieras conectarlo, abre **Conectores → Autorizar directorio de AgencyKey** y usa una cuenta con acceso a todo el equipo y a los modelos de la agencia. Una vez autorizado, al abrir **Empleados** se sincronizan los modelos y los chatters, incluidos los que estén desactivados en AgencyKey. Los modelos inactivos se pueden consultar en **Personas inactivas**. La importación de ventas usa la clave API de Conectores.
+La activación del directorio es opcional. Cuando quieras conectarlo, abre **Conectores → Autorizar directorio de AgencyKey** y usa una cuenta con acceso a todo el equipo y a los modelos de la agencia. Una vez autorizado, al abrir **Empleados** se sincronizan los modelos y los chatters, incluidos los que estén desactivados en AgencyKey. Los modelos inactivos aparecen con su estado en la tabla **Modelos**. La importación de ventas usa la clave API de Conectores.
 
 El panel permite guardar o reemplazar claves API, tokens y contraseñas de otros servicios. El Worker usa actualmente la credencial de AgencyKey. La lista de credenciales devuelve el nombre, el tipo y la fecha de actualización. La contraseña de acceso a HERS pertenece a Supabase Auth.
 
