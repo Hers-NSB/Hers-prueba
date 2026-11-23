@@ -9,7 +9,7 @@ Verificado el 22 de noviembre de 2026.
 - Supabase de pruebas registra la migración `20261122203513_finance_payment_details`. Cloudflare Workers sirvió la versión 23 desde el commit `1d0cc785`, con los cambios de Finanzas y Conectores de la versión 22. La comprobación de un pago real queda pendiente del primer corte registrado.
 - La tarjeta **Quincena actual** se publicó en la versión 24 de Cloudflare, desde el commit `864d8dfe`. Supabase registra la migración `20261122205627_finance_current_pay_progress`. La consulta devuelve 6 de 15 días importados para la quincena del 16 al 30 de noviembre.
 
-- Supabase registra `20261123015138_finance_current_pay_independent_sales`. Empleados y Pagos muestran las ventas netas de la quincena aunque falte definir el porcentaje. La consulta devuelve ventas para cinco modelos y dos chatters.
+- Supabase registra `20261123015138_finance_current_pay_independent_sales`. Empleados y Pagos muestran las ventas netas de la quincena aunque falte definir el porcentaje. La consulta devuelve ventas para cinco modelos y dos chatters. Cloudflare Workers sirve la versión 25 al 100 % desde el commit `ce514885`.
 
 ## Finanzas
 
