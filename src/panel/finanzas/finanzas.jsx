@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { dateKey, financeBreakdown, investmentTotal, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
+import { dateKey, financeBreakdown, investmentTotal, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd, usdPayment } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
@@ -17,39 +17,44 @@ const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
 const pageSize = 500;
 
-async function readRows(table, ordering, filter = (query) => query) {
+async function readRows(table, ordering, signal, filter = (query) => query) {
   const rows = [];
   for (let start = 0; ; start += pageSize) {
     let query = filter(supabase.from(table).select("*"));
     for (const column of ordering) query = query.order(column);
-    const { data, error } = await query.range(start, start + pageSize - 1);
+    const { data, error } = await query.range(start, start + pageSize - 1).abortSignal(signal);
     if (error) throw error;
     rows.push(...data);
     if (data.length < pageSize) return rows;
   }
 }
 
-async function loadFinance({ from, to }) {
-  const { data: allowed, error } = await supabase.rpc("finance_is_admin");
+async function readPayroll(signal) {
+  const { data, error } = await supabase.rpc("finance_current_pay").abortSignal(signal);
+  if (error) throw error;
+  const { amounts: currentPay, sales: currentPaySales = {}, ...payPeriod } = data;
+  return { currentPay, currentPaySales, payPeriod };
+}
+
+async function loadFinance({ from, to }, signal) {
+  const { data: allowed, error } = await supabase.rpc("finance_is_admin").abortSignal(signal);
   if (error?.code === "42501" || !error && !allowed) return null;
   if (error) throw error;
   const inPeriod = (query) => query.gte("day", from).lte("day", to);
   const [allMovements, allSales, creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet, payroll] = await Promise.all([
-    readRows("finance_movements", ["day", "id"]),
-    readRows("finance_agencykey_sales", ["day", "creator_id"]),
-    readRows("finance_creators", ["name", "id"]),
-    readRows("finance_platforms", ["name", "id"]),
-    readRows("finance_members", ["name", "id"]),
-    readRows("finance_categories", ["name"]),
-    readRows("finance_distribution_plans", ["effective_on", "revision"]),
-    readRows("finance_model_shares", ["effective_on", "id"]),
-    readRows("finance_member_availability", ["effective_on", "member_id"]),
-    readRows("finance_agencykey_employee_net", ["day"], inPeriod),
-    supabase.rpc("finance_current_pay"),
+    readRows("finance_movements", ["day", "id"], signal),
+    readRows("finance_agencykey_sales", ["day", "creator_id"], signal),
+    readRows("finance_creators", ["name", "id"], signal),
+    readRows("finance_platforms", ["name", "id"], signal),
+    readRows("finance_members", ["name", "id"], signal),
+    readRows("finance_categories", ["name"], signal),
+    readRows("finance_distribution_plans", ["effective_on", "revision"], signal),
+    readRows("finance_model_shares", ["effective_on", "id"], signal),
+    readRows("finance_member_availability", ["effective_on", "member_id"], signal),
+    readRows("finance_agencykey_employee_net", ["day"], signal, inPeriod),
+    readPayroll(signal),
   ]);
-  if (payroll.error) throw payroll.error;
-  const { amounts: currentPay, sales: currentPaySales = {}, ...payPeriod } = payroll.data;
-  return { ...empty, currentPay, currentPaySales, payPeriod, movements: allMovements.filter(({ day }) => day >= from && day <= to),
+  return { ...empty, ...payroll, movements: allMovements.filter(({ day }) => day >= from && day <= to),
     allMovements, allSales, sales: allSales.filter(({ day }) => day >= from && day <= to), creators, platforms, members, categories, distributionPlans, rates, availability, employeeNet };
 }
 
@@ -66,52 +71,67 @@ export default function Finanzas() {
   const [updating, setUpdating] = useState(false);
   const [syncError, setSyncError] = useState("");
   const [directoryError, setDirectoryError] = useState(null);
-  const [directoryRevision, refreshDirectory] = useState(0);
+  const [directoryRevision, refreshDirectory] = useState(null);
   const [movementFilters, setMovementFilters] = useState({});
+
+  const busy = loading || updating;
 
   useEffect(() => {
     if (!filters.from || !filters.to || filters.from > filters.to) return;
-    let active = true;
-    loadFinance(filters).then((result) => {
-      if (!active) return;
+    const controller = new AbortController();
+    loadFinance(filters, controller.signal).then((result) => {
+      if (controller.signal.aborted) return;
       setData(result ?? empty);
       setAccess(Boolean(result));
       setLoading(false);
     }).catch((error) => {
-      if (!active) return;
+      if (controller.signal.aborted) return;
       console.error("Finanzas", error.code || error.message);
       setLoadError(true);
       setLoading(false);
     });
-    return () => { active = false; };
+    return () => controller.abort();
   }, [filters, revision]);
 
   useEffect(() => {
-    if (tab !== "Empleados") return;
+    if (!access || directoryRevision === null) return;
     const controller = new AbortController();
     callApi("/employees", "POST", undefined, controller.signal).then(() => {
-      if (!controller.signal.aborted) {
-        setDirectoryError(null);
-        reload();
-      }
+      if (controller.signal.aborted) return;
+      setDirectoryError(null);
+      reload();
     }).catch((error) => {
-      if (!controller.signal.aborted) setDirectoryError(error);
+      if (controller.signal.aborted) return;
+      setDirectoryError(error);
+      if (directoryRevision > 0) reload();
     });
     return () => controller.abort();
-  }, [tab, directoryRevision]);
+  }, [access, directoryRevision]);
 
   useEffect(() => {
-    if (tab !== "Empleados" || !access) return;
-    const checkPeriod = () => {
-      if (document.visibilityState === "visible") refresh((value) => value + 1);
+    if (tab !== "Empleados" || !access || busy) return;
+    let request;
+    const checkPeriod = async () => {
+      if (document.visibilityState !== "visible" || request) return;
+      const controller = new AbortController();
+      request = controller;
+      try {
+        const payroll = await readPayroll(controller.signal);
+        if (!controller.signal.aborted) setData((current) => ({ ...current, ...payroll }));
+      } catch (error) {
+        if (!controller.signal.aborted) console.error("Pagos", error.code || error.message);
+      } finally {
+        request = undefined;
+      }
     };
     const timer = window.setInterval(checkPeriod, 60_000);
     document.addEventListener("visibilitychange", checkPeriod);
     return () => {
+      request?.abort();
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", checkPeriod);
     };
-  }, [access, tab]);
+  }, [access, busy, tab]);
 
   async function updateFilters(period) {
     if (period.from === filters.from && period.to === filters.to) return;
@@ -119,7 +139,8 @@ export default function Finanzas() {
     setLoadError(false);
     setSyncError("");
     setFilters(period);
-    await syncDays(missingAgencyKeyDays(period, data.allSales, data.creators));
+    const synced = await syncDays(missingAgencyKeyDays(period, data.allSales, data.creators, data.payPeriod?.day));
+    if (synced) reload();
   }
   function reload() {
     setLoading(true);
@@ -127,13 +148,11 @@ export default function Finanzas() {
     refresh((value) => value + 1);
   }
   const invalid = !filters.from || !filters.to || filters.from > filters.to;
-  const totals = summarize(data);
-  const distribution = calculateModelDistribution(data.sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
 
   async function syncDays(days) {
-    if (!days.length) return;
-    setUpdating(true);
     setSyncError("");
+    if (!days.length) return 0;
+    setUpdating(true);
     let synced = 0;
     const errors = [];
     try {
@@ -144,7 +163,7 @@ export default function Finanzas() {
           synced += 1;
         } catch (error) {
           errors.push(error.message);
-          if (/\[(?:CON-|AK-KEY-MISSING)/.test(error.message)) break;
+          if (error.status === 429 || /\[(?:CON-|AK-KEY-MISSING)/.test(error.message)) break;
         }
       }
       if (errors.length) setSyncError([
@@ -153,23 +172,28 @@ export default function Finanzas() {
         errors[0],
       ].filter(Boolean).join(" "));
     } finally {
-      reload();
       setUpdating(false);
     }
+    return synced;
   }
 
   async function update() {
     if (updating || (tab === "Resumen" && invalid)) return;
+    const today = data.payPeriod?.day ?? dateKey(new Date());
     const range = tab === "Empleados" ? data.payPeriod : filters;
-    const days = missingAgencyKeyDays(range, [], []);
+    const days = missingAgencyKeyDays(range, data.allSales, data.creators, today, true);
     await syncDays(days);
-    if (tab === "Empleados") refreshDirectory((value) => value + 1);
+    if (tab === "Empleados") {
+      setLoading(true);
+      refreshDirectory((value) => (value ?? 0) + 1);
+    } else {
+      reload();
+    }
   }
 
   const paymentPerson = payments && (payments.type === "modelShare" ? data.creators : data.members)
     .find(({ id }) => id === payments.person.id);
   const paymentRate = payments && effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()));
-  const busy = loading || updating;
   return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
       <div><h1>Finanzas {busy && <RefreshCw className="hf-refreshing" size={20} role="status" aria-label="Actualizando Finanzas" />}</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
@@ -179,7 +203,10 @@ export default function Finanzas() {
     </header>
     {access === false ? <p role="alert" className="hf-notice">Tu cuenta no tiene acceso a Finanzas</p> : <>
       <nav className="hf-tabs" aria-label="Secciones de Finanzas">
-        {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{item}</button>)}
+        {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => {
+          setTab(item);
+          if (item === "Empleados") refreshDirectory((value) => value ?? 0);
+        }}>{item}</button>)}
       </nav>
       {tab === "Resumen" && <div className="hf-toolbar">
         <PeriodPicker value={filters} onChange={updateFilters} disabled={busy || !access} />
@@ -188,7 +215,7 @@ export default function Finanzas() {
       {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
       {loadError && <p className="hf-notice" role="alert">No se pudieron actualizar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
       {access && <div aria-busy={busy}>
-        {tab === "Resumen" && <Overview totals={totals} data={data} distribution={distribution} />}
+        {tab === "Resumen" && <Overview data={data} />}
         {tab === "Movimiento" && <Movements data={data} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
@@ -238,8 +265,10 @@ function Breakdown({ data, dimension, title, label, catalog }) {
   </section>;
 }
 
-function Overview({ totals, data, distribution }) {
+function Overview({ data }) {
   const { movements, sales } = data;
+  const totals = summarize(data);
+  const distribution = calculateModelDistribution(sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
   const investment = investmentTotal(movements, totals);
   const net = netSales(sales, movements);
   const history = { movements: data.allMovements, sales: data.allSales, commissions: [] };
@@ -272,7 +301,6 @@ function Movements({ data, filters, onFilter, onEdit }) {
   const change = (key, value) => onFilter((current) => ({ ...current, [key]: value }));
   const select = (label, key, rows, placeholder = "Todos") => <Choice label={label} value={filters[key]}
     rows={rows} placeholder={placeholder} onChange={(value) => change(key, value)} />;
-  const descriptions = new Map(data.categories.map(({ name, description }) => [name.toLowerCase(), description]));
   const categories = [...new Set([...data.categories.map(({ name }) => name), ...data.allMovements.map(({ category }) => category)])].sort();
   const rows = data.allMovements.filter((row) =>
     (!filters.from || row.day >= filters.from) && (!filters.to || row.day <= filters.to) &&
@@ -298,7 +326,7 @@ function Movements({ data, filters, onFilter, onEdit }) {
     <Table headings={["Fecha", "Tipo", "Categoría", "Modelo", "Plataforma", "Importe", "Acción"]}
       emptyText="Sin movimientos para estos filtros"
       rows={[...rows].reverse().map((row) => [row.id, [row.day, kinds[row.kind],
-        <CategoryDescription name={row.category} description={descriptions.get(row.category.toLowerCase())} />,
+        <CategoryDescription name={row.category} description={row.description} />,
         row.creator_id ? findName(data.creators, row.creator_id) : "Otros",
         row.platform_id ? findName(data.platforms, row.platform_id) : "Otros", usd(row.amount),
         <div className="hf-actions">{row.finance_payment_id ? <span>Pago confirmado</span>
@@ -329,8 +357,8 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     const rate = effectiveShare(data.rates, recipient, currentDay);
     const eligible = type === "modelShare" || isChatter(row.role) || Boolean(rate);
     const payout = data.currentPay[recipient] ?? (data.payPeriod?.day === data.payPeriod?.from && row.agencykey_id ? 0 : null);
-    const amount = !eligible || !rate ? "—" : payout == null && rate.basis === "employee_sales" && !row.agencykey_id
-      ? "Pendiente de vincular" : payout == null ? "Pendiente de sincronizar" : usd(payout);
+    const amount = payout != null && rate ? usdPayment(payout) : !eligible || !rate ? "—"
+      : rate.basis === "employee_sales" && !row.agencykey_id ? "Pendiente de vincular" : "Pendiente de sincronizar";
     return [recipient, [active ? row.name : <>{row.name} <small className="hf-employee-status">Inactivo</small></>, row.role,
       rate ? percentLabel(rate.percent) : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
       <div className="hf-actions">

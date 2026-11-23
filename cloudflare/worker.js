@@ -130,6 +130,9 @@ async function queryAgencyKey(apiKey, path, params, send, code, stage) {
   } catch {
     throw new IntegrationError(502, `AgencyKey no respondió al consultar ${stage}`, `${code}-NETWORK`);
   }
+  if (response.status === 429) {
+    throw new IntegrationError(429, "AgencyKey alcanzó su límite de peticiones. Vuelve a intentar en unos minutos.", "AK-RATE-LIMIT");
+  }
   if (!response.ok) {
     const reason = response.status === 401 || response.status === 403 ? " · Verifica los permisos de la clave" : "";
     throw new IntegrationError(502, `AgencyKey respondió HTTP ${response.status} al consultar ${stage}${reason}`, `${code}-HTTP`);

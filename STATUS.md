@@ -23,6 +23,16 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 23 de noviembre de 2026 · Actualización, gráfico y pagos
+
+Rama `codex/finanzas-actualizacion-y-pagos`. Supabase registró entre 370 y 391 respuestas exitosas por operación de lectura frecuente de Finanzas en 24 horas. La consulta de registros no devolvió respuestas 429 en esas rutas. Cloudflare registró respuestas 502 en la sincronización y el directorio. El origen de esas respuestas queda por confirmar.
+
+- `src/panel/finanzas/finanzas.jsx` actualiza únicamente el cálculo de la quincena en segundo plano mientras Empleados está visible. Las lecturas cancelables se descartan al cambiar de contexto. La sincronización manual reutiliza los días completos, vuelve a pedir el día actual si está en el período y corta el lote si recibe HTTP 429.
+- `src/panel/finanzas/FinanceCharts.jsx` y `finanzas.css` muestran Ingreso e Inversión como áreas adaptables, aumentan el contraste y ocultan los controles visuales de incremento en los importes y porcentajes.
+- Movimiento muestra su propia descripción al consultar la categoría de la fila. El panel Categorías muestra la descripción del catálogo. Pagos conserva el acceso a Editar para los empleados manuales y muestra centavos.
+- `supabase/migrations/20261123160000_finance_pay_inactive_chatters.sql` conserva la comisión de los chatters inactivos cuando AgencyKey atribuye ventas en fechas con porcentaje vigente. La misma regla se usa para el estimado y los próximos cierres.
+- Las 25 pruebas de Node y las 5 integraciones SQL locales pasaron. La regresión de chatter inactivo falla con las migraciones anteriores y pasa con la nueva. Chromium comprobó a 320, 768 y 1440 px el ancho del gráfico, los tooltips, los campos numéricos, la edición desde Pagos y la consulta única de pagos al volver a la pestaña. El despliegue de Cloudflare y la migración del proyecto conectado quedan pendientes.
+
 ### 22 de noviembre de 2026 · Finanzas
 
 Rama `codex/finanzas-resumen-movimientos-empleados`, basada en `12eaee7`. [PR #12](https://github.com/Hers-NSB/Hers-prueba/pull/12). La versión 28 sucedió a la versión 27, que servía el commit `78198dd` del [PR #11](https://github.com/Hers-NSB/Hers-prueba/pull/11).

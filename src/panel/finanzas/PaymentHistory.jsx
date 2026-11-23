@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { usd } from "./finance";
+import { usdPayment as usd } from "./finance";
 import PeriodPicker from "./PeriodPicker";
 
 const moneyDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "short", timeZone: "UTC" });
@@ -55,6 +55,8 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
   const [confirming, setConfirming] = useState(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const payrollDay = currentPeriod?.day;
+  const importedDays = currentPeriod?.importedDays;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -82,7 +84,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     }
     readHistory();
     return () => controller.abort();
-  }, [type, person.id, revision, financeRevision]);
+  }, [type, person.id, revision, financeRevision, payrollDay, importedDays]);
 
   async function confirm() {
     if (busy) return;
@@ -94,7 +96,6 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
       setConfirming(null);
       setNotice(data ? "Pago confirmado y registrado como inversión." : "El corte ya no está disponible para confirmar.");
       setLoading(true);
-      reload((value) => value + 1);
       onConfirmed();
     } catch {
       setError("No se pudo confirmar el pago. Inténtalo nuevamente.");
@@ -122,7 +123,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
       <div><h2 id={id}>Pagos de {person.name}</h2>
         <p>{type === "modelShare" ? "Modelo" : "Empleado"} · Porcentaje de pago vigente {activeRate}</p></div>
       <div className="hf-actions">
-        <button type="button" disabled={busy} onClick={onEdit}>Editar</button>
+        <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onEdit}>Editar</button>
         <button type="button" aria-label="Cerrar pagos" disabled={busy} onClick={onClose}><X size={18} /></button>
       </div>
     </header>

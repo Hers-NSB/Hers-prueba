@@ -119,7 +119,7 @@ export async function handleIntegrations(request, project, env, run, send = fetc
   const route = new URL(request.url);
   const action = route.pathname.slice("/api/admin/integrations".length);
   const fail = (status, code, message) => {
-    if (status >= 500) console.warn("Conectores", { code, reference, status });
+    if (status >= 500 || status === 429) console.warn("Conectores", { code, reference, status });
     return json({ error: `[${code}] ${message} · Ref. ${reference}`, code, reference }, status);
   };
   try {

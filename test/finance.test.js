@@ -202,4 +202,7 @@ test("elige los días incompletos y conserva los ceros confirmados", () => {
   ];
   assert.deepEqual(missingAgencyKeyDays({ from: "2026-11-01", to: "2026-11-03" }, sales, models),
     ["2026-11-02", "2026-11-03"]);
+  const range = { from: "2026-11-01", to: "2026-11-03" };
+  assert.deepEqual(missingAgencyKeyDays(range, sales, models, "2026-11-01"), []);
+  assert.deepEqual(missingAgencyKeyDays(range, sales, models, "2026-11-01", true), ["2026-11-01"]);
 });
