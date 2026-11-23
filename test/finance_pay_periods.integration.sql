@@ -26,11 +26,13 @@ begin
     values (chatter_id, '2001-02-01', 25, 'employee_sales');
   insert into public.finance_agencykey_sales (creator_id, day, net)
     values (model_id, cutoff - 1, 125.25);
+  insert into public.finance_payments (period_start, period_end, creator_id, amount)
+    values ('2001-01-16', '2001-01-31', model_id, 50.13);
   update hers_private.finance_payroll set next_period = '2001-02-01';
   insert into hers_private.finance_final_days (day) select cutoff - n from generate_series(1, 14) as n;
 
   if public.hers_payroll_worker(token, 'next')->>'day' <> cutoff::text
-     or exists (select from public.finance_payments p where p.creator_id = model_id) then
+     or exists (select from public.finance_payments p where p.creator_id = model_id and p.period_end = cutoff) then
     raise exception 'Debe esperar al último día completo de la quincena';
   end if;
 
@@ -43,8 +45,19 @@ begin
   perform public.hers_payroll_worker(token, 'import', payload);
   if (select count(*) from public.finance_payments p
       where p.paid_at is null and p.period_end = cutoff
-        and ((p.creator_id = model_id and p.amount = 170.20) or (p.member_id = chatter_id and p.amount = 75))) <> 2 then
-    raise exception 'El cierre debe guardar una sola vez el neto con el descuento vigente';
+        and ((p.creator_id = model_id and p.amount = 55.05 and p.net_sales = 225.25
+          and p.pay_rate_min = 20 and p.pay_rate_max = 30)
+          or (p.member_id = chatter_id and p.amount = 25 and p.net_sales = 100
+          and p.pay_rate_min = 25 and p.pay_rate_max = 25))) <> 2 then
+    raise exception 'El cierre debe registrar una sola vez el pago con el porcentaje vigente de cada día';
+  end if;
+
+  update public.finance_model_shares set percent = 40 where creator_id = model_id and effective_on = cutoff;
+  if not exists (select from public.finance_payments where creator_id = model_id and period_end = cutoff
+      and net_sales = 225.25 and pay_rate_min = 20 and pay_rate_max = 30 and amount = 55.05)
+     or not exists (select from public.finance_payments where creator_id = model_id and period_end = '2001-01-31'
+      and net_sales is null and pay_rate_min is null and pay_rate_max is null and amount = 50.13) then
+    raise exception 'El historial debe conservar sus importes y los datos capturados al cierre';
   end if;
 
   if public.finance_pay_period_start('2028-02-29') <> date '2028-02-16'
@@ -67,6 +80,12 @@ begin
      or exists (select from public.finance_payments) then
     raise exception 'Un chatter no puede confirmar ni ver pagos';
   end if;
+  begin
+    perform public.finance_current_pay();
+    raise exception 'Un chatter no puede consultar la quincena actual';
+  exception when insufficient_privilege then
+    null;
+  end;
 end;
 $$;
 
@@ -86,6 +105,7 @@ begin
       join public.finance_payments p on p.id = m.finance_payment_id
       where p.id in (pay_id, chatter_pay_id)
         and p.paid_by = auth.uid() and m.amount = p.amount and m.kind = 'investment'
+        and m.category = case when p.creator_id is null then 'Equipo' else 'Modelo' end
         and m.day = (p.paid_at at time zone 'America/Halifax')::date
         and m.creator_id is not distinct from p.creator_id) <> 2 then
     raise exception 'Debe registrarse una inversión por el importe exacto en la fecha de confirmación';
@@ -101,6 +121,108 @@ begin
     select creator_id from public.finance_payments where id = pay_id
   )::text) then
     raise exception 'El total actual no debe incluir cortes anteriores';
+  end if;
+end;
+$$;
+
+reset role;
+do $$
+declare
+  report_day date;
+  start_day date;
+  model uuid;
+  employee uuid;
+  employee_key text;
+begin
+  select (statement_timestamp() at time zone report_zone)::date into report_day from hers_private.finance_payroll;
+  start_day := public.finance_pay_period_start(report_day);
+  select creator_id into strict model from public.finance_payments where id = current_setting('hers.test.payment_model')::uuid;
+  select p.member_id, m.agencykey_id into strict employee, employee_key
+    from public.finance_payments p join public.finance_members m on m.id = p.member_id
+    where p.id = current_setting('hers.test.payment_chatter')::uuid;
+
+  insert into public.finance_agencykey_sales (creator_id, day, net) values (model, report_day, 250.25);
+  insert into public.finance_agencykey_employee_net (day, totals) values (report_day, jsonb_build_object(employee_key, 80.40))
+    on conflict (day) do update set totals = finance_agencykey_employee_net.totals || excluded.totals;
+  insert into hers_private.finance_final_days (day)
+    select report_day - 1 where report_day > start_day on conflict do nothing;
+
+  perform set_config('hers.test.current_report_day', report_day::text, true);
+  perform set_config('hers.test.current_model', 'model:' || model, true);
+  perform set_config('hers.test.current_chatter', 'chatter:' || employee, true);
+end;
+$$;
+
+set local role authenticated;
+do $$
+declare
+  current_pay jsonb := public.finance_current_pay();
+  report_day date := current_setting('hers.test.current_report_day')::date;
+  start_day date := (current_pay->>'from')::date;
+  model_key text := current_setting('hers.test.current_model');
+  employee_key text := current_setting('hers.test.current_chatter');
+begin
+  if (current_pay->'sales'->>model_key)::numeric is distinct from 250.25
+     or (current_pay->'sales'->>employee_key)::numeric is distinct from 80.40
+     or (current_pay->'amounts'->>model_key)::numeric is distinct from 100.10
+     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 20.10 then
+    raise exception 'La quincena actual debe mostrar las ventas y el pago estimado de cada persona';
+  end if;
+  if (current_pay->>'importedDays')::integer is distinct from (report_day > start_day)::integer
+     or (current_pay->>'totalDays')::integer is distinct from (current_pay->>'to')::date - start_day + 1 then
+    raise exception 'El avance de la quincena debe contar solo los días confirmados del período actual';
+  end if;
+  if exists (select from public.finance_payments where period_start = start_day
+      and (('model:' || creator_id) = model_key or ('chatter:' || member_id) = employee_key)) then
+    raise exception 'Consultar el estimado no debe generar cortes';
+  end if;
+end;
+$$;
+
+reset role;
+delete from public.finance_model_shares
+where ('model:' || creator_id) = current_setting('hers.test.current_model')
+   or ('chatter:' || member_id) = current_setting('hers.test.current_chatter');
+
+set local role authenticated;
+do $$
+declare
+  current_pay jsonb := public.finance_current_pay();
+  model_key text := current_setting('hers.test.current_model');
+  employee_key text := current_setting('hers.test.current_chatter');
+begin
+  if (current_pay->'sales'->>model_key)::numeric is distinct from 250.25
+     or (current_pay->'sales'->>employee_key)::numeric is distinct from 80.40 then
+    raise exception 'Las ventas importadas deben mostrarse aunque falte configurar el porcentaje';
+  end if;
+  if (current_pay->'amounts') ? model_key or (current_pay->'amounts') ? employee_key then
+    raise exception 'Sin un porcentaje vigente no corresponde calcular un pago';
+  end if;
+end;
+$$;
+
+reset role;
+do $$
+declare
+  disabled_key text := gen_random_uuid()::text;
+  enabled_key text := gen_random_uuid()::text;
+  disabled_id uuid;
+  snapshot jsonb;
+begin
+  snapshot := jsonb_build_object('creators', '[]'::jsonb, 'employees', jsonb_build_array(
+    jsonb_build_object('id', enabled_key, 'name', 'Activo', 'role', 'Chatter', 'active', true),
+    jsonb_build_object('id', disabled_key, 'name', 'Desactivado', 'role', 'Team Leader, Chatter', 'active', false)
+  ));
+  perform hers_private.apply_agencykey_directory(snapshot);
+  perform hers_private.apply_agencykey_directory(snapshot);
+  select id into strict disabled_id from public.finance_members
+    where agencykey_id = disabled_key and not agencykey_available;
+  if not exists (select from public.finance_member_availability where member_id = disabled_id and not available) then
+    raise exception 'Un chatter recién importado que está desactivado debe conservar ese estado';
+  end if;
+  perform hers_private.apply_agencykey_directory(jsonb_set(snapshot, '{employees,1,active}', 'true'));
+  if not exists (select from public.finance_members where id = disabled_id and agencykey_available) then
+    raise exception 'La reactivación debe conservar el mismo empleado';
   end if;
 end;
 $$;

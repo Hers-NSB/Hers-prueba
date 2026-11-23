@@ -147,7 +147,7 @@
 .hf-calendar {
   position: absolute; inset: calc(100% + .45rem) auto auto 0; z-index: 5;
   display: grid; grid-template-columns: minmax(115px, .85fr) minmax(0, 1.5fr);
-  width: min(520px, calc(100cqw - 4px)); border: 1px solid var(--hf-line); border-radius: 20px;
+  width: min(520px, calc(100cqw - 1.5rem), calc(100vw - 3rem)); border: 1px solid var(--hf-line); border-radius: 20px;
   background: var(--hf-surface); color: var(--hf-ink); box-shadow: 0 12px 30px #0008;
 }
 .hf-calendar-presets { display: grid; align-content: start; gap: .3rem; padding: .75rem; border-right: 1px solid var(--hf-line); }
@@ -156,12 +156,12 @@
 .hf-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; }
 .hf-calendar-grid > span { background: var(--hf-field); padding: .6rem .05rem; font-weight: 650; color: var(--hf-muted); }
 .hf-calendar-grid > span:nth-child(6), .hf-calendar-grid > span:nth-child(7) { color: var(--hf-accent); }
-.hf .hf-calendar button { min-height: 36px; padding: .25rem; border: 0; border-radius: 9px; background: transparent; }
-.hf .hf-calendar-presets button { justify-content: start; padding-inline: .55rem; text-align: left; }
-.hf .hf-calendar-grid button { justify-content: center; }
-.hf .hf-calendar button[aria-pressed="true"], .hf .hf-calendar button:hover:not(:disabled) { background: var(--hf-field); }
-.hf .hf-calendar button[data-other="true"] { color: var(--hf-muted); }
-.hf .hf-calendar > p { grid-column: 1 / -1; padding: .65rem .85rem; border-top: 1px solid var(--hf-line); }
+:is(.hf, .hf-dialog) .hf-calendar button { min-height: 36px; padding: .25rem; border: 0; border-radius: 9px; background: transparent; }
+:is(.hf, .hf-dialog) .hf-calendar-presets button { justify-content: start; padding-inline: .55rem; text-align: left; }
+:is(.hf, .hf-dialog) .hf-calendar-grid button { justify-content: center; }
+:is(.hf, .hf-dialog) .hf-calendar button[aria-pressed="true"], :is(.hf, .hf-dialog) .hf-calendar button:hover:not(:disabled) { background: var(--hf-field); }
+:is(.hf, .hf-dialog) .hf-calendar button[data-other="true"] { color: var(--hf-muted); }
+:is(.hf, .hf-dialog) .hf-calendar > p { grid-column: 1 / -1; padding: .65rem .85rem; border-top: 1px solid var(--hf-line); margin: 0; }
 .hf-category { display: grid; align-content: start; gap: .35rem; color: var(--hf-muted); font-size: .88rem; }
 @container (max-width: 425px) {
   .hf-calendar { grid-template-columns: minmax(0, 1fr); }
@@ -196,23 +196,23 @@
 .hf-choice { position: relative; display: block; }
 .hf-choice select { appearance: none; padding-right: 2rem; text-overflow: ellipsis; }
 .hf-choice svg { position: absolute; top: 50%; right: .65rem; transform: translateY(-50%); pointer-events: none; }
-.hf .hf-date-range {
-  grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem;
-  min-width: 0; margin: 0; padding: .55rem .7rem .7rem; border: 1px solid var(--hf-line); border-radius: 10px;
+@supports (appearance: base-select) {
+  .hf-choice select, .hf-choice select::picker(select) { appearance: base-select; }
+  .hf-choice select::picker-icon { display: none; }
+  .hf-choice select:open + svg { transform: translateY(-50%) rotate(180deg); }
+  .hf-choice select::picker(select) {
+    margin-top: .35rem; padding: .45rem; max-height: 17rem; overflow: auto;
+    border: 1px solid var(--hf-line); border-radius: 13px;
+    background: var(--hf-surface); color: var(--hf-ink); box-shadow: 0 12px 30px #0008;
+  }
+  .hf-choice option { display: flex; min-height: 38px; padding: .55rem .75rem; border-radius: 8px; }
+  .hf-choice option::checkmark { display: none; }
+  .hf-choice option:is(:hover, :focus-visible, :checked) { background: var(--hf-field); }
 }
-.hf-date-range legend { color: var(--hf-muted); padding-inline: .25rem; font-size: .88rem; }
 .hf-full-field, .hf-model-options { grid-column: 1 / -1; min-width: 0; }
+.hf-employee-status { display: inline-block; margin-inline-start: .35rem; white-space: nowrap; }
 .hf .hf-employee-count { margin-top: .55rem; font-size: .9rem; }
-.hf-payment-history h3 { margin: .75rem 0; font-size: 1rem; }
-.hf-payment-history ul { display: grid; gap: .55rem; padding: 0; list-style: none; }
-.hf-payment-history li {
-  display: flex; justify-content: space-between; flex-wrap: wrap; gap: .6rem;
-  border: 1px solid var(--hf-line); border-radius: 10px; padding: .65rem;
-}
-.hf-payment-history li > div { display: grid; align-content: start; gap: .3rem; }
-.hf-payment-history li span { color: var(--hf-muted); font-size: .85rem; }
 @container (max-width: 365px) {
-  .hf .hf-date-range { grid-template-columns: minmax(0, 1fr); }
   .hf-finance .hf-overview-kpis { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 400px) {
@@ -220,3 +220,96 @@
   .hf-category-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hf-category-row button:first-child { grid-column: 1 / -1; }
 }
+
+.hf-chart-scroll { overflow-x: auto; }
+.hf-chart-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: .85rem; font-size: .82rem; }
+.hf-chart-legend span { display: flex; align-items: center; gap: .35rem; }
+.hf-chart-legend span::before { content: ""; width: .65rem; height: .65rem; border-radius: 50%; background: var(--hf-accent); }
+.hf-chart-legend span + span::before { background: var(--hf-expense); }
+.hf-dialog .hf-calendar-month button { min-width: 32px; }
+.hf-calendar[data-single="true"] { width: min(330px, calc(100vw - 4rem)); grid-template-columns: minmax(0, 1fr); }
+:is(.hf, .hf-dialog) .hf-calendar-grid button[aria-pressed="true"] {
+  border-radius: 4px; background: #5a4537; color: #fff3e7;
+}
+:is(.hf, .hf-dialog) .hf-calendar-grid button[data-boundary="true"] {
+  border-radius: 8px; background: var(--hf-accent); color: #211914; font-weight: 750;
+}
+.hf-category-panel .hf-summary-head .hf-actions { margin: 0; }
+.hf-category-inline, .hf-edit-group {
+  min-width: 0; margin: 0; padding: .65rem; border: 1px solid var(--hf-line); border-radius: 10px;
+}
+.hf-edit-group {
+  display: grid; grid-column: 1 / -1; gap: .75rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+}
+.hf-edit-group legend { padding-inline: .35rem; color: var(--hf-accent); font-size: .9rem; }
+.hf-edit-group p { margin: 0; color: var(--hf-muted); font-size: .85rem; }
+.hf-date-filter { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; }
+
+.hf-dialog.hf-payment-panel {
+  inset: 0 0 0 auto; margin: 0; width: min(600px, 100%); max-width: none; height: 100dvh; max-height: 100dvh;
+  padding: 0; border-radius: 16px 0 0 16px; overflow: auto; container-type: inline-size;
+}
+.hf-payment-header {
+  position: sticky; top: 0; z-index: 7; display: flex; justify-content: space-between; align-items: start;
+  gap: .8rem; padding: 1rem; background: var(--hf-surface); border-bottom: 1px solid var(--hf-line);
+}
+.hf-payment-header p { margin: .35rem 0 0; color: var(--hf-muted); font-size: .88rem; }
+.hf-payment-content { padding: 1rem; }
+.hf-payment-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 0; gap: .5rem; }
+.hf-payment-kpis article { padding: .65rem; }
+.hf-payment-kpis article strong { font-size: clamp(1.05rem, 3.8vw, 1.5rem); }
+.hf-payment-filters { display: flex; flex-wrap: wrap; gap: .65rem; align-items: end; margin-block: 1rem; }
+.hf-payment-filters select { min-height: 42px; }
+.hf-payment-history-note { margin: .45rem 0; color: var(--hf-muted); font-size: .85rem; }
+.hf-payment-content h3 { margin: .85rem 0 .4rem; font-size: 1rem; }
+.hf-payment-table th, .hf-payment-table td { padding: .5rem .35rem; }
+.hf-payment-table summary { cursor: pointer; }
+.hf-payment-table td:has(details[open]) { min-width: min(20ch, 23cqw); }
+.hf-payment-table td small { display: block; margin-top: .25rem; color: var(--hf-muted); }
+.hf-payment-state { display: inline-block; color: var(--hf-muted); font-size: .85rem; }
+.hf-payment-state[data-state="Pendiente"] { color: #f4d59d; }
+.hf-payment-state[data-state="Pagado"] { color: #b9c9a4; }
+.hf-payment-facts { display: grid; gap: .45rem; }
+.hf-payment-facts dt { font-size: .8rem; color: var(--hf-muted); }
+.hf-payment-facts dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
+@container (max-width: 510px) {
+  .hf-payment-table thead { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; }
+  .hf-payment-table :is(table, tbody) { display: block; }
+  .hf-payment-table tr {
+    display: grid; gap: 0 .65rem; grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: .55rem; margin-bottom: .65rem; border: 1px solid var(--hf-line); border-radius: 10px;
+  }
+  .hf-payment-table td { display: block; border: 0; overflow-wrap: anywhere; }
+  .hf-payment-table td::before { display: block; color: var(--hf-muted); font-size: .75rem; content: attr(data-label); }
+  .hf-payment-table td:has(details[open]) { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .hf-dialog.hf-payment-panel { border-radius: 0; }
+}
+
+.hf-current-pay {
+  margin-bottom: .8rem; padding: 1rem; border: 1px solid #6b503a;
+  border-radius: 14px; background: #26201b;
+}
+.hf-current-pay header {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .45rem;
+}
+.hf-current-pay header h3 { margin: 0; color: var(--hf-accent); }
+.hf-current-pay header span {
+  padding: .3rem .65rem; border-radius: 100px; background: #402f21; color: #f4d59d;
+  font-size: .82rem; font-weight: 700;
+}
+.hf-current-pay-dates { margin: .55rem 0 .85rem; font-weight: 700; }
+.hf-current-pay dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin: 0; }
+.hf-current-pay dt { color: var(--hf-muted); font-size: .83rem; }
+.hf-current-pay dd {
+  margin: .25rem 0 0; font-size: clamp(1.2rem, 4vw, 1.7rem); font-weight: 750;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.hf-current-pay dl > div:last-child dd { color: #f4d59d; }
+.hf-current-pay-progress {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .7rem;
+  margin-top: .85rem; color: var(--hf-muted); font-size: .8rem;
+}
+.hf-current-pay-progress progress { flex: 1 1 8rem; max-width: 100%; height: .6rem; accent-color: var(--hf-accent); }

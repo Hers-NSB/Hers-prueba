@@ -1,16 +1,21 @@
 # Estado de Hers-prueba
 
-Verificado el 21 de noviembre de 2026.
+Verificado el 22 de noviembre de 2026, hora de la sesión.
 
-## Finanzas
+## Despliegue
 
-- El [PR #9](https://github.com/Hers-NSB/Hers-prueba/pull/9) está integrado en `main` desde el commit `5c47d33`.
-- El [Worker de HERS prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión 21 al 100 % del tráfico. Supabase de pruebas registra la migración `20261122003428_finance_pay_periods`.
-- Cloudflare tiene activo el disparador `5,20,35,50 * * * *` (UTC). El primer período incorporado comienza el 16 de noviembre. La primera importación automática quedaba pendiente de verificar.
-- Pasaron GitHub Actions y la prueba SQL de cierre, permisos y confirmación sin duplicados, con reversión en Supabase de pruebas. Se verificaron el panel publicado y la consulta de ventas de AgencyKey desde **Conectores**.
-- El directorio queda disponible para activación manual desde **Conectores → Autorizar directorio de AgencyKey**.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión 27 de Cloudflare Workers al 100 % del tráfico. El código funcional desplegado corresponde al commit `78198dd` del [PR #11](https://github.com/Hers-NSB/Hers-prueba/pull/11).
+- Supabase de pruebas tiene aplicadas todas las migraciones del repositorio, hasta `20261123021955_finance_directory_inactive_chatters`.
+- La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
+
+## Finanzas y Conectores
+
+- **Empleados** muestra las ventas netas de la quincena por modelo y chatter. La tabla principal incluye los chatters desactivados con la etiqueta **Inactivo** y acceso a su historial. Se verificaron dos chatters activos y uno inactivo.
+- **Pagos** muestra las ventas acumuladas, el pago estimado y los días importados. El pago aplica directamente el porcentaje vigente en cada fecha de venta. Para la quincena actual, los porcentajes acordados están vigentes desde el 16 de noviembre.
+- El cierre quincenal genera automáticamente los cortes. Cuando se confirma un pago, se registra una sola inversión en **Equipo** para empleados o en **Modelo** para modelos.
+- El avance verificado de la quincena del 16 al 30 de noviembre es de 6 de 15 días importados. La base tiene 0 cortes registrados. La comprobación de un pago real queda pendiente del primer cierre.
+- Se validaron el cierre y la confirmación con pruebas SQL, además de la interfaz de escritorio y móvil con datos simulados.
 
 ## Postulaciones
 
-- El [PR #7](https://github.com/Hers-NSB/Hers-prueba/pull/7) está integrado. El formulario guarda en Supabase y muestra la confirmación en pantalla.
-- Supabase de pruebas tiene aplicada la migración `20261121154801_applications`. Se verificaron el envío anónimo y el acceso administrativo con una prueba SQL que revirtió sus cambios.
+El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar. Se verificaron el envío anónimo y el acceso administrativo con una prueba SQL que revierte sus datos. [PR #7](https://github.com/Hers-NSB/Hers-prueba/pull/7).

@@ -13,6 +13,7 @@ export default function Integrations() {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [formError, setFormError] = useState("");
+  const [directoryConnected, setDirectoryConnected] = useState(null);
   const [action, setAction] = useState("");
   const [notice, setNotice] = useState(null);
   const directoryPopup = useRef(null);
@@ -22,6 +23,11 @@ export default function Integrations() {
     callApi("", "GET", undefined, controller.signal).then(setData).catch((error) => {
       if (!controller.signal.aborted) setNotice({ error: error.message });
     });
+    callApi("/agencykey-directory", "GET", undefined, controller.signal).then(({ connected }) => {
+      if (!controller.signal.aborted) setDirectoryConnected(connected);
+    }).catch((error) => {
+      if (!controller.signal.aborted) setNotice({ error: error.message });
+    });
     return () => controller.abort();
   }, []);
 
@@ -29,6 +35,7 @@ export default function Integrations() {
     function complete(event) {
       if (event.origin !== window.location.origin || event.source !== directoryPopup.current ||
           event.data?.type !== "hers-agencykey-directory") return;
+      if (event.data.connected) setDirectoryConnected(true);
       setNotice(event.data.connected
         ? { success: "Directorio de AgencyKey autorizado" }
         : { error: "No se pudo autorizar el directorio de AgencyKey" });
@@ -72,6 +79,10 @@ export default function Integrations() {
         setNotice({ success: `${label} · ${result.day} · ${result.creators} modelos${total}` });
       }
       setData(await callApi());
+      if (operation === "refresh") {
+        const { connected } = await callApi("/agencykey-directory");
+        setDirectoryConnected(connected);
+      }
     } catch (error) {
       if (operation === "save" && !saved) setFormError(error.message);
       else setNotice({ error: saved ? "Credencial guardada. No se pudo actualizar el estado" : error.message });
@@ -110,7 +121,8 @@ export default function Integrations() {
           {data.sync && <div><dt>Último día importado</dt><dd>{data.sync.through_day}</dd></div>}
         </dl>
         <div className="hf-actions">
-          <button type="button" disabled={busy} onClick={connectDirectory}>Autorizar directorio de AgencyKey</button>
+          {directoryConnected && <span role="status">Directorio de AgencyKey autorizado</span>}
+          {directoryConnected === false && <button type="button" disabled={busy} onClick={connectDirectory}>Autorizar directorio de AgencyKey</button>}
           {agencyKeySaved ? <>
             <button type="button" disabled={busy} onClick={() => perform("test")}>{action === "test" ? "Probando…" : "Probar conexión"}</button>
           </> : <button type="button" className="hf-primary" disabled={busy} onClick={() => edit()}>Configurar AgencyKey</button>}

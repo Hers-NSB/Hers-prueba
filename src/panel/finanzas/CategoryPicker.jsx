@@ -41,6 +41,17 @@ export default function CategoryPicker({ categories, value, onChange, onSaved })
     }
   }
 
+  const nameForm = <div className="hf-category-edit">
+    <label>{editing?.action === "create" ? "Nueva categoría" : "Nombre de la categoría"}
+      <input maxLength={120} value={name} onChange={(event) => setName(event.target.value)}
+        onKeyDown={(event) => { if (event.key === "Enter") save(); }} />
+    </label>
+    <div className="hf-actions">
+      <button type="button" disabled={saving} onClick={reset}>Cancelar</button>
+      <button type="button" className="hf-primary" disabled={saving || !name.trim()} onClick={save}>Guardar categoría</button>
+    </div>
+  </div>;
+
   return <div className="hf-category">
     <span>Categoría</span>
     <button type="button" className="hf-select-trigger hf-period-trigger" aria-haspopup="dialog"
@@ -56,9 +67,15 @@ export default function CategoryPicker({ categories, value, onChange, onSaved })
         if (!saving) close();
       }}>
       <div className="hf-summary-head"><h2 id={id}>Categorías</h2>
-        <button type="button" onClick={close} disabled={saving}>Cerrar</button>
+        <div className="hf-actions">
+          <button type="button" disabled={saving} onClick={() => edit("create")}>Crear categoría</button>
+          <button type="button" onClick={close} disabled={saving}>Cerrar</button>
+        </div>
       </div>
-      {[...names].sort((a, b) => a.localeCompare(b, "es")).map((item) => <div key={item} className="hf-category-row">
+      {editing?.action === "create" && nameForm}
+      {[...names].sort((a, b) => a.localeCompare(b, "es")).map((item) => editing?.action === "rename" && editing.selected === item
+        ? <div className="hf-category-inline" key={item}>{nameForm}</div>
+        : <div key={item} className="hf-category-row">
         <button type="button" aria-pressed={item === value} disabled={saving} onClick={() => {
           onChange(item);
           close();
@@ -66,18 +83,13 @@ export default function CategoryPicker({ categories, value, onChange, onSaved })
         <button type="button" aria-label={`Editar categoría ${item}`} disabled={saving} onClick={() => edit("rename", item)}>Editar</button>
         <button type="button" aria-label={`Eliminar categoría ${item}`} disabled={saving} onClick={() => edit("delete", item)}>Eliminar</button>
       </div>)}
-      {editing ? <div className="hf-category-edit">
-        {editing.action === "delete"
-          ? <p>¿Eliminar la categoría {editing.selected}? Los movimientos existentes conservarán su categoría.</p>
-          : <label>{editing.action === "create" ? "Nueva categoría" : "Nombre de la categoría"}
-            <input maxLength={120} value={name} onChange={(event) => setName(event.target.value)} />
-          </label>}
+      {editing?.action === "delete" && <div className="hf-category-edit">
+        <p>¿Eliminar la categoría {editing.selected}? Los movimientos existentes conservarán su categoría.</p>
         <div className="hf-actions">
           <button type="button" disabled={saving} onClick={reset}>Cancelar</button>
-          <button type="button" className="hf-primary" disabled={saving || (editing.action !== "delete" && !name.trim())}
-            onClick={save}>{editing.action === "delete" ? "Confirmar eliminación" : "Guardar categoría"}</button>
+          <button type="button" className="hf-primary" disabled={saving} onClick={save}>Confirmar eliminación</button>
         </div>
-      </div> : <button type="button" onClick={() => edit("create")}>Crear categoría</button>}
+      </div>}
       {error && <p className="hf-notice" role="alert">{error}</p>}
     </dialog>, document.body)}
   </div>;

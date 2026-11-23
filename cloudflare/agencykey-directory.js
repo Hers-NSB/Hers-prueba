@@ -200,6 +200,8 @@ export async function readAgencyDirectory(access, send = fetch) {
   return { employees, creators };
 }
 
+export const directoryStatus = (project, env, send) => rpc(project, env, "status", {}, send);
+
 export async function syncDirectory(project, env, send = fetch) {
   const connection = await rpc(project, env, "load", {}, send);
   if (!connection?.ciphertext) throw failure("Conecta el directorio de AgencyKey para agregar empleados", "AK-DIRECTORY-CONNECT", 409);
