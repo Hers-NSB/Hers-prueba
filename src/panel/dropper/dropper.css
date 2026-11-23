@@ -1,0 +1,43 @@
+.hers-dropper {
+  width: min(100%, 1380px);
+  margin-inline: auto;
+  padding: clamp(16px, 3vw, 36px);
+}
+
+.hers-dropper__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block-end: 16px;
+}
+
+.hers-dropper__header h1 {
+  margin: 0;
+  color: #e8ddd3;
+}
+
+.hers-dropper__header a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #544438;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #e8ddd3;
+}
+
+.hers-dropper-frame {
+  display: block;
+  inline-size: 100%;
+  block-size: max(32rem, 70dvh);
+  border: 1px solid #392f28;
+  border-radius: 12px;
+  background: #171614;
+  color-scheme: dark;
+}
+
+.hers-dropper-frame[hidden] {
+  display: none;
+}

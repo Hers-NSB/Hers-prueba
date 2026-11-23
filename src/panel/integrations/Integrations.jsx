@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { KeyRound, Plus, RefreshCw, Save, ShieldCheck } from "lucide-react";
 import AdminLoading from "../AdminLoading.jsx";
+import DropperFrame from "../dropper/DropperFrame.jsx";
 import callApi from "./connectorApi";
 import { usd } from "../finanzas/finance";
 import "../finanzas/finanzas.css";
@@ -11,6 +12,20 @@ const blank = { service: "agencykey", kind: "api-key", value: "" };
 const dateTime = (date) => new Date(date).toLocaleString("es-VE");
 
 export default function Integrations() {
+  const [bots, setBots] = useState(false);
+  return <section className="hf hers-integrations" aria-labelledby="hers-integrations-title">
+    <header className="hf-header">
+      <div><h1 id="hers-integrations-title">Conectores</h1><p>Conexiones y credenciales de HERS</p></div>
+    </header>
+    <nav className="hf-tabs" aria-label="Secciones de Conectores">
+      <button type="button" aria-pressed={!bots} onClick={() => setBots(false)}>Servicios</button>
+      <button type="button" aria-pressed={bots} onClick={() => setBots(true)}>Bots</button>
+    </nav>
+    {bots ? <DropperFrame view="bots" title="Bots de Telegram de Dropper" /> : <Services />}
+  </section>;
+}
+
+function Services() {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [formError, setFormError] = useState("");
@@ -99,13 +114,12 @@ export default function Integrations() {
   };
   const close = () => { if (!busy) setForm(null); };
 
-  return <section className="hf hers-integrations" aria-label="Conectores">
-    <header className="hf-header">
-      <div><h1>Conectores</h1><p>Conexiones y credenciales de HERS</p></div>
+  return <section aria-label="Servicios">
+    <div className="hf-actions">
       <button type="button" onClick={() => perform("refresh")} disabled={busy}>
         <RefreshCw size={16} aria-hidden="true" /> Actualizar estado
       </button>
-    </header>
+    </div>
     {notice && <p className="hf-notice" role={notice.error ? "alert" : "status"}>{notice.error || notice.success}</p>}
     {!data && !notice && <AdminLoading>Cargando Conectores…</AdminLoading>}
     {data && <>

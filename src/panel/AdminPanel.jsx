@@ -5,6 +5,7 @@ import "./adminPanel.css";
 import {
   BarChart3,
   ClipboardList,
+  Download,
   Home,
   LogOut,
   PanelLeftClose,
@@ -16,10 +17,12 @@ import { supabase, APPLICATIONS_TABLE, adminLogout } from "../lib/supabase";
 const Postulaciones = lazy(() => import("./Postulaciones/postulaciones.jsx"));
 const Finanzas = lazy(() => import("./finanzas/finanzas.jsx"));
 const Integrations = lazy(() => import("./integrations/Integrations.jsx"));
+const Dropper = lazy(() => import("./dropper/Dropper.jsx"));
 const sectionNames = {
   applications: "Postulaciones",
   finance: "Finanzas",
   integrations: "Conectores",
+  dropper: "Dropper",
 };
 
 export default function AdminPanel({ onClose }) {
@@ -128,6 +131,14 @@ export default function AdminPanel({ onClose }) {
               <span>Finanzas</span>
             </button>
             <button
+              className={`admin-nav-item ${activeSection === "dropper" ? "is-active" : ""}`}
+              onClick={() => goTo("dropper")}
+              aria-label="Dropper"
+            >
+              <Download size={18} aria-hidden="true" />
+              <span>Dropper</span>
+            </button>
+            <button
               className={`admin-nav-item ${activeSection === "integrations" ? "is-active" : ""}`}
               onClick={() => goTo("integrations")}
             >
@@ -167,6 +178,10 @@ export default function AdminPanel({ onClose }) {
               <div className="admin-module-view">
                 <Integrations />
               </div>
+            )}
+
+            {activeSection === "dropper" && (
+              <div className="admin-module-view"><Dropper /></div>
             )}
 
             {activeSection === "finance" && (
