@@ -1,11 +1,11 @@
 # Estado de Hers-prueba
 
-Verificado el 22 de noviembre de 2026, hora de la sesión.
+Verificado el 23 de noviembre de 2026.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **28** de Cloudflare Workers al **100 %** del tráfico. Código publicado `2ad510f` del [PR #12](https://github.com/Hers-NSB/Hers-prueba/pull/12), versión `29e31377-18cb-4bb5-86e5-9ec02cf54962`.
-- Supabase de pruebas tiene aplicadas todas las migraciones del repositorio, hasta `20261123033155_finance_current_period_and_categories`. El identificador en el historial de migraciones coincide con el archivo del repositorio.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **30** de Cloudflare Workers al **100 %**. Código publicado `4fb8ae0` del [PR #14](https://github.com/Hers-NSB/Hers-prueba/pull/14), versión `212d1270-7a10-4da0-b43e-8531d8936d33`.
+- Supabase de pruebas tiene aplicadas las migraciones hasta `20261123155240_finance_next_pending_import`. El historial también contiene `20261123043232_finance_inactive_chatter_pay`, que cubre la comisión de chatters inactivos.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
 ## Finanzas y Conectores
@@ -13,7 +13,7 @@ Verificado el 22 de noviembre de 2026, hora de la sesión.
 - **Empleados** muestra las ventas netas de la quincena en las tablas **Modelos** y **Otros empleados**. Los chatters desactivados conservan su historial y los importes que les correspondan según las ventas y la vigencia del porcentaje.
 - **Pagos** muestra las ventas acumuladas, el pago estimado y los días importados. Los cambios de porcentaje hechos desde la interfaz rigen toda la quincena actual. Los cortes cerrados y las vigencias existentes fuera de la operación se conservan.
 - El cierre quincenal genera automáticamente los cortes. Cuando se confirma un pago, se registra una sola inversión en **Equipo** para empleados o en **Modelo** para modelos.
-- El avance verificado de la quincena del 16 al 30 de noviembre es de 6 de 15 días importados. La base tiene 0 cortes registrados. La comprobación de un pago real queda pendiente del primer cierre.
+- El avance verificado de la quincena del 16 al 30 de noviembre es de 7 de 15 días importados. La base tiene 0 cortes registrados. La comprobación de un pago real queda pendiente del primer cierre.
 - Se validaron el cierre y la confirmación con pruebas SQL, además de la interfaz de escritorio y móvil con datos simulados.
 
 ## Postulaciones
@@ -23,11 +23,17 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 23 de noviembre de 2026 · Despliegue de Finanzas
+
+Se publicaron el gráfico de áreas y los reintentos. El gráfico conserva todas las fechas del rango. Pagos conserva la edición en línea del porcentaje y el botón Editar para empleados manuales.
+
+Pasaron GitHub Actions, 28 pruebas de Node y cinco integraciones SQL locales. En Supabase de pruebas pasaron las dos integraciones de pagos, mediante transacciones revertidas. En Cloudflare se compararon la portada y los nueve recursos con el build, y se comprobaron las respuestas 401 de Conectores sin sesión y 410 de la ruta retirada. Cloudflare conserva el disparador, los registros, las trazas y la redacción de parámetros.
+
 ### 23 de noviembre de 2026 · Reintentos de AgencyKey
 
 - `cloudflare/worker.js` reintenta la consulta puntual de transacciones ante 502, 503 y 504. Ante 429 respeta las esperas de hasta diez segundos y devuelve al cliente las mayores. Finanzas detiene el lote si recibe un 429.
 - Si una consulta de transacciones agota los intentos, no se guarda un día parcial. El disparador prueba el siguiente día pendiente de la misma quincena y vuelve a buscar el día más antiguo en el siguiente ciclo.
-- `20261123155240_finance_next_pending_import.sql` habilita la búsqueda del siguiente día pendiente sin marcar fechas como importadas. Despliegue pendiente en Cloudflare y Supabase de pruebas.
+- `20261123155240_finance_next_pending_import.sql` habilita la búsqueda del siguiente día pendiente sin marcar fechas como importadas. Migración aplicada en Supabase y Worker publicado en Cloudflare.
 
 ### 23 de noviembre de 2026 · Actualización, gráfico y pagos
 
@@ -37,7 +43,7 @@ Rama `codex/finanzas-actualizacion-y-pagos`. Supabase registró entre 370 y 391 
 - `src/panel/finanzas/FinanceCharts.jsx` y `finanzas.css` muestran Ingreso e Inversión como áreas adaptables, aumentan el contraste y ocultan los controles visuales de incremento en los importes y porcentajes.
 - Movimiento muestra su propia descripción al consultar la categoría de la fila. El panel Categorías muestra la descripción del catálogo. Pagos conserva el acceso a Editar para los empleados manuales y muestra centavos.
 - `supabase/migrations/20261123043232_finance_inactive_chatter_pay.sql` conserva la comisión de los chatters inactivos cuando AgencyKey atribuye ventas en fechas con porcentaje vigente. La misma regla se usa para el estimado y los próximos cierres.
-- Las 25 pruebas de Node y las 5 integraciones SQL locales pasaron. La regresión de chatter inactivo falla con las migraciones anteriores y pasa con la nueva. Chromium comprobó a 320, 768 y 1440 px el ancho del gráfico, los tooltips, los campos numéricos, la edición desde Pagos y la consulta única de pagos al volver a la pestaña. El despliegue de Cloudflare y la migración del proyecto conectado quedan pendientes.
+- Las 25 pruebas de Node y las 5 integraciones SQL locales pasaron. La regresión de chatter inactivo falla con las migraciones anteriores y pasa con la nueva. Chromium comprobó a 320, 768 y 1440 px el ancho del gráfico, los tooltips, los campos numéricos, la edición desde Pagos y la consulta única de pagos al volver a la pestaña. El despliegue actual se registra en **Despliegue**.
 
 ### 22 de noviembre de 2026 · Finanzas
 
