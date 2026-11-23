@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import "./adminPanel.css";
 import {
   BarChart3,
-  BookOpen,
   ClipboardList,
   Home,
   LogOut,
@@ -11,11 +10,11 @@ import {
   PanelLeftOpen,
   Plug,
 } from "lucide-react";
-import Historias from "./Historias/historias.jsx";
-import Postulaciones from "./Postulaciones/postulaciones.jsx";
-import Finanzas from "./finanzas/finanzas.jsx";
-import Integrations from "./integrations/Integrations.jsx";
 import { supabase, APPLICATIONS_TABLE, adminLogout } from "../lib/supabase";
+
+const Postulaciones = lazy(() => import("./Postulaciones/postulaciones.jsx"));
+const Finanzas = lazy(() => import("./finanzas/finanzas.jsx"));
+const Integrations = lazy(() => import("./integrations/Integrations.jsx"));
 
 export default function AdminPanel({ onClose }) {
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -23,6 +22,7 @@ export default function AdminPanel({ onClose }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
+    if (activeSection !== "dashboard") return;
     let mounted = true;
     const loadCount = async () => {
       const { count, error, status } = await supabase
@@ -114,13 +114,6 @@ export default function AdminPanel({ onClose }) {
               <span>Postulaciones</span>
             </button>
             <button
-              className={`admin-nav-item ${activeSection === "stories" ? "is-active" : ""}`}
-              onClick={() => goTo("stories")}
-            >
-              <BookOpen size={18} />
-              <span>Historias</span>
-            </button>
-            <button
               className={`admin-nav-item ${activeSection === "finance" ? "is-active" : ""}`}
               onClick={() => goTo("finance")}
               aria-label="Finanzas"
@@ -157,29 +150,25 @@ export default function AdminPanel({ onClose }) {
             <AdminDashboardHome applicationCount={applications.count} />
           )}
 
-          {activeSection === "applications" && (
-            <div className="admin-module-view">
-              <Postulaciones onBack={() => goTo("dashboard")} />
-            </div>
-          )}
+          <Suspense fallback={<p role="status">Cargando sección…</p>}>
+            {activeSection === "applications" && (
+              <div className="admin-module-view">
+                <Postulaciones onBack={() => goTo("dashboard")} />
+              </div>
+            )}
 
-          {activeSection === "stories" && (
-            <div className="admin-module-view">
-              <Historias embedded onBack={() => goTo("dashboard")} />
-            </div>
-          )}
+            {activeSection === "integrations" && (
+              <div className="admin-module-view">
+                <Integrations />
+              </div>
+            )}
 
-          {activeSection === "integrations" && (
-            <div className="admin-module-view">
-              <Integrations />
-            </div>
-          )}
-
-          {activeSection === "finance" && (
-            <div className="admin-module-view">
-              <Finanzas onBack={() => goTo("dashboard")} />
-            </div>
-          )}
+            {activeSection === "finance" && (
+              <div className="admin-module-view">
+                <Finanzas onBack={() => goTo("dashboard")} />
+              </div>
+            )}
+          </Suspense>
         </main>
       </div>
     </div>,
@@ -209,11 +198,6 @@ function AdminDashboardHome({ applicationCount }) {
           <span className="admin-stat-card__label">Postulaciones</span>
           <strong>{applicationCount ?? "—"}</strong>
           <span>Registros recibidos</span>
-        </div>
-        <div className="admin-stat-card">
-          <span className="admin-stat-card__label">Historias</span>
-          <strong>Editor</strong>
-          <span>Gestión de contenido activa</span>
         </div>
         <div className="admin-stat-card">
           <span className="admin-stat-card__label">Estado</span>

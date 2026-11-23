@@ -1,7 +1,6 @@
 import { beginDirectory, directoryStatus, finishDirectory, syncDirectory } from "./agencykey-directory.js";
 import { bridge, handleIntegrations, IntegrationError, storedAgencyKey, workerRpc } from "./integrations.js";
 
-const api = "https://app.agencykey.com/api/v1/public/crm/reports";
 const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
 const dayMs = 86_400_000;
 
@@ -39,85 +38,6 @@ function reportPeriod(day, zone) {
 
 const isName = (value) => typeof value === "string" && value.trim().length > 0;
 const isId = (value) => typeof value === "string" && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value);
-
-export function normalizeReports(created, employees) {
-  if (!Array.isArray(created?.data) || !Array.isArray(employees?.data)) {
-    throw new Error("Formato de reporte de AgencyKey inesperado");
-  }
-  const sales = new Map();
-  for (const row of created.data) {
-    if (!isId(row.creatorId) || !isName(row.creatorName || row.creatorUsername) ||
-        !Number.isFinite(row.totalSalesSum) || sales.has(row.creatorId)) {
-      throw new Error("Fila de ventas de AgencyKey inválida o repetida");
-    }
-    sales.set(row.creatorId, { creator_key: row.creatorId, creator_name: row.creatorName || row.creatorUsername,
-      crm_total: row.totalSalesSum });
-  }
-
-  const attributions = [];
-  const members = new Set();
-  for (const row of employees.data) {
-    if (row.senderId === "__unknown__") continue;
-    if (!isId(row.senderId) || !isName(row.senderName) || !Number.isFinite(row.totalSalesSum) || members.has(row.senderId)) {
-      throw new Error("Fila de integrante de AgencyKey inválida o repetida");
-    }
-    members.add(row.senderId);
-    if (row.creatorBreakdown == null && row.totalSalesSum === 0) continue;
-    if (!Array.isArray(row.creatorBreakdown)) throw new Error("Falta el desglose de ventas por modelo");
-    const creators = new Set();
-    for (const model of row.creatorBreakdown) {
-      if (!sales.has(model.creatorId) || !Number.isFinite(model.totalSalesSum) || creators.has(model.creatorId)) {
-        throw new Error("Desglose de ventas de AgencyKey inválido o repetido");
-      }
-      creators.add(model.creatorId);
-      attributions.push({ creator_key: model.creatorId, member_key: row.senderId,
-        member_name: row.senderName, attributed: model.totalSalesSum });
-    }
-    const inCents = (amount) => Math.round(amount * 100);
-    const breakdown = row.creatorBreakdown.reduce((sum, item) => sum + inCents(item.totalSalesSum), 0);
-    if (Math.abs(breakdown - inCents(row.totalSalesSum)) > row.creatorBreakdown.length) {
-      throw new Error("El desglose de ventas atribuidas no coincide con el total del integrante");
-    }
-  }
-  return { sales: [...sales.values()], attributions };
-}
-
-export async function importAgencyKey(instant, env, send = fetch, testOnly = false) {
-  const hasBridge = Boolean(env.HERS_INTEGRATIONS_SECRET && env.SUPABASE_PUBLISHABLE_KEY);
-  const apiKey = hasBridge ? await storedAgencyKey(project, env, send) : env.AGENCYKEY_API_KEY;
-  if (!apiKey || (!testOnly && !hasBridge && !env.SUPABASE_SYNC_KEY)) return { skipped: true };
-  const { day, ...period } = previousDay(instant, env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax");
-  const getReport = async (report, options = {}) => {
-    const response = await send(`${api}/${report}?${new URLSearchParams({ ...period, ...options })}`, {
-      method: "GET",
-      redirect: "manual",
-      headers: { "x-public-api-key": apiKey, Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`AgencyKey ${report}: HTTP ${response.status}`);
-    return response.json();
-  };
-  const [creators, members] = await Promise.all([
-    getReport("creators"), getReport("employees", { includeCreatorBreakdown: "true" }),
-  ]);
-  const { sales, attributions } = normalizeReports(creators, members);
-  const outcome = { day, creators: sales.length, attributions: attributions.length };
-  if (testOnly) return outcome;
-  const batch = { p_day: day, p_sales: sales, p_attributions: attributions };
-  if (hasBridge) {
-    await bridge(project, env, "import", batch, send);
-    return outcome;
-  }
-  const key = env.SUPABASE_SYNC_KEY;
-  const response = await send(`${project}/rest/v1/rpc/finance_import_agencykey`, {
-    method: "POST",
-    redirect: "manual",
-    headers: { apikey: key, "Content-Type": "application/json",
-      ...(key.startsWith("sb_secret_") ? {} : { Authorization: `Bearer ${key}` }) },
-    body: JSON.stringify(batch),
-  });
-  if (!response.ok) throw new Error(`Supabase finance_import_agencykey: HTTP ${response.status}`);
-  return outcome;
-}
 
 const agencyRoot = "https://app.agencykey.com/api";
 

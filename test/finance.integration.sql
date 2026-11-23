@@ -22,6 +22,7 @@ set local role anon;
 do $$
 begin
   if has_table_privilege(current_user, 'public.finance_movements', 'select') or
+     has_function_privilege(current_user, 'public.finance_overview_totals()', 'execute') or
      has_function_privilege(current_user, 'public.finance_import_agencykey(date,jsonb,jsonb)', 'execute') then
     raise exception 'Un visitante anónimo tiene acceso a Finanzas';
   end if;
@@ -36,6 +37,7 @@ begin
   if public.finance_is_admin()
      or exists (select 1 from public.finance_platforms)
      or exists (select 1 from public.finance_commissions)
+     or public.finance_overview_totals() <> '{"balance": null, "movementCategories": []}'::jsonb
      or has_function_privilege(current_user, 'public.finance_import_agencykey(date,jsonb,jsonb)', 'execute') then
     raise exception 'Un chatter accedió a Finanzas';
   end if;
@@ -53,6 +55,7 @@ declare member uuid;
 declare model uuid;
 declare platform uuid;
 declare movement uuid;
+declare prior_balance numeric := (public.finance_overview_totals()->>'balance')::numeric;
 begin
   select id into strict member from public.finance_members where agencykey_id = 'finance-fixture-member';
   select id into strict model from public.finance_creators where agencykey_id = 'finance-fixture-model';
@@ -69,7 +72,9 @@ begin
   insert into public.finance_rates values (member,'2020-01-01',10),(member,'2020-01-02',20);
   update public.finance_rates set percent = 25 where member_id = member and effective_on = '2020-01-02';
 
-  if not public.finance_is_admin()
+  if (public.finance_overview_totals()->>'balance')::numeric is distinct from coalesce(prior_balance, 0) + 41.75
+     or not (public.finance_overview_totals()->'movementCategories' @> '["Producción","Servicios","Ventas"]'::jsonb)
+     or not public.finance_is_admin()
      or (select count(*) from public.finance_agencykey_sales where creator_id = model) <> 2
      or (select count(*) from public.finance_commissions where member_id = member) <> 2
      or (select commission from public.finance_commissions where member_id = member and day = '2020-01-01') <> 4.36

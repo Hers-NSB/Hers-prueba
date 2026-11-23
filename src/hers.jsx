@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
 import "./hers.css";
 
@@ -51,7 +51,7 @@ import {
   teamLogin,
   modelLogin,
 } from "./lib/supabase";
-import AdminPanel from "./panel/AdminPanel.jsx";
+const AdminPanel = lazy(() => import("./panel/AdminPanel.jsx"));
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -158,12 +158,14 @@ export default function HERS() {
       )}
 
       {adminPanelOpen && (
-        <AdminPanel
-          onClose={() => {
-            setAdminPanelOpen(false);
-            localStorage.removeItem("hers_admin_session");
-          }}
-        />
+        <Suspense fallback={<p role="status">Cargando administración…</p>}>
+          <AdminPanel
+            onClose={() => {
+              setAdminPanelOpen(false);
+              localStorage.removeItem("hers_admin_session");
+            }}
+          />
+        </Suspense>
       )}
       {toast && <Toast message={toast} />}
     </div>
