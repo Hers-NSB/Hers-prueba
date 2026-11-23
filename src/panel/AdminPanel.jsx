@@ -111,6 +111,7 @@ export default function AdminPanel({ onClose }) {
             <button
               className={`admin-nav-item ${activeSection === "dashboard" ? "is-active" : ""}`}
               onClick={() => goTo("dashboard")}
+              aria-label="Inicio"
             >
               <Home size={18} />
               <span>Inicio</span>
@@ -118,6 +119,7 @@ export default function AdminPanel({ onClose }) {
             <button
               className={`admin-nav-item ${activeSection === "applications" ? "is-active" : ""}`}
               onClick={() => goTo("applications")}
+              aria-label="Postulaciones"
             >
               <ClipboardList size={18} />
               <span>Postulaciones</span>
@@ -141,6 +143,7 @@ export default function AdminPanel({ onClose }) {
             <button
               className={`admin-nav-item ${activeSection === "integrations" ? "is-active" : ""}`}
               onClick={() => goTo("integrations")}
+              aria-label="Conectores"
             >
               <Plug size={18} />
               <span>Conectores</span>
