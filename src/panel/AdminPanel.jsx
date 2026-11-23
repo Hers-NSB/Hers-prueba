@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import AdminLoading from "./AdminLoading.jsx";
 import "./adminPanel.css";
 import {
   BarChart3,
@@ -15,6 +16,11 @@ import { supabase, APPLICATIONS_TABLE, adminLogout } from "../lib/supabase";
 const Postulaciones = lazy(() => import("./Postulaciones/postulaciones.jsx"));
 const Finanzas = lazy(() => import("./finanzas/finanzas.jsx"));
 const Integrations = lazy(() => import("./integrations/Integrations.jsx"));
+const sectionNames = {
+  applications: "Postulaciones",
+  finance: "Finanzas",
+  integrations: "Conectores",
+};
 
 export default function AdminPanel({ onClose }) {
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -150,7 +156,7 @@ export default function AdminPanel({ onClose }) {
             <AdminDashboardHome applicationCount={applications.count} />
           )}
 
-          <Suspense fallback={<p role="status">Cargando sección…</p>}>
+          <Suspense fallback={<AdminLoading>Cargando {sectionNames[activeSection]}…</AdminLoading>}>
             {activeSection === "applications" && (
               <div className="admin-module-view">
                 <Postulaciones onBack={() => goTo("dashboard")} />

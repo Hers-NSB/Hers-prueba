@@ -34,6 +34,10 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 23 de noviembre de 2026 · Carga de Administración
+
+La rama `codex/carga-panel-administracion` muestra una pantalla de carga durante la restauración de sesión y la descarga del panel. Postulaciones, Finanzas y Conectores comparten un indicador de carga que respeta la preferencia de movimiento reducido. Pasaron el lint, la compilación, las 26 pruebas de Node y la regresión de sesión y carga de Conectores en un DOM simulado. Pendiente de despliegue.
+
 ### 23 de noviembre de 2026 · Importes del gráfico
 
 Resultado operativo muestra Ingreso e Inversión en dólares enteros, con el mismo estilo en todas las fechas. Chromium comprobó el tooltip y el ancho del gráfico a 320, 768 y 1440 px. GitHub Actions pasó y los recursos publicados coinciden con el build.

@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { FaInstagram, FaTelegram, FaWhatsapp } from "react-icons/fa";
+import AdminLoading from "../AdminLoading.jsx";
 import "./postulaciones.css";
 import {
   supabase,
@@ -213,10 +214,7 @@ export default function Postulaciones({ onBack = null }) {
         {error && <p className="postulaciones-error">{error}</p>}
 
         {loading ? (
-          <div className="postulaciones-loading">
-            <Loader2 size={28} className="postulaciones-spin" />
-            <span>Cargando postulaciones…</span>
-          </div>
+          <AdminLoading>Cargando Postulaciones…</AdminLoading>
         ) : applications.length === 0 ? (
           <p className="postulaciones-empty">Todavía no hay postulaciones</p>
         ) : (

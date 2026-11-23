@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef, Fragment } from "react";
 import { createPortal } from "react-dom";
+import AdminLoading from "./panel/AdminLoading.jsx";
 import "./hers.css";
 
 import {
@@ -56,7 +57,17 @@ const AdminPanel = lazy(() => import("./panel/AdminPanel.jsx"));
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function HERS() {
+  const [authModal, setAuthModal] = useState(null);
+  const [teamPanelOpen, setTeamPanelOpen] = useState(false);
+  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [checkingAdminSession, setCheckingAdminSession] = useState(
+    () => localStorage.getItem("hers_admin_session") === "true",
+  );
+  const showLanding = !checkingAdminSession && !adminPanelOpen;
+
   useEffect(() => {
+    if (!showLanding) return;
     const revealElements = document.querySelectorAll(".reveal");
     if (!revealElements.length) return;
     const observer = new IntersectionObserver(
@@ -72,15 +83,7 @@ export default function HERS() {
     );
     revealElements.forEach((element) => observer.observe(element));
     return () => observer.disconnect();
-  }, []);
-
-  const [authModal, setAuthModal] = useState(null);
-  const [teamPanelOpen, setTeamPanelOpen] = useState(false);
-  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [checkingAdminSession, setCheckingAdminSession] = useState(
-    () => localStorage.getItem("hers_admin_session") === "true",
-  );
+  }, [showLanding]);
 
   useEffect(() => {
     if (!checkingAdminSession) return;
@@ -104,7 +107,20 @@ export default function HERS() {
   }, [toast]);
 
   if (checkingAdminSession) {
-    return null;
+    return <AdminLoading fullscreen>Restaurando sesión de administración…</AdminLoading>;
+  }
+
+  if (adminPanelOpen) {
+    return (
+      <Suspense fallback={<AdminLoading fullscreen>Cargando administración…</AdminLoading>}>
+        <AdminPanel
+          onClose={() => {
+            setAdminPanelOpen(false);
+            localStorage.removeItem("hers_admin_session");
+          }}
+        />
+      </Suspense>
+    );
   }
 
   return (
@@ -157,16 +173,6 @@ export default function HERS() {
         />
       )}
 
-      {adminPanelOpen && (
-        <Suspense fallback={<p role="status">Cargando administración…</p>}>
-          <AdminPanel
-            onClose={() => {
-              setAdminPanelOpen(false);
-              localStorage.removeItem("hers_admin_session");
-            }}
-          />
-        </Suspense>
-      )}
       {toast && <Toast message={toast} />}
     </div>
   );
