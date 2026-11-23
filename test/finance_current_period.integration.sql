@@ -9,6 +9,8 @@ declare
   second_model uuid;
   other_model uuid;
   staff uuid;
+  chatter uuid;
+  agencykey_user text := gen_random_uuid()::text;
 begin
   select (statement_timestamp() at time zone report_zone)::date into report_day from hers_private.finance_payroll;
   period_start := public.finance_pay_period_start(report_day);
@@ -25,6 +27,17 @@ begin
     (staff, period_start + 1, 35, array[other_model]), (staff, period_start + 16, 15, array[second_model]);
   insert into public.finance_payments (period_start, period_end, member_id, amount, net_sales, pay_rate_min, pay_rate_max)
   values (last_period, period_start - 1, staff, 9, 90, 10, 10);
+
+  insert into public.finance_members (name, role, agencykey_id, agencykey_available)
+    values ('Chatter inactivo de pruebas', 'Chatter', agencykey_user, false) returning id into chatter;
+  insert into public.finance_member_availability (member_id, effective_on, available)
+    values (chatter, period_start, false);
+  insert into public.finance_model_shares (member_id, effective_on, percent, basis)
+    values (chatter, period_start, 10, 'employee_sales');
+  insert into public.finance_agencykey_employee_net (day, totals)
+    values (period_start, jsonb_build_object(agencykey_user, 80.10))
+    on conflict (day) do update set totals = finance_agencykey_employee_net.totals || excluded.totals;
+  perform set_config('hers.test.inactive_chatter', chatter::text, true);
 
   perform set_config('hers.test.manual_period', period_start::text, true);
   perform set_config('hers.test.manual_staff', staff::text, true);
@@ -56,10 +69,16 @@ declare
   cut_start date := (current_pay->>'from')::date;
   recipient text := 'chatter:' || staff;
   category_name text := 'Categoría ' || gen_random_uuid();
+  chatter_recipient text := 'chatter:' || current_setting('hers.test.inactive_chatter');
 begin
   if (current_pay->'sales'->>recipient)::numeric is distinct from 150.10
      or (current_pay->'amounts'->>recipient)::numeric is distinct from 30.02 then
     raise exception 'El pago manual debe sumar solo las ventas de sus modelos asignados en la fecha de cada venta';
+  end if;
+
+  if (current_pay->'sales'->>chatter_recipient)::numeric is distinct from 80.10
+     or (current_pay->'amounts'->>chatter_recipient)::numeric is distinct from 8.01 then
+    raise exception 'El chatter inactivo debe conservar el pago de sus ventas atribuidas';
   end if;
 
   perform public.finance_save_current_pay_rate(staff, null, 'Empleado manual de pruebas', 'Dropper', 50, array[first_model, second_model]);
@@ -95,10 +114,15 @@ do $$
 declare
   staff uuid := current_setting('hers.test.manual_staff')::uuid;
   cutoff date := current_setting('hers.test.manual_period')::date;
+  chatter uuid := current_setting('hers.test.inactive_chatter')::uuid;
 begin
   if not exists (select from hers_private.finance_period_pay_details(cutoff, cutoff + 1)
       where member_id = staff and amount = 75.06 and net_sales = 150.10 and pay_rate_min = 50 and pay_rate_max = 50) then
     raise exception 'El cierre debe tomar la misma base e importe que el estimado';
+  end if;
+  if not exists (select from hers_private.finance_period_pay_details(cutoff, cutoff + 1)
+      where member_id = chatter and amount = 8.01 and net_sales = 80.10) then
+    raise exception 'El chatter inactivo debe conservar el pago en el cierre';
   end if;
 end;
 $$;

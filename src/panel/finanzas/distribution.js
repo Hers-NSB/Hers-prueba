@@ -95,10 +95,11 @@ export function calculateModelDistribution(sales, plans, members, rates, availab
       if (!Number(rate?.percent)) continue;
       const member = staff.get(rate.member_id);
       const status = employment.get(rate.member_id)?.findLast(({ effective_on }) => effective_on <= day);
-      if ((member?.archived_on && day >= member.archived_on) || status?.available === false) continue;
+      if ((member?.archived_on && day >= member.archived_on)) continue;
 
       let payout;
       if (rate.basis === "employee_sales") {
+        if (status?.available === false && !Object.hasOwn(employeeTotals ?? {}, member?.agencykey_id)) continue;
         if (!employeeTotals || !member?.agencykey_id) {
           pendingDays.add(day);
           pendingRecipients.add(recipient);
@@ -106,6 +107,7 @@ export function calculateModelDistribution(sales, plans, members, rates, availab
         }
         payout = commissionCents(exactCents(employeeTotals[member.agencykey_id] ?? 0), rate.percent);
       } else {
+        if (status?.available === false) continue;
         const creators = rate.member_id ? rate.creator_ids : [rate.creator_id];
         const applicable = creators.filter((creator) => amounts.has(creator));
         if (!applicable.length) continue;

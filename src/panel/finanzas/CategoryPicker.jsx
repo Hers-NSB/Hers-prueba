@@ -2,7 +2,6 @@ import { useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import CategoryDescription from "./CategoryDescription";
 
 export default function CategoryPicker({ categories, value, onChange, onSaved }) {
   const id = useId();
@@ -96,12 +95,10 @@ export default function CategoryPicker({ categories, value, onChange, onSaved })
         editing?.action === "rename" && editing.selected === item
           ? <div className="hf-category-inline" key={item}>{nameForm}</div>
           : <div key={item} className="hf-category-row">
-            <CategoryDescription name={item} description={description}>
-              <button type="button" aria-pressed={item === value} disabled={saving} onClick={() => {
-                onChange(item);
-                close();
-              }}>{item}</button>
-            </CategoryDescription>
+            <button type="button" aria-pressed={item === value} disabled={saving} onClick={() => {
+              onChange(item);
+              close();
+            }}>{item}</button>
             <button type="button" aria-label={`Editar categoría ${item}`} disabled={saving}
               onClick={() => edit("rename", item, description)}>Editar</button>
             <button type="button" aria-label={`Eliminar categoría ${item}`} disabled={saving}

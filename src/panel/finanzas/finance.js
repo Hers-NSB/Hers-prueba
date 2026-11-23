@@ -79,6 +79,15 @@ export function dailyFinance({ movements, sales, commissions }, agencyByDay = ne
   });
 }
 
+export function operatingIncomeSeries(range, data, agencyByDay) {
+  const recorded = new Map(dailyFinance(data, agencyByDay).map(({ date, income }) => [date, income]));
+  const points = [];
+  for (let date = Date.parse(range.from); date <= Date.parse(range.to); date += 86_400_000) {
+    points.push({ date, income: recorded.get(date) ?? null });
+  }
+  return points;
+}
+
 export function hasOperatingAmounts({ movements, commissions }) {
   return movements.length > 0 || commissions.some((row) => row.commission != null);
 }

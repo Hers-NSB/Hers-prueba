@@ -23,6 +23,19 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 22 de noviembre de 2026 · Ajustes de Finanzas
+
+Rama `codex/ajustes-finanzas-noviembre`, basada en `db91fe5`.
+
+- **Resumen del período** usa dos columnas en móvil. **Resultado operativo** muestra solo ingresos y conserva todas las fechas del rango. El desplazamiento queda dentro del gráfico cuando el espacio no alcanza.
+- **Editar movimiento** muestra la descripción propia del movimiento en el tooltip junto al campo.
+- **Pagos** edita el porcentaje desde el valor de **Porcentaje de pago vigente**. Los datos y las asignaciones de empleados manuales se editan desde **Empleados**.
+- La migración `20261123043232_finance_inactive_chatter_pay.sql` conserva las ventas atribuidas a chatters desactivados para el estimado y el cierre, según el porcentaje vigente en cada fecha. Supabase de pruebas tenía un chatter desactivado con ventas del 16 al 18 y porcentaje con vigencia posterior. Guardar su porcentaje desde Pagos lo aplica a la quincena actual.
+- Se mantuvo el conteo inclusivo del cierre. Supabase de pruebas confirmó siete días finalizados, del 16 al 22 de noviembre, para el corte del 16 al 30.
+- Pasaron lint, build, 26 pruebas JavaScript y cinco de integración en PostgreSQL local. Chromium verificó la cuadrícula a 320, 390, 768 y 1440 px, las fechas, el tooltip táctil y la edición del porcentaje con datos simulados.
+- Queda pendiente aplicar la migración a Supabase de pruebas y desplegar el build en el Worker.
+
+
 ### 22 de noviembre de 2026 · Finanzas
 
 Rama `codex/finanzas-resumen-movimientos-empleados`, basada en `12eaee7`. [PR #12](https://github.com/Hers-NSB/Hers-prueba/pull/12). La versión 28 sucedió a la versión 27, que servía el commit `78198dd` del [PR #11](https://github.com/Hers-NSB/Hers-prueba/pull/11).

@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Info } from "lucide-react";
 
-export default function CategoryDescription({ name, description, children }) {
+export default function DescriptionTooltip({ description, children }) {
   const id = useId();
   const trigger = useRef(null);
   const tooltip = useRef(null);
@@ -60,24 +60,24 @@ export default function CategoryDescription({ name, description, children }) {
     };
   }, [host]);
 
-  if (!description?.trim()) return children ?? name;
-  return <span className="hf-category-description"
+  if (!description?.trim()) return children;
+  return <span className="hf-description"
     onPointerEnter={(event) => { if (event.pointerType === "mouse") show(event); }}
     onPointerLeave={(event) => {
       if (event.pointerType === "mouse" && !trigger.current?.matches(":focus-visible")) deferDismiss();
     }}>
     {children}
-    <button type="button" ref={trigger} className="hf-category-description-trigger"
-      aria-label={children ? `Descripción de ${name}` : undefined} aria-describedby={id}
+    <button type="button" ref={trigger} className="hf-description-trigger"
+      aria-label="Ver descripción del movimiento" aria-describedby={id}
       onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) show(event); }}
       onBlur={() => setHost(null)} onClick={(event) => {
         if (event.nativeEvent.pointerType === "touch" && host) setHost(null);
         else show(event);
       }}>
-      {children ? <Info size={16} aria-hidden="true" /> : name}
+      <Info size={16} aria-hidden="true" />
     </button>
     {!host && <span id={id} hidden>{description}</span>}
-    {host && createPortal(<span className="hf-category-tooltip" ref={tooltip} id={id} role="tooltip"
+    {host && createPortal(<span className="hf-description-tooltip" ref={tooltip} id={id} role="tooltip"
       onPointerEnter={() => window.clearTimeout(dismissTimer.current)}
       onPointerLeave={() => { if (!trigger.current?.matches(":focus-visible")) deferDismiss(); }}>{description}</span>, host)}
   </span>;

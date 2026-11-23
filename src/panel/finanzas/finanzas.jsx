@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useState } from "react";
 import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { dateKey, financeBreakdown, investmentTotal, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
@@ -6,7 +6,7 @@ import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
 import CategoryPicker from "./CategoryPicker";
-import CategoryDescription from "./CategoryDescription";
+import DescriptionTooltip from "./DescriptionTooltip";
 import PaymentHistory from "./PaymentHistory";
 import "./finanzas.css";
 
@@ -188,7 +188,7 @@ export default function Finanzas() {
       {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
       {loadError && <p className="hf-notice" role="alert">No se pudieron actualizar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
       {access && <div aria-busy={busy}>
-        {tab === "Resumen" && <Overview totals={totals} data={data} distribution={distribution} />}
+        {tab === "Resumen" && <Overview range={filters} totals={totals} data={data} distribution={distribution} />}
         {tab === "Movimiento" && <Movements data={data} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
@@ -199,7 +199,7 @@ export default function Finanzas() {
         currentPeriod={payments.type === "modelShare" || isChatter(paymentPerson.role) || paymentRate ? data.payPeriod : null}
         currentAmount={data.currentPay[payments.recipient]} currentNet={data.currentPaySales[payments.recipient]}
         financeRevision={revision} movements={data.allMovements}
-        onEdit={() => setEditor({ type: payments.type, row: paymentPerson })} onConfirmed={reload} onClose={() => setPayments(null)} />}
+        onChanged={reload} onClose={() => setPayments(null)} />}
       {editor && <Editor editor={editor} data={data} onChange={reload} onClose={() => setEditor(null)}
         onSaved={() => { setEditor(null); reload(); }} />}
 
@@ -238,7 +238,7 @@ function Breakdown({ data, dimension, title, label, catalog }) {
   </section>;
 }
 
-function Overview({ totals, data, distribution }) {
+function Overview({ range, totals, data, distribution }) {
   const { movements, sales } = data;
   const investment = investmentTotal(movements, totals);
   const net = netSales(sales, movements);
@@ -259,7 +259,7 @@ function Overview({ totals, data, distribution }) {
     <Suspense fallback={<section className="hf-section hf-trend" aria-busy="true">
       <h2>Resultado operativo</h2><div className="hf-chart" />
     </section>}>
-      <FinanceCharts data={data} agencyByDay={distribution.agencyByDay} pendingDays={distribution.pendingDays} />
+      <FinanceCharts data={data} range={range} agencyByDay={distribution.agencyByDay} />
     </Suspense>
     <div className="hf-breakdowns">
       <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
@@ -272,7 +272,6 @@ function Movements({ data, filters, onFilter, onEdit }) {
   const change = (key, value) => onFilter((current) => ({ ...current, [key]: value }));
   const select = (label, key, rows, placeholder = "Todos") => <Choice label={label} value={filters[key]}
     rows={rows} placeholder={placeholder} onChange={(value) => change(key, value)} />;
-  const descriptions = new Map(data.categories.map(({ name, description }) => [name.toLowerCase(), description]));
   const categories = [...new Set([...data.categories.map(({ name }) => name), ...data.allMovements.map(({ category }) => category)])].sort();
   const rows = data.allMovements.filter((row) =>
     (!filters.from || row.day >= filters.from) && (!filters.to || row.day <= filters.to) &&
@@ -298,7 +297,7 @@ function Movements({ data, filters, onFilter, onEdit }) {
     <Table headings={["Fecha", "Tipo", "Categoría", "Modelo", "Plataforma", "Importe", "Acción"]}
       emptyText="Sin movimientos para estos filtros"
       rows={[...rows].reverse().map((row) => [row.id, [row.day, kinds[row.kind],
-        <CategoryDescription name={row.category} description={descriptions.get(row.category.toLowerCase())} />,
+        row.category,
         row.creator_id ? findName(data.creators, row.creator_id) : "Otros",
         row.platform_id ? findName(data.platforms, row.platform_id) : "Otros", usd(row.amount),
         <div className="hf-actions">{row.finance_payment_id ? <span>Pago confirmado</span>
@@ -328,14 +327,18 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
   const toRow = ([row, type, recipient, active]) => {
     const rate = effectiveShare(data.rates, recipient, currentDay);
     const eligible = type === "modelShare" || isChatter(row.role) || Boolean(rate);
-    const payout = data.currentPay[recipient] ?? (data.payPeriod?.day === data.payPeriod?.from && row.agencykey_id ? 0 : null);
-    const amount = !eligible || !rate ? "—" : payout == null && rate.basis === "employee_sales" && !row.agencykey_id
-      ? "Pendiente de vincular" : payout == null ? "Pendiente de sincronizar" : usd(payout);
+    const firstDay = data.payPeriod?.day === data.payPeriod?.from;
+    const payout = data.currentPay[recipient] ?? (firstDay && eligible && rate && row.agencykey_id ? 0 : null);
+    const amount = payout != null ? usd(payout) : !eligible || !rate ? "—"
+      : rate.basis === "employee_sales" && !row.agencykey_id ? "Pendiente de vincular" : "Pendiente de sincronizar";
     return [recipient, [active ? row.name : <>{row.name} <small className="hf-employee-status">Inactivo</small></>, row.role,
       rate ? percentLabel(rate.percent) : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
       <div className="hf-actions">
         <button type="button" onClick={() => onPayments({ type, person: row, recipient })}>Pagos</button>
-        {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
+        {active && type === "member" && !row.agencykey_id && <>
+          <button type="button" onClick={() => onEdit("member", row)}>Editar empleado</button>
+          <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>
+        </>}</div>]];
   };
   const models = participants.filter(isModel).map(toRow);
   const otherEmployees = participants.filter((entry) => !isModel(entry)).map(toRow);
@@ -369,6 +372,7 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
 }
 
 function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
+  const descriptionId = useId();
   const today = dateKey(new Date());
   const rateDay = data.payPeriod?.day ?? today;
   const recipient = type === "modelShare" ? `model:${row.id}` : row && `chatter:${row.id}`;
@@ -442,10 +446,13 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
           {select("Plataforma", "platform_id", data.platforms)}
           {field(kind === "income" ? "Ingreso a agencia ($)" : "Importe ($)", "amount",
             { type: "number", step: "0.01", min: kind === "income" ? undefined : "0.01", required: true })}
-          <label className="hf-full-field">Descripción
-            <textarea maxLength={500} rows={3} value={values.description ?? ""}
+          <div className="hf-full-field hf-movement-description">
+            <DescriptionTooltip description={row ? values.description : null}>
+              <label htmlFor={descriptionId}>Descripción</label>
+            </DescriptionTooltip>
+            <textarea id={descriptionId} maxLength={500} rows={3} value={values.description ?? ""}
               onChange={(event) => set("description", event.target.value)} />
-          </label>
+          </div>
         </>}
         {type === "archive" && <p>Retirar a {row.name} del listado de empleados y conservar su historial</p>}
         {memberShare && !row?.agencykey_id && <fieldset className="hf-edit-group">

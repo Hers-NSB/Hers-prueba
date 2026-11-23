@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dailyFinance, financeBreakdown, missingAgencyKeyDays, netSales, ONLYFANS, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
+import { dailyFinance, financeBreakdown, missingAgencyKeyDays, netSales, ONLYFANS, operatingIncomeSeries, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
 import { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
@@ -202,4 +202,21 @@ test("elige los días incompletos y conserva los ceros confirmados", () => {
   ];
   assert.deepEqual(missingAgencyKeyDays({ from: "2026-11-01", to: "2026-11-03" }, sales, models),
     ["2026-11-02", "2026-11-03"]);
+});
+
+test("muestra todas las fechas del resultado y distingue el cero de un ingreso sin datos", () => {
+  const data = {
+    movements: [{ day: "2026-11-16", kind: "income", amount: 20 },
+      { day: "2026-11-17", kind: "investment", amount: 10 }],
+    sales: [{ day: "2026-11-18", net: 0 }],
+    commissions: [],
+  };
+  const range = { from: "2026-11-16", to: "2026-11-19" };
+  const points = operatingIncomeSeries(range, data, new Map([["2026-11-18", 0]]));
+  assert.deepEqual(points, [
+    { date: Date.parse("2026-11-16"), income: 20 },
+    { date: Date.parse("2026-11-17"), income: null },
+    { date: Date.parse("2026-11-18"), income: 0 },
+    { date: Date.parse("2026-11-19"), income: null },
+  ]);
 });
