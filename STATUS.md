@@ -4,8 +4,8 @@ Verificado el 22 de noviembre de 2026, hora de la sesión.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **28** de Cloudflare Workers al **100 %** del tráfico. Código publicado `2ad510f` del [PR #12](https://github.com/Hers-NSB/Hers-prueba/pull/12), versión `29e31377-18cb-4bb5-86e5-9ec02cf54962`.
-- Supabase de pruebas tiene aplicadas todas las migraciones del repositorio, hasta `20261123033155_finance_current_period_and_categories`. El identificador en el historial de migraciones coincide con el archivo del repositorio.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **29** de Cloudflare Workers al **100 %** del tráfico. Código publicado `17750f8` del [PR #13](https://github.com/Hers-NSB/Hers-prueba/pull/13), versión `fa0b9976-d891-4db3-9e35-2b99de7ac060`, despliegue `b7bd9be7-9a4e-4865-a7cf-bb0eacb3fb2a`.
+- Supabase de pruebas tiene aplicadas todas las migraciones del repositorio, hasta `20261123043232_finance_inactive_chatter_pay`. El identificador en el historial de migraciones coincide con el archivo del repositorio.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
 ## Finanzas y Conectores
@@ -13,7 +13,7 @@ Verificado el 22 de noviembre de 2026, hora de la sesión.
 - **Empleados** muestra las ventas netas de la quincena en las tablas **Modelos** y **Otros empleados**. Los chatters desactivados conservan su historial y los importes que les correspondan según las ventas y la vigencia del porcentaje.
 - **Pagos** muestra las ventas acumuladas, el pago estimado y los días importados. Los cambios de porcentaje hechos desde la interfaz rigen toda la quincena actual. Los cortes cerrados y las vigencias existentes fuera de la operación se conservan.
 - El cierre quincenal genera automáticamente los cortes. Cuando se confirma un pago, se registra una sola inversión en **Equipo** para empleados o en **Modelo** para modelos.
-- El avance verificado de la quincena del 16 al 30 de noviembre es de 6 de 15 días importados. La base tiene 0 cortes registrados. La comprobación de un pago real queda pendiente del primer cierre.
+- El avance verificado de la quincena del 16 al 30 de noviembre es de 7 de 15 días importados. La comprobación de un pago real queda pendiente del primer cierre.
 - Se validaron el cierre y la confirmación con pruebas SQL, además de la interfaz de escritorio y móvil con datos simulados.
 
 ## Postulaciones
@@ -25,7 +25,7 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ### 22 de noviembre de 2026 · Ajustes de Finanzas
 
-Rama `codex/ajustes-finanzas-noviembre`, basada en `db91fe5`.
+Rama `codex/ajustes-finanzas-noviembre`, basada en `db91fe5`. [PR #13](https://github.com/Hers-NSB/Hers-prueba/pull/13).
 
 - **Resumen del período** usa dos columnas en móvil. **Resultado operativo** muestra solo ingresos y conserva todas las fechas del rango. El desplazamiento queda dentro del gráfico cuando el espacio no alcanza.
 - **Editar movimiento** muestra la descripción propia del movimiento en el tooltip junto al campo.
@@ -33,7 +33,7 @@ Rama `codex/ajustes-finanzas-noviembre`, basada en `db91fe5`.
 - La migración `20261123043232_finance_inactive_chatter_pay.sql` conserva las ventas atribuidas a chatters desactivados para el estimado y el cierre, según el porcentaje vigente en cada fecha. Supabase de pruebas tenía un chatter desactivado con ventas del 16 al 18 y porcentaje con vigencia posterior. Guardar su porcentaje desde Pagos lo aplica a la quincena actual.
 - Se mantuvo el conteo inclusivo del cierre. Supabase de pruebas confirmó siete días finalizados, del 16 al 22 de noviembre, para el corte del 16 al 30.
 - Pasaron lint, build, 26 pruebas JavaScript y cinco de integración en PostgreSQL local. Chromium verificó la cuadrícula a 320, 390, 768 y 1440 px, las fechas, el tooltip táctil y la edición del porcentaje con datos simulados.
-- Queda pendiente aplicar la migración a Supabase de pruebas y desplegar el build en el Worker.
+- Se aplicó la migración a Supabase de pruebas y pasó `test/finance_current_period.integration.sql` en una transacción que revirtió los datos de prueba. Cloudflare confirmó la versión 29 al 100 % del tráfico, la redacción de cadenas de consulta y el disparador de importación. La portada y los tres recursos del build coincidieron byte a byte. Conectores devolvió 401 sin sesión y la ruta retirada devolvió 410.
 
 
 ### 22 de noviembre de 2026 · Finanzas
