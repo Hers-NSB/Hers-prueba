@@ -113,14 +113,15 @@ async function readCredential(request) {
 
 export async function handleIntegrations(request, project, env, run, send = fetch, directory) {
   const reference = crypto.randomUUID().slice(0, 12);
-  const json = (payload, status = 200) => Response.json(payload, {
-    status, headers: { "Cache-Control": "no-store", "X-HERS-Request-ID": reference },
+  const json = (payload, status = 200, headers) => Response.json(payload, {
+    status, headers: { "Cache-Control": "no-store", "X-HERS-Request-ID": reference, ...headers },
   });
   const route = new URL(request.url);
   const action = route.pathname.slice("/api/admin/integrations".length);
-  const fail = (status, code, message) => {
-    if (status >= 500 || status === 429) console.warn("Conectores", { code, reference, status });
-    return json({ error: `[${code}] ${message} · Ref. ${reference}`, code, reference }, status);
+  const fail = (status, code, message, { upstreamStatus, retryAfterSeconds } = {}) => {
+    if (status >= 500 || status === 429) console.warn("Conectores", { code, reference, status, upstreamStatus, retryAfterSeconds });
+    const headers = retryAfterSeconds === undefined ? undefined : { "Retry-After": String(retryAfterSeconds) };
+    return json({ error: `[${code}] ${message} · Ref. ${reference}`, code, reference }, status, headers);
   };
   try {
     if (!env.HERS_INTEGRATIONS_SECRET || !env.SUPABASE_PUBLISHABLE_KEY) {
@@ -166,7 +167,7 @@ export async function handleIntegrations(request, project, env, run, send = fetc
     }
     return fail(404, "CON-ROUTE", "Operación no disponible");
   } catch (error) {
-    if (error instanceof IntegrationError) return fail(error.status, error.code, error.message);
+    if (error instanceof IntegrationError) return fail(error.status, error.code, error.message, error);
     return fail(502, "CON-UNEXPECTED", "La operación no se pudo completar");
   }
 }

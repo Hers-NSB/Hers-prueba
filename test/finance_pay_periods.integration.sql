@@ -36,6 +36,15 @@ begin
     raise exception 'Debe esperar al último día completo de la quincena';
   end if;
 
+  delete from hers_private.finance_final_days where day = cutoff - 2;
+  if (public.hers_payroll_worker(token, 'next', jsonb_build_object('after_day', cutoff - 2))->>'day')
+       is distinct from cutoff::text
+     or (public.hers_payroll_worker(token, 'next')->>'day') is distinct from (cutoff - 2)::text
+     or exists (select from public.finance_payments p where p.creator_id = model_id and p.period_end = cutoff) then
+    raise exception 'Saltar un día solo afecta esa búsqueda y no cierra la quincena incompleta';
+  end if;
+  insert into hers_private.finance_final_days (day) values (cutoff - 2);
+
   payload := jsonb_build_object(
     'p_day', cutoff,
     'p_sales', jsonb_build_array(jsonb_build_object('creator_key', model_key, 'creator_name', 'Modelo de pago', 'net', 100)),

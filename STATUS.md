@@ -23,9 +23,15 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 23 de noviembre de 2026 · Reintentos de AgencyKey
+
+- `cloudflare/worker.js` reintenta la consulta puntual de transacciones ante 502, 503 y 504. Ante 429 respeta las esperas de hasta diez segundos y devuelve al cliente las mayores. Finanzas detiene el lote si recibe un 429.
+- Si una consulta de transacciones agota los intentos, no se guarda un día parcial. El disparador prueba el siguiente día pendiente de la misma quincena y vuelve a buscar el día más antiguo en el siguiente ciclo.
+- `20261123170000_finance_next_pending_import.sql` habilita la búsqueda del siguiente día pendiente sin marcar fechas como importadas. Despliegue pendiente en Cloudflare y Supabase de pruebas.
+
 ### 23 de noviembre de 2026 · Actualización, gráfico y pagos
 
-Rama `codex/finanzas-actualizacion-y-pagos`. Supabase registró entre 370 y 391 respuestas exitosas por operación de lectura frecuente de Finanzas en 24 horas. La consulta de registros no devolvió respuestas 429 en esas rutas. Cloudflare registró respuestas 502 en la sincronización y el directorio. El origen de esas respuestas queda por confirmar.
+Rama `codex/finanzas-actualizacion-y-pagos`. Supabase registró entre 370 y 391 respuestas exitosas por operación de lectura frecuente de Finanzas en 24 horas. La consulta de registros no devolvió respuestas 429 en esas rutas. Las trazas de Cloudflare y Supabase confirmaron un 502 de transacciones en AgencyKey, otro intento con neto sin confirmar y dos fallos del directorio con SQLSTATE 21000. Supabase ya tiene la actualización del directorio acotada a la revisión de la conexión.
 
 - `src/panel/finanzas/finanzas.jsx` actualiza únicamente el cálculo de la quincena en segundo plano mientras Empleados está visible. Las lecturas cancelables se descartan al cambiar de contexto. La sincronización manual reutiliza los días completos, vuelve a pedir el día actual si está en el período y corta el lote si recibe HTTP 429.
 - `src/panel/finanzas/FinanceCharts.jsx` y `finanzas.css` muestran Ingreso e Inversión como áreas adaptables, aumentan el contraste y ocultan los controles visuales de incremento en los importes y porcentajes.
