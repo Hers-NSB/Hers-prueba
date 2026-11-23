@@ -23,6 +23,10 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 23 de noviembre de 2026 · Importes del gráfico
+
+Resultado operativo muestra Ingreso e Inversión en dólares enteros, con el mismo estilo en todas las fechas.
+
 ### 23 de noviembre de 2026 · Pagos en dólares enteros
 
 La migración `20261123161750_finance_whole_pay_current_period.sql` aplica desde el inicio de la quincena en curso el último porcentaje guardado para cada participante. La estimación y los cierres nuevos redondean el pago total al dólar más cercano. En Supabase de pruebas, SMELL tiene $209,16 en ventas atribuidas y un pago estimado de $21 con el 10 % desde el día 16.

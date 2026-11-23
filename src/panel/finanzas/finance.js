@@ -3,8 +3,6 @@ export const kinds = { income: "Ingreso", expense: "Inversión", investment: "In
 
 const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 });
 export const usd = (value) => value == null ? "—" : money.format(value);
-const preciseMoney = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol" });
-export const usdPrecise = (value) => value == null ? "—" : preciseMoney.format(value);
 export const isActiveFinanceEntry = ({ archived_on, agencykey_available }) => !archived_on && agencykey_available !== false;
 export const dateKey = (date) =>
   [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");

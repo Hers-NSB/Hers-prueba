@@ -251,7 +251,6 @@
 .hf-chart-legend span { color: var(--hf-ink); display: flex; align-items: center; gap: .35rem; }
 .hf-chart-legend span::before { content: ""; width: .65rem; height: .65rem; border-radius: 50%; background: var(--hf-accent); }
 .hf-chart-legend span:nth-child(2)::before { background: var(--hf-expense); }
-.hf-chart-legend span:nth-child(3)::before { background: var(--hf-profit); }
 .hf-dialog .hf-calendar-month button { min-width: 32px; }
 .hf-calendar[data-single="true"] { width: min(330px, calc(100vw - 4rem)); grid-template-columns: minmax(0, 1fr); }
 :is(.hf, .hf-dialog) .hf-calendar-grid button[aria-pressed="true"] {
