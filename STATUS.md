@@ -50,7 +50,7 @@ El total de días ya se calculaba con fechas inclusivas del período. Cada día 
 - Las migraciones y los cinco archivos SQL de integración pasaron en PostgreSQL local mediante PGlite, con roles y funciones de sesión de prueba. Incluyen un cierre, la confirmación idempotente, chatters inactivos, asignaciones manuales, porcentajes y el historial.
 - La prueba `test/finance_current_period.integration.sql` pasó en Supabase de pruebas tras aplicar la migración. La consulta de la quincena devolvió ventas y pago estimado para un empleado asignado manualmente. El chatter desactivado conserva ventas atribuidas del 16 al 18 de noviembre. Su primera vigencia empieza el 22, de modo que esas ventas no generan un pago estimado con la configuración existente.
 - Cloudflare confirmó la versión 28 al 100 %, la redacción de cadenas de consulta y el disparador de importación. El sitio público entregó el HTML, los estilos y los módulos JavaScript del build publicado. Conectores devolvió 401 sin sesión y la ruta retirada de cambio de contraseña conservó la respuesta 410.
-- La quincena del 16 al 30 de noviembre sigue abierta con 6 de 15 días importados y 0 cortes. Se programó una comprobación diaria de solo lectura desde el 1 de diciembre para verificar el primer pago real registrado y su inversión vinculada.
+- La quincena del 16 al 30 de noviembre sigue abierta con 6 de 15 días importados y 0 cortes. La comprobación diaria del primer pago se desactivó a solicitud del usuario. La verificación queda pendiente hasta que se registre un pago real.
 
 ## CONTEXTO PARA CONTINUAR EN UN NUEVO CHAT
 
@@ -59,7 +59,7 @@ Hers-prueba es el entorno de pruebas del panel de administración y la portada d
 1. Revisa el PR y compara la versión del Worker con la última migración aplicada en **Despliegue**.
 2. Para continuar con la interfaz, empieza en `src/panel/finanzas/finanzas.jsx`, `FinanceCharts.jsx`, `PaymentHistory.jsx` y `finanzas.css`. El reparto de Resumen se calcula en `distribution.js`.
 3. Para continuar con ventas, porcentajes o pagos, revisa la migración del 23 de noviembre en UTC junto con `20261122203513_finance_payment_details.sql`, `20261123015138_finance_current_pay_independent_sales.sql` y `cloudflare/integrations.js`. Guarda las ventas y los porcentajes históricos con el corte e importa días usando la zona de AgencyKey.
-4. Cuando se registre el primer pago real, verifica que tenga una sola inversión vinculada por `finance_payment_id`, con el mismo importe y la categoría correspondiente. La comprobación está programada. Para repetir la prueba de integración en Supabase de pruebas, ejecuta `test/finance_current_period.integration.sql`.
+4. Cuando se registre el primer pago real, verifica que tenga una sola inversión vinculada por `finance_payment_id`, con el mismo importe y la categoría correspondiente. Para repetir la prueba de integración en Supabase de pruebas, ejecuta `test/finance_current_period.integration.sql`.
 5. Al terminar cada conjunto de cambios, actualiza este archivo y revisa el README.
 
 ```sh
