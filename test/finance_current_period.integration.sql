@@ -35,7 +35,7 @@ begin
   insert into public.finance_member_availability (member_id, effective_on, available)
   values (inactive_chatter, period_start, false);
   insert into public.finance_agencykey_employee_net (day, totals)
-  values (period_start, jsonb_build_object(chatter_key, 2.25))
+  values (period_start, jsonb_build_object(chatter_key, 209.16))
   on conflict (day) do update set totals = finance_agencykey_employee_net.totals || excluded.totals;
 
   perform set_config('hers.test.inactive_chatter', inactive_chatter::text, true);
@@ -71,19 +71,19 @@ declare
   category_name text := 'Categoría ' || gen_random_uuid();
 begin
   if (current_pay->'sales'->>recipient)::numeric is distinct from 150.10
-     or (current_pay->'amounts'->>recipient)::numeric is distinct from 30.02 then
+     or (current_pay->'amounts'->>recipient)::numeric is distinct from 30 then
     raise exception 'El pago manual debe sumar solo las ventas de sus modelos asignados en la fecha de cada venta';
   end if;
 
   if (current_pay->'amounts'->>('chatter:' || current_setting('hers.test.inactive_chatter')))::numeric
-      is distinct from 0.23 then
+      is distinct from 21 then
     raise exception 'El chatter inactivo conserva la comisión sobre ventas atribuidas con porcentaje vigente';
   end if;
 
   perform public.finance_save_current_pay_rate(staff, null, 'Empleado manual de pruebas', 'Dropper', 50, array[first_model, second_model]);
   current_pay := public.finance_current_pay();
   if (current_pay->'sales'->>recipient)::numeric is distinct from 150.10
-     or (current_pay->'amounts'->>recipient)::numeric is distinct from 75.06
+     or (current_pay->'amounts'->>recipient)::numeric is distinct from 75
      or (select count(*) from public.finance_model_shares where member_id = staff
        and effective_on in (cut_start, cut_start + 1) and percent = 50 and creator_ids = array[first_model, second_model]) <> 2
      or not exists (select from public.finance_model_shares where member_id = staff and effective_on = cut_start + 16 and percent = 15)
@@ -92,7 +92,7 @@ begin
   end if;
 
   perform public.finance_save_current_pay_rate(null, first_model, null, null, 25, '{}');
-  if (public.finance_current_pay()->'amounts'->>('model:' || first_model))::numeric is distinct from 25.01 then
+  if (public.finance_current_pay()->'amounts'->>('model:' || first_model))::numeric is distinct from 25 then
     raise exception 'El modelo debe cobrar según el nuevo porcentaje de toda la quincena';
   end if;
 
@@ -115,11 +115,11 @@ declare
   cutoff date := current_setting('hers.test.manual_period')::date;
 begin
   if not exists (select from hers_private.finance_period_pay_details(cutoff, cutoff + 1)
-      where member_id = staff and amount = 75.06 and net_sales = 150.10 and pay_rate_min = 50 and pay_rate_max = 50) then
+      where member_id = staff and amount = 75 and net_sales = 150.10 and pay_rate_min = 50 and pay_rate_max = 50) then
     raise exception 'El cierre debe tomar la misma base e importe que el estimado';
   end if;
   if not exists (select from hers_private.finance_period_pay_details(cutoff, cutoff + 1)
-      where member_id = current_setting('hers.test.inactive_chatter')::uuid and amount = 0.23 and net_sales = 2.25) then
+      where member_id = current_setting('hers.test.inactive_chatter')::uuid and amount = 21 and net_sales = 209.16) then
     raise exception 'El cierre conserva el pago del chatter inactivo';
   end if;
 end;

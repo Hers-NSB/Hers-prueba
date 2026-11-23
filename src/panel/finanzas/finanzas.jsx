@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { dateKey, financeBreakdown, investmentTotal, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd, usdPayment } from "./finance";
+import { dateKey, financeBreakdown, investmentTotal, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { calculateModelDistribution, effectiveShare, isChatter } from "./distribution";
@@ -226,7 +226,8 @@ export default function Finanzas() {
         currentPeriod={payments.type === "modelShare" || isChatter(paymentPerson.role) || paymentRate ? data.payPeriod : null}
         currentAmount={data.currentPay[payments.recipient]} currentNet={data.currentPaySales[payments.recipient]}
         financeRevision={revision} movements={data.allMovements}
-        onEdit={() => setEditor({ type: payments.type, row: paymentPerson })} onConfirmed={reload} onClose={() => setPayments(null)} />}
+        onEdit={() => setEditor({ type: payments.type, row: paymentPerson })}
+        onArchive={() => setEditor({ type: "archive", row: paymentPerson })} onConfirmed={reload} onClose={() => setPayments(null)} />}
       {editor && <Editor editor={editor} data={data} onChange={reload} onClose={() => setEditor(null)}
         onSaved={() => { setEditor(null); reload(); }} />}
 
@@ -338,17 +339,16 @@ function Movements({ data, filters, onFilter, onEdit }) {
   </section>;
 }
 
-const isCurrent = (entry) => entry.agencykey_available !== false;
 const percentage = new Intl.NumberFormat("es-VE", { style: "percent", maximumFractionDigits: 2 });
 const percentLabel = (value) => percentage.format(Number(value) / 100);
 
 function Employees({ data, directoryError, onEdit, onPayments }) {
   const currentDay = data.payPeriod?.day ?? dateKey(new Date());
   const chatters = data.members.filter(({ role }) => isChatter(role));
-  const creators = data.creators.filter(isCurrent);
+  const creators = data.creators.filter(isActiveFinanceEntry);
   const participants = [
-    ...data.members.map((row) => [row, "member", `chatter:${row.id}`, !row.archived_on && isCurrent(row)]),
-    ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isCurrent(row)]),
+    ...data.members.map((row) => [row, "member", `chatter:${row.id}`, isActiveFinanceEntry(row)]),
+    ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isActiveFinanceEntry(row)]),
   ].sort(([a], [b]) => a.name.localeCompare(b.name, "es"));
   const headings = ["Nombre", "Rol", "Porcentaje", "Ventas netas ($)", "Pago ($)", "Acciones"];
   const isModel = ([row, type]) => type === "modelShare"
@@ -357,13 +357,13 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     const rate = effectiveShare(data.rates, recipient, currentDay);
     const eligible = type === "modelShare" || isChatter(row.role) || Boolean(rate);
     const payout = data.currentPay[recipient] ?? (data.payPeriod?.day === data.payPeriod?.from && row.agencykey_id ? 0 : null);
-    const amount = payout != null && rate ? usdPayment(payout) : !eligible || !rate ? "—"
+    const amount = payout != null && rate ? usd(payout) : !eligible || !rate ? "—"
       : rate.basis === "employee_sales" && !row.agencykey_id ? "Pendiente de vincular" : "Pendiente de sincronizar";
     return [recipient, [active ? row.name : <>{row.name} <small className="hf-employee-status">Inactivo</small></>, row.role,
       rate ? percentLabel(rate.percent) : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
       <div className="hf-actions">
         <button type="button" onClick={() => onPayments({ type, person: row, recipient })}>Pagos</button>
-        {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];
+      </div>]];
   };
   const models = participants.filter(isModel).map(toRow);
   const otherEmployees = participants.filter((entry) => !isModel(entry)).map(toRow);
@@ -407,7 +407,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setValues((current) => ({ ...current, [key]: value }));
-  const availableModels = data.creators.filter((creator) => isCurrent(creator) || values.creator_ids.includes(creator.id));
+  const availableModels = data.creators.filter((creator) => isActiveFinanceEntry(creator) || values.creator_ids.includes(creator.id));
   const memberShare = type === "member";
   const byEmployee = memberShare && isChatter(values.role);
   const field = (label, key, props) => <label>{label}<input {...props} value={values[key] ?? ""} onChange={(e) => set(key, e.target.value)} /></label>;

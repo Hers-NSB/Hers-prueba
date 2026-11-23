@@ -2,7 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { usdPayment as usd } from "./finance";
+import { isActiveFinanceEntry, usd } from "./finance";
 import { isChatter } from "./distribution";
 import PeriodPicker from "./PeriodPicker";
 
@@ -45,7 +45,7 @@ function CurrentPeriod({ id, period, net, amount }) {
   </section>;
 }
 
-export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, movements, onEdit, onConfirmed, onClose }) {
+export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, movements, onEdit, onArchive, onConfirmed, onClose }) {
   const id = useId();
   const [records, setRecords] = useState([]);
   const [loadError, setLoadError] = useState("");
@@ -149,19 +149,21 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
   const movementByPayment = new Map(movements.filter((row) => row.finance_payment_id)
     .map((row) => [row.finance_payment_id, row]));
   const activeRate = rate ? percent(rate.percent) : "—";
+  const editableManual = type === "member" && !person.agencykey_id && isActiveFinanceEntry(person);
 
   return <dialog className="hf-dialog hf-finance-dialog hf-payment-panel" aria-labelledby={id}
     ref={(node) => { if (node && !node.open) node.showModal(); }}
     onCancel={(event) => { event.preventDefault(); if (!busy && !confirming) onClose(); }}>
     <header className="hf-payment-header">
       <div><h2 id={id}>Pagos de {person.name}</h2>
+        {!isActiveFinanceEntry(person) && <small className="hf-employee-status">Inactivo</small>}
         <p>{type === "modelShare" ? "Modelo" : "Empleado"}</p>
         {rateInput === null ? <p className="hf-payment-rate">
-          Porcentaje de pago vigente {person.archived_on ? activeRate :
-            <button type="button" className="hf-payment-rate-value" aria-label={`Porcentaje de pago vigente ${activeRate}`}
+          Porcentaje de pago de la quincena {person.archived_on ? activeRate :
+            <button type="button" className="hf-payment-rate-value" aria-label={`Porcentaje de pago de la quincena ${activeRate}`}
               disabled={busy} onClick={() => setRateInput(String(rate?.percent ?? 0))}>{activeRate}</button>}
         </p> : <form className="hf-payment-rate" onSubmit={saveRate}>
-          <label htmlFor={`${id}-rate`}>Porcentaje de pago vigente</label>
+          <label htmlFor={`${id}-rate`}>Porcentaje de pago de la quincena</label>
           <input id={`${id}-rate`} type="number" min="0" max="100" step="0.01" required autoFocus
             disabled={busy} value={rateInput} onChange={(event) => setRateInput(event.target.value)} />
           <span aria-hidden="true">%</span>
@@ -171,8 +173,10 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
         </form>}
       </div>
       <div className="hf-actions">
-        {type === "member" && !person.agencykey_id && !person.archived_on &&
-          <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onEdit}>Editar</button>}
+        {editableManual && <>
+          <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onEdit}>Editar</button>
+          <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onArchive}>Eliminar</button>
+        </>}
         <button type="button" aria-label="Cerrar pagos" disabled={busy} onClick={onClose}><X size={18} /></button>
       </div>
     </header>

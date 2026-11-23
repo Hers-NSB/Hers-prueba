@@ -23,6 +23,12 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 23 de noviembre de 2026 · Pagos en dólares enteros
+
+La migración `20261123161750_finance_whole_pay_current_period.sql` aplica desde el inicio de la quincena en curso el último porcentaje guardado para cada participante. La estimación y los cierres nuevos redondean el pago total al dólar más cercano. En Supabase de pruebas, SMELL tiene $209,16 en ventas atribuidas y un pago estimado de $21 con el 10 % desde el día 16.
+
+La etiqueta Inactivo aparece también al abrir Pagos. El botón Eliminar de los empleados manuales abre desde Pagos la confirmación que archiva al empleado y conserva su historial. La interfaz se comprobó en Chromium a 320, 768 y 1440 px.
+
 ### 23 de noviembre de 2026 · Despliegue de Finanzas
 
 Se publicaron el gráfico de áreas y los reintentos. El gráfico conserva todas las fechas del rango. Pagos conserva la edición en línea del porcentaje y el botón Editar para empleados manuales.

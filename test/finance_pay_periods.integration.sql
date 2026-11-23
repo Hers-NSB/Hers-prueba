@@ -54,7 +54,7 @@ begin
   perform public.hers_payroll_worker(token, 'import', payload);
   if (select count(*) from public.finance_payments p
       where p.paid_at is null and p.period_end = cutoff
-        and ((p.creator_id = model_id and p.amount = 55.05 and p.net_sales = 225.25
+        and ((p.creator_id = model_id and p.amount = 55 and p.net_sales = 225.25
           and p.pay_rate_min = 20 and p.pay_rate_max = 30)
           or (p.member_id = chatter_id and p.amount = 25 and p.net_sales = 100
           and p.pay_rate_min = 25 and p.pay_rate_max = 25))) <> 2 then
@@ -63,7 +63,7 @@ begin
 
   update public.finance_model_shares set percent = 40 where creator_id = model_id and effective_on = cutoff;
   if not exists (select from public.finance_payments where creator_id = model_id and period_end = cutoff
-      and net_sales = 225.25 and pay_rate_min = 20 and pay_rate_max = 30 and amount = 55.05)
+      and net_sales = 225.25 and pay_rate_min = 20 and pay_rate_max = 30 and amount = 55)
      or not exists (select from public.finance_payments where creator_id = model_id and period_end = '2001-01-31'
       and net_sales is null and pay_rate_min is null and pay_rate_max is null and amount = 50.13) then
     raise exception 'El historial debe conservar sus importes y los datos capturados al cierre';
@@ -174,8 +174,8 @@ declare
 begin
   if (current_pay->'sales'->>model_key)::numeric is distinct from 250.25
      or (current_pay->'sales'->>employee_key)::numeric is distinct from 80.40
-     or (current_pay->'amounts'->>model_key)::numeric is distinct from 100.10
-     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 20.10 then
+     or (current_pay->'amounts'->>model_key)::numeric is distinct from 100
+     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 20 then
     raise exception 'La quincena actual debe mostrar las ventas y el pago estimado de cada persona';
   end if;
   if (current_pay->>'importedDays')::integer is distinct from current_setting('hers.test.imported_days')::integer

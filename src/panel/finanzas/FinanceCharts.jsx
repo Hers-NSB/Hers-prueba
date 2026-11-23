@@ -1,7 +1,7 @@
 import {
   Area, AreaChart, CartesianGrid, Dot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { dailyFinance, usdPayment } from "./finance";
+import { dailyFinance, usdPrecise } from "./finance";
 
 const shortDate = new Intl.DateTimeFormat("es-VE", { month: "short", day: "numeric", timeZone: "UTC" });
 const longDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "long", timeZone: "UTC" });
@@ -36,7 +36,7 @@ export default function FinanceCharts({ data, range, agencyByDay, pendingDays })
               contentStyle={{ background: "var(--hf-bg)", border: "1px solid var(--hf-line)", borderRadius: 8, whiteSpace: "normal" }}
               labelStyle={{ color: "var(--hf-ink)" }} labelFormatter={(value) => longDate.format(value)}
               filterNull={false}
-              formatter={(value, name, item) => [usdPayment(value),
+              formatter={(value, name, item) => [usdPrecise(value),
                 item.dataKey === "income" && maxDates.has(item.payload.date) ? "Ingreso · Máximo" : name]}
               isAnimationActive={false} />
             <Area type="linear" dataKey="income" name="Ingreso" stroke="var(--hf-accent)" strokeWidth={2}

@@ -232,7 +232,11 @@
   .hf-choice option:is(:hover, :focus-visible, :checked) { background: var(--hf-field); }
 }
 .hf-full-field, .hf-model-options { grid-column: 1 / -1; min-width: 0; }
-.hf-employee-status { display: inline-block; margin-inline-start: .35rem; white-space: nowrap; }
+.hf .hf-employee-status, .hf-dialog .hf-employee-status {
+  display: inline-block; margin-inline-start: .35rem; padding: .12rem .4rem; border: 1px solid var(--hf-expense);
+  border-radius: 5px; color: var(--hf-ink); font-size: .75rem; line-height: 1.25; white-space: nowrap;
+}
+.hf-payment-header .hf-employee-status { margin: .35rem 0 0; }
 .hf .hf-employee-count { margin-top: .55rem; font-size: .9rem; }
 @container (max-width: 365px) {
   .hf-finance .hf-overview-kpis { grid-template-columns: minmax(0, 1fr); }
@@ -276,7 +280,7 @@
   position: sticky; top: 0; z-index: 7; display: flex; justify-content: space-between; align-items: start;
   gap: .8rem; padding: 1rem; background: var(--hf-surface); border-bottom: 1px solid var(--hf-line);
 }
-.hf-payment-header .hf-actions { flex-wrap: nowrap; margin: 0; }
+.hf-payment-header .hf-actions { margin: 0; }
 .hf-payment-header h2 { overflow-wrap: anywhere; }
 .hf-payment-header p { margin: .35rem 0 0; color: var(--hf-muted); font-size: .88rem; }
 .hf-payment-rate { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
