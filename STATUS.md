@@ -4,8 +4,8 @@ Verificado el 23 de noviembre de 2026.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **30** de Cloudflare Workers al **100 %**. Código publicado `4fb8ae0` del [PR #14](https://github.com/Hers-NSB/Hers-prueba/pull/14), versión `212d1270-7a10-4da0-b43e-8531d8936d33`.
-- Supabase de pruebas tiene aplicadas las migraciones hasta `20261123155240_finance_next_pending_import`. El historial también contiene `20261123043232_finance_inactive_chatter_pay`, que cubre la comisión de chatters inactivos.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **31** de Cloudflare Workers al **100 %**. Código publicado `f5bbe19` del [PR #14](https://github.com/Hers-NSB/Hers-prueba/pull/14), versión `fb90e003-3e23-444e-b4ca-9531ea223a8c`.
+- Supabase de pruebas tiene aplicadas las migraciones hasta `20261123161750_finance_whole_pay_current_period`. El historial también contiene `20261123043232_finance_inactive_chatter_pay`, que cubre la comisión de chatters inactivos.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
 ## Finanzas y Conectores
@@ -27,7 +27,7 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 La migración `20261123161750_finance_whole_pay_current_period.sql` aplica desde el inicio de la quincena en curso el último porcentaje guardado para cada participante. La estimación y los cierres nuevos redondean el pago total al dólar más cercano. En Supabase de pruebas, SMELL tiene $209,16 en ventas atribuidas y un pago estimado de $21 con el 10 % desde el día 16.
 
-La etiqueta Inactivo aparece también al abrir Pagos. El botón Eliminar de los empleados manuales abre desde Pagos la confirmación que archiva al empleado y conserva su historial. La interfaz se comprobó en Chromium a 320, 768 y 1440 px.
+La etiqueta Inactivo aparece también al abrir Pagos. El botón Eliminar de los empleados manuales abre desde Pagos la confirmación que archiva al empleado y conserva su historial. Pasaron GitHub Actions y las dos integraciones SQL de pagos contra Supabase de pruebas. El archivado y la etiqueta se verificaron en Chromium a 320, 768 y 1440 px con un servidor simulado.
 
 ### 23 de noviembre de 2026 · Despliegue de Finanzas
 
