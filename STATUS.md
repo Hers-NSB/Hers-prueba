@@ -11,7 +11,7 @@ Verificado el 22 de noviembre de 2026.
 
 - Supabase registra `20261123015138_finance_current_pay_independent_sales`. Empleados y Pagos muestran las ventas netas de la quincena aunque falte definir el porcentaje. La consulta devuelve ventas para cinco modelos y dos chatters. Cloudflare Workers publicó la versión 25 desde el commit `ce514885`.
 
-- Supabase registra `20261123020150_finance_current_pay_direct_percentage`. El porcentaje configurado se aplica directamente a las ventas netas de cada día. La migración no modificó cortes registrados.
+- Supabase registra `20261123020150_finance_current_pay_direct_percentage`. El porcentaje configurado se aplica directamente a las ventas netas de cada día. La migración no modificó cortes registrados. La versión 26 de Cloudflare sirve el 100 % del tráfico desde el commit `8e90864c`.
 
 ## Finanzas
 
