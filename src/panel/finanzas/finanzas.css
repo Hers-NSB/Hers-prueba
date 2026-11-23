@@ -279,6 +279,13 @@
 .hf-payment-header .hf-actions { flex-wrap: nowrap; margin: 0; }
 .hf-payment-header h2 { overflow-wrap: anywhere; }
 .hf-payment-header p { margin: .35rem 0 0; color: var(--hf-muted); font-size: .88rem; }
+.hf-payment-rate { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.hf-payment-rate label, .hf-payment-rate .hf-notice { flex-basis: 100%; }
+.hf-payment-panel .hf-payment-rate input { width: 5.5rem; }
+.hf-payment-panel .hf-payment-rate-value {
+  min-height: 32px; padding: .15rem .35rem; color: var(--hf-accent);
+  border-color: transparent; background: transparent; text-decoration: underline;
+}
 .hf-payment-content { padding: 1rem; }
 .hf-payment-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 0; gap: .5rem; }
 .hf-payment-kpis article { padding: .65rem; }

@@ -24,8 +24,8 @@ language sql stable set search_path = '' as $$
       where a.member_id = m.id and a.effective_on <= e.day
       order by a.effective_on desc limit 1
     ) status on true
-    -- Las ventas atribuidas generan comisión aunque el directorio marque al chatter como inactivo.
     where e.day between p_from and p_to and rate.basis = 'employee_sales'
+      -- A directory deactivation does not cancel sales attributed to a chatter.
       and (coalesce(status.available, true) or e.totals ? m.agencykey_id)
   ), individual_pay as (
     select * from model_pay

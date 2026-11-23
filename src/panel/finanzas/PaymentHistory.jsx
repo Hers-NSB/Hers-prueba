@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { usdPayment as usd } from "./finance";
+import { isChatter } from "./distribution";
 import PeriodPicker from "./PeriodPicker";
 
 const moneyDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "short", timeZone: "UTC" });
@@ -55,6 +56,8 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
   const [confirming, setConfirming] = useState(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [rateInput, setRateInput] = useState(null);
+  const [rateError, setRateError] = useState("");
   const payrollDay = currentPeriod?.day;
   const importedDays = currentPeriod?.importedDays;
 
@@ -104,6 +107,37 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     }
   }
 
+  async function saveRate(event) {
+    event.preventDefault();
+    if (busy) return;
+    const model = type === "modelShare";
+    const creatorIds = rate?.creator_ids ?? [];
+    if (!model && !isChatter(person.role) && Number(rateInput) > 0 && !creatorIds.length) {
+      setRateError("Abre Editar en este panel y asigna al menos un modelo.");
+      return;
+    }
+
+    setBusy(true);
+    setRateError("");
+    try {
+      const { error } = await supabase.rpc("finance_save_current_pay_rate", {
+        p_member_id: model ? null : person.id,
+        p_creator_id: model ? person.id : null,
+        p_name: model ? null : person.name,
+        p_role: model ? null : person.role,
+        p_percent: Number(rateInput),
+        p_creator_ids: creatorIds,
+      });
+      if (error) throw error;
+      setRateInput(null);
+      onConfirmed();
+    } catch {
+      setRateError("No se pudo guardar el porcentaje. Inténtalo nuevamente.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function closeConfirmation() {
     if (busy) return;
     setConfirming(null);
@@ -121,9 +155,24 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     onCancel={(event) => { event.preventDefault(); if (!busy && !confirming) onClose(); }}>
     <header className="hf-payment-header">
       <div><h2 id={id}>Pagos de {person.name}</h2>
-        <p>{type === "modelShare" ? "Modelo" : "Empleado"} · Porcentaje de pago vigente {activeRate}</p></div>
+        <p>{type === "modelShare" ? "Modelo" : "Empleado"}</p>
+        {rateInput === null ? <p className="hf-payment-rate">
+          Porcentaje de pago vigente {person.archived_on ? activeRate :
+            <button type="button" className="hf-payment-rate-value" aria-label={`Porcentaje de pago vigente ${activeRate}`}
+              disabled={busy} onClick={() => setRateInput(String(rate?.percent ?? 0))}>{activeRate}</button>}
+        </p> : <form className="hf-payment-rate" onSubmit={saveRate}>
+          <label htmlFor={`${id}-rate`}>Porcentaje de pago vigente</label>
+          <input id={`${id}-rate`} type="number" min="0" max="100" step="0.01" required autoFocus
+            disabled={busy} value={rateInput} onChange={(event) => setRateInput(event.target.value)} />
+          <span aria-hidden="true">%</span>
+          <button type="submit" disabled={busy}>{busy ? "Guardando…" : "Guardar"}</button>
+          <button type="button" disabled={busy} onClick={() => { setRateError(""); setRateInput(null); }}>Cancelar</button>
+          {rateError && <p className="hf-notice" role="alert">{rateError}</p>}
+        </form>}
+      </div>
       <div className="hf-actions">
-        <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onEdit}>Editar</button>
+        {type === "member" && !person.agencykey_id && !person.archived_on &&
+          <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onEdit}>Editar</button>}
         <button type="button" aria-label="Cerrar pagos" disabled={busy} onClick={onClose}><X size={18} /></button>
       </div>
     </header>

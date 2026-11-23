@@ -27,7 +27,7 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 - `cloudflare/worker.js` reintenta la consulta puntual de transacciones ante 502, 503 y 504. Ante 429 respeta las esperas de hasta diez segundos y devuelve al cliente las mayores. Finanzas detiene el lote si recibe un 429.
 - Si una consulta de transacciones agota los intentos, no se guarda un día parcial. El disparador prueba el siguiente día pendiente de la misma quincena y vuelve a buscar el día más antiguo en el siguiente ciclo.
-- `20261123170000_finance_next_pending_import.sql` habilita la búsqueda del siguiente día pendiente sin marcar fechas como importadas. Despliegue pendiente en Cloudflare y Supabase de pruebas.
+- `20261123155240_finance_next_pending_import.sql` habilita la búsqueda del siguiente día pendiente sin marcar fechas como importadas. Despliegue pendiente en Cloudflare y Supabase de pruebas.
 
 ### 23 de noviembre de 2026 · Actualización, gráfico y pagos
 
@@ -36,7 +36,7 @@ Rama `codex/finanzas-actualizacion-y-pagos`. Supabase registró entre 370 y 391 
 - `src/panel/finanzas/finanzas.jsx` actualiza únicamente el cálculo de la quincena en segundo plano mientras Empleados está visible. Las lecturas cancelables se descartan al cambiar de contexto. La sincronización manual reutiliza los días completos, vuelve a pedir el día actual si está en el período y corta el lote si recibe HTTP 429.
 - `src/panel/finanzas/FinanceCharts.jsx` y `finanzas.css` muestran Ingreso e Inversión como áreas adaptables, aumentan el contraste y ocultan los controles visuales de incremento en los importes y porcentajes.
 - Movimiento muestra su propia descripción al consultar la categoría de la fila. El panel Categorías muestra la descripción del catálogo. Pagos conserva el acceso a Editar para los empleados manuales y muestra centavos.
-- `supabase/migrations/20261123160000_finance_pay_inactive_chatters.sql` conserva la comisión de los chatters inactivos cuando AgencyKey atribuye ventas en fechas con porcentaje vigente. La misma regla se usa para el estimado y los próximos cierres.
+- `supabase/migrations/20261123043232_finance_inactive_chatter_pay.sql` conserva la comisión de los chatters inactivos cuando AgencyKey atribuye ventas en fechas con porcentaje vigente. La misma regla se usa para el estimado y los próximos cierres.
 - Las 25 pruebas de Node y las 5 integraciones SQL locales pasaron. La regresión de chatter inactivo falla con las migraciones anteriores y pasa con la nueva. Chromium comprobó a 320, 768 y 1440 px el ancho del gráfico, los tooltips, los campos numéricos, la edición desde Pagos y la consulta única de pagos al volver a la pestaña. El despliegue de Cloudflare y la migración del proyecto conectado quedan pendientes.
 
 ### 22 de noviembre de 2026 · Finanzas

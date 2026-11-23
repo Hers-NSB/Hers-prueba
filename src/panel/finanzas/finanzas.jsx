@@ -215,7 +215,7 @@ export default function Finanzas() {
       {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
       {loadError && <p className="hf-notice" role="alert">No se pudieron actualizar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
       {access && <div aria-busy={busy}>
-        {tab === "Resumen" && <Overview data={data} />}
+        {tab === "Resumen" && <Overview data={data} range={filters} />}
         {tab === "Movimiento" && <Movements data={data} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
@@ -265,7 +265,7 @@ function Breakdown({ data, dimension, title, label, catalog }) {
   </section>;
 }
 
-function Overview({ data }) {
+function Overview({ data, range }) {
   const { movements, sales } = data;
   const totals = summarize(data);
   const distribution = calculateModelDistribution(sales, data.distributionPlans, data.members, data.rates, data.availability, data.employeeNet);
@@ -288,7 +288,7 @@ function Overview({ data }) {
     <Suspense fallback={<section className="hf-section hf-trend" aria-busy="true">
       <h2>Resultado operativo</h2><div className="hf-chart" />
     </section>}>
-      <FinanceCharts data={data} agencyByDay={distribution.agencyByDay} pendingDays={distribution.pendingDays} />
+      <FinanceCharts data={data} range={range} agencyByDay={distribution.agencyByDay} pendingDays={distribution.pendingDays} />
     </Suspense>
     <div className="hf-breakdowns">
       <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />

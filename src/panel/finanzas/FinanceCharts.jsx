@@ -8,12 +8,15 @@ const longDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "long", timeZone:
 const axisMoney = new Intl.NumberFormat("es-VE", { notation: "compact", maximumFractionDigits: 1 });
 const axis = { fill: "var(--hf-muted)", fontSize: 11 };
 
-export default function FinanceCharts({ data, agencyByDay, pendingDays }) {
+export default function FinanceCharts({ data, range, agencyByDay, pendingDays }) {
   const title = "Resultado operativo";
-  const points = dailyFinance(data, agencyByDay).map((point) =>
-    pendingDays?.has(new Date(point.date).toISOString().slice(0, 10)) ? { ...point, income: null } : point)
-    .filter(({ income, expenses }) => income !== null || expenses !== null)
-    .map((point) => ({ ...point, expenses: point.expenses ?? 0 }));
+  const recorded = new Map(dailyFinance(data, agencyByDay).map((point) => [point.date, point]));
+  const points = [];
+  for (let date = Date.parse(range.from); date <= Date.parse(range.to); date += 86_400_000) {
+    const point = recorded.get(date);
+    const isPending = pendingDays?.has(new Date(date).toISOString().slice(0, 10));
+    points.push({ date, income: isPending ? null : point?.income ?? null, expenses: point?.expenses ?? 0 });
+  }
   const highest = points.reduce((maximum, { income }) => income == null ? maximum : Math.max(maximum, income), -Infinity);
   const maxDates = new Set(points.filter(({ income }) => income === highest).map(({ date }) => date));
 
@@ -32,6 +35,7 @@ export default function FinanceCharts({ data, agencyByDay, pendingDays }) {
             <Tooltip cursor={{ stroke: "var(--hf-muted)", strokeDasharray: "3 5" }}
               contentStyle={{ background: "var(--hf-bg)", border: "1px solid var(--hf-line)", borderRadius: 8, whiteSpace: "normal" }}
               labelStyle={{ color: "var(--hf-ink)" }} labelFormatter={(value) => longDate.format(value)}
+              filterNull={false}
               formatter={(value, name, item) => [usdPayment(value),
                 item.dataKey === "income" && maxDates.has(item.payload.date) ? "Ingreso · Máximo" : name]}
               isAnimationActive={false} />

@@ -156,7 +156,9 @@ begin
   insert into hers_private.finance_final_days (day)
     select report_day - 1 where report_day > start_day on conflict do nothing;
 
-  perform set_config('hers.test.current_report_day', report_day::text, true);
+  perform set_config('hers.test.imported_days', (
+    select count(*)::text from hers_private.finance_final_days where day >= start_day and day < report_day
+  ), true);
   perform set_config('hers.test.current_model', 'model:' || model, true);
   perform set_config('hers.test.current_chatter', 'chatter:' || employee, true);
 end;
@@ -166,7 +168,6 @@ set local role authenticated;
 do $$
 declare
   current_pay jsonb := public.finance_current_pay();
-  report_day date := current_setting('hers.test.current_report_day')::date;
   start_day date := (current_pay->>'from')::date;
   model_key text := current_setting('hers.test.current_model');
   employee_key text := current_setting('hers.test.current_chatter');
@@ -177,7 +178,7 @@ begin
      or (current_pay->'amounts'->>employee_key)::numeric is distinct from 20.10 then
     raise exception 'La quincena actual debe mostrar las ventas y el pago estimado de cada persona';
   end if;
-  if (current_pay->>'importedDays')::integer is distinct from (report_day > start_day)::integer
+  if (current_pay->>'importedDays')::integer is distinct from current_setting('hers.test.imported_days')::integer
      or (current_pay->>'totalDays')::integer is distinct from (current_pay->>'to')::date - start_day + 1 then
     raise exception 'El avance de la quincena debe contar solo los días confirmados del período actual';
   end if;
