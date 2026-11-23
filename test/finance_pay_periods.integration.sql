@@ -45,16 +45,16 @@ begin
   perform public.hers_payroll_worker(token, 'import', payload);
   if (select count(*) from public.finance_payments p
       where p.paid_at is null and p.period_end = cutoff
-        and ((p.creator_id = model_id and p.amount = 170.20 and p.net_sales = 225.25
-          and p.pay_rate_min = 70 and p.pay_rate_max = 80)
-          or (p.member_id = chatter_id and p.amount = 75 and p.net_sales = 100
-          and p.pay_rate_min = 75 and p.pay_rate_max = 75))) <> 2 then
-    raise exception 'El cierre debe guardar una sola vez el neto con el descuento vigente';
+        and ((p.creator_id = model_id and p.amount = 55.05 and p.net_sales = 225.25
+          and p.pay_rate_min = 20 and p.pay_rate_max = 30)
+          or (p.member_id = chatter_id and p.amount = 25 and p.net_sales = 100
+          and p.pay_rate_min = 25 and p.pay_rate_max = 25))) <> 2 then
+    raise exception 'El cierre debe registrar una sola vez el pago con el porcentaje vigente de cada día';
   end if;
 
   update public.finance_model_shares set percent = 40 where creator_id = model_id and effective_on = cutoff;
   if not exists (select from public.finance_payments where creator_id = model_id and period_end = cutoff
-      and net_sales = 225.25 and pay_rate_min = 70 and pay_rate_max = 80 and amount = 170.20)
+      and net_sales = 225.25 and pay_rate_min = 20 and pay_rate_max = 30 and amount = 55.05)
      or not exists (select from public.finance_payments where creator_id = model_id and period_end = '2001-01-31'
       and net_sales is null and pay_rate_min is null and pay_rate_max is null and amount = 50.13) then
     raise exception 'El historial debe conservar sus importes y los datos capturados al cierre';
@@ -164,8 +164,8 @@ declare
 begin
   if (current_pay->'sales'->>model_key)::numeric is distinct from 250.25
      or (current_pay->'sales'->>employee_key)::numeric is distinct from 80.40
-     or (current_pay->'amounts'->>model_key)::numeric is distinct from 150.15
-     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 60.30 then
+     or (current_pay->'amounts'->>model_key)::numeric is distinct from 100.10
+     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 20.10 then
     raise exception 'La quincena actual debe mostrar las ventas y el pago estimado de cada persona';
   end if;
   if (current_pay->>'importedDays')::integer is distinct from (report_day > start_day)::integer

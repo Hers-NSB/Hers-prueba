@@ -115,7 +115,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     .filter((row) => !status || (status === "paid" ? row.paid_at : canPay(row)));
   const movementByPayment = new Map(movements.filter((row) => row.finance_payment_id)
     .map((row) => [row.finance_payment_id, row]));
-  const activeRate = rate ? percent(100 - Number(rate.percent)) : "—";
+  const activeRate = rate ? percent(rate.percent) : "—";
 
   return <dialog className="hf-dialog hf-payment-panel" aria-labelledby={id}
     ref={(node) => { if (node && !node.open) node.showModal(); }}
