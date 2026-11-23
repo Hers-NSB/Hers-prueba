@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { dailyFinance, financeBreakdown, missingAgencyKeyDays, netSales, ONLYFANS, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
+import { dailyFinance, dailyOperatingSeries, financeBreakdown, missingAgencyKeyDays, netSales, ONLYFANS, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
 import worker, { importNet, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
@@ -34,6 +34,20 @@ test("usa fechas registradas y conserva la diferencia entre cero y dato ausente"
     { date: Date.parse("2026-11-21"), income: null, expenses: null, profit: null, provisional: false, net: null },
   ]);
   assert.equal(netSales([{ gross: 100, net: 80 }, { crm_total: 250 }]), 80);
+});
+
+test("grafica las ventas netas diarias antes del reparto y mantiene la inversión", () => {
+  const day = "2026-11-23";
+  const data = {
+    sales: [{ day, net: 110.40 }, { day: "2026-11-24", net: 0 }],
+    movements: [{ day, kind: "investment", amount: 12.50 }, { day, kind: "expense", amount: 2.50 }],
+    commissions: [{ day, attributed: 110.40, commission: 51.12 }],
+  };
+  assert.deepEqual(dailyOperatingSeries(data, { from: day, to: "2026-11-25" }), [
+    { date: Date.parse(day), income: 110.40, expenses: 15 },
+    { date: Date.parse("2026-11-24"), income: 0, expenses: 0 },
+    { date: Date.parse("2026-11-25"), income: null, expenses: 0 },
+  ]);
 });
 
 test("agrupa ventas netas y movimientos por modelo y plataforma sin duplicar importes", () => {

@@ -1,22 +1,16 @@
 import {
   Area, AreaChart, CartesianGrid, Dot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { dailyFinance, usd } from "./finance";
+import { dailyOperatingSeries, usd } from "./finance";
 
 const shortDate = new Intl.DateTimeFormat("es-VE", { month: "short", day: "numeric", timeZone: "UTC" });
 const longDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "long", timeZone: "UTC" });
 const axisMoney = new Intl.NumberFormat("es-VE", { maximumFractionDigits: 0 });
 const axis = { fill: "var(--hf-muted)", fontSize: 11 };
 
-export default function FinanceCharts({ data, range, agencyByDay, pendingDays }) {
+export default function FinanceCharts({ data, range }) {
   const title = "Resultado operativo";
-  const recorded = new Map(dailyFinance(data, agencyByDay).map((point) => [point.date, point]));
-  const points = [];
-  for (let date = Date.parse(range.from); date <= Date.parse(range.to); date += 86_400_000) {
-    const point = recorded.get(date);
-    const isPending = pendingDays?.has(new Date(date).toISOString().slice(0, 10));
-    points.push({ date, income: isPending ? null : point?.income ?? null, expenses: point?.expenses ?? 0 });
-  }
+  const points = dailyOperatingSeries(data, range);
 
   return <section className="hf-section hf-trend">
     <h2>{title}</h2>
