@@ -317,7 +317,7 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     ...data.members.map((row) => [row, "member", `chatter:${row.id}`, !row.archived_on && isCurrent(row)]),
     ...data.creators.map((row) => [{ ...row, role: "Modelo" }, "modelShare", `model:${row.id}`, isCurrent(row)]),
   ].sort(([a], [b]) => a.name.localeCompare(b.name, "es"));
-  const headings = ["Nombre", "Rol", "Porcentaje", "Pago ($)", "Acciones"];
+  const headings = ["Nombre", "Rol", "Porcentaje", "Ventas netas ($)", "Pago ($)", "Acciones"];
   const rows = (active) => participants.filter((entry) => entry[3] === active).map(([row, type, recipient]) => {
     const rate = effectiveShare(data.rates, recipient, currentDay);
     const eligible = type === "modelShare" || isChatter(row.role);
@@ -325,7 +325,7 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     const amount = !eligible || !rate ? "—" : payout == null && !row.agencykey_id && type === "member"
       ? "Pendiente de vincular" : payout == null ? "Pendiente de sincronizar" : usd(payout);
     return [recipient, [row.name, row.role,
-      rate ? percentLabel(rate.percent) : "—", active ? amount : "—",
+      rate ? percentLabel(rate.percent) : "—", active && eligible ? usd(data.currentPaySales[recipient]) : "—", active ? amount : "—",
       <div className="hf-actions"><button type="button" onClick={() => onEdit(type, row)}>Editar</button>
         <button type="button" onClick={() => onPayments({ type, person: row, recipient, eligible })}>Pagos</button>
         {active && type === "member" && !row.agencykey_id && <button type="button" onClick={() => onEdit("archive", row)}>Eliminar</button>}</div>]];

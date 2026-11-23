@@ -179,4 +179,26 @@ begin
 end;
 $$;
 
+reset role;
+delete from public.finance_model_shares
+where ('model:' || creator_id) = current_setting('hers.test.current_model')
+   or ('chatter:' || member_id) = current_setting('hers.test.current_chatter');
+
+set local role authenticated;
+do $$
+declare
+  current_pay jsonb := public.finance_current_pay();
+  model_key text := current_setting('hers.test.current_model');
+  employee_key text := current_setting('hers.test.current_chatter');
+begin
+  if (current_pay->'sales'->>model_key)::numeric is distinct from 250.25
+     or (current_pay->'sales'->>employee_key)::numeric is distinct from 80.40 then
+    raise exception 'Las ventas importadas deben mostrarse aunque falte configurar el porcentaje';
+  end if;
+  if (current_pay->'amounts') ? model_key or (current_pay->'amounts') ? employee_key then
+    raise exception 'Sin un porcentaje vigente no corresponde calcular un pago';
+  end if;
+end;
+$$;
+
 rollback;
