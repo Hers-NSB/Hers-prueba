@@ -3,6 +3,7 @@ export const kinds = { income: "Ingreso", expense: "Inversión", investment: "In
 
 const money = new Intl.NumberFormat("es-VE", { style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 });
 export const usd = (value) => value == null ? "—" : money.format(value);
+export const isActiveFinanceEntry = ({ archived_on, agencykey_available }) => !archived_on && agencykey_available !== false;
 export const dateKey = (date) =>
   [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
 
@@ -125,7 +126,7 @@ export function financeBreakdown({ movements, sales }, dimension) {
   }));
 }
 
-export function missingAgencyKeyDays(range, sales, creators) {
+export function missingAgencyKeyDays(range, sales, creators, through = range?.to, refreshToday = false) {
   const expected = creators.filter(({ agencykey_id, agencykey_available }) => agencykey_id && agencykey_available !== false);
   const confirmed = new Map();
   for (const { day, creator_id, net } of sales) {
@@ -134,10 +135,10 @@ export function missingAgencyKeyDays(range, sales, creators) {
     confirmed.get(day).add(creator_id);
   }
   const days = [];
-  for (let timestamp = Date.parse(range?.from); timestamp <= Date.parse(range?.to); timestamp += 86_400_000) {
+  for (let timestamp = Date.parse(range?.from); timestamp <= Math.min(Date.parse(range?.to), Date.parse(through)); timestamp += 86_400_000) {
     const day = new Date(timestamp).toISOString().slice(0, 10);
     const models = confirmed.get(day);
-    if (!models || expected.some(({ id }) => !models.has(id))) days.push(day);
+    if (refreshToday && day === through || !models || expected.some(({ id }) => !models.has(id))) days.push(day);
   }
   return days;
 }

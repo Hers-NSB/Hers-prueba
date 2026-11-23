@@ -95,7 +95,9 @@ export function calculateModelDistribution(sales, plans, members, rates, availab
       if (!Number(rate?.percent)) continue;
       const member = staff.get(rate.member_id);
       const status = employment.get(rate.member_id)?.findLast(({ effective_on }) => effective_on <= day);
-      if ((member?.archived_on && day >= member.archived_on) || status?.available === false) continue;
+      if (member?.archived_on && day >= member.archived_on) continue;
+      if (status?.available === false && (rate.basis !== "employee_sales"
+        || !Object.hasOwn(employeeTotals ?? {}, member?.agencykey_id))) continue;
 
       let payout;
       if (rate.basis === "employee_sales") {

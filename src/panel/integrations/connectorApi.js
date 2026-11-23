@@ -15,6 +15,10 @@ export default async function callApi(path = "", method = "GET", payload, signal
     throw new Error("[CON-NETWORK] No se pudo conectar con el Worker", { cause: error });
   }
   const result = await response.json().catch(() => null);
-  if (!response.ok || !result) throw new Error(result?.error || `[CON-RESPONSE] El Worker devolvió una respuesta inesperada (HTTP ${response.status})`);
+  if (!response.ok || !result) {
+    const error = new Error(result?.error || `[CON-RESPONSE] El Worker devolvió una respuesta inesperada (HTTP ${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return result;
 }

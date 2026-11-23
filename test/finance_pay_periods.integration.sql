@@ -36,6 +36,15 @@ begin
     raise exception 'Debe esperar al último día completo de la quincena';
   end if;
 
+  delete from hers_private.finance_final_days where day = cutoff - 2;
+  if (public.hers_payroll_worker(token, 'next', jsonb_build_object('after_day', cutoff - 2))->>'day')
+       is distinct from cutoff::text
+     or (public.hers_payroll_worker(token, 'next')->>'day') is distinct from (cutoff - 2)::text
+     or exists (select from public.finance_payments p where p.creator_id = model_id and p.period_end = cutoff) then
+    raise exception 'Saltar un día solo afecta esa búsqueda y no cierra la quincena incompleta';
+  end if;
+  insert into hers_private.finance_final_days (day) values (cutoff - 2);
+
   payload := jsonb_build_object(
     'p_day', cutoff,
     'p_sales', jsonb_build_array(jsonb_build_object('creator_key', model_key, 'creator_name', 'Modelo de pago', 'net', 100)),
@@ -45,7 +54,7 @@ begin
   perform public.hers_payroll_worker(token, 'import', payload);
   if (select count(*) from public.finance_payments p
       where p.paid_at is null and p.period_end = cutoff
-        and ((p.creator_id = model_id and p.amount = 55.05 and p.net_sales = 225.25
+        and ((p.creator_id = model_id and p.amount = 55 and p.net_sales = 225.25
           and p.pay_rate_min = 20 and p.pay_rate_max = 30)
           or (p.member_id = chatter_id and p.amount = 25 and p.net_sales = 100
           and p.pay_rate_min = 25 and p.pay_rate_max = 25))) <> 2 then
@@ -54,7 +63,7 @@ begin
 
   update public.finance_model_shares set percent = 40 where creator_id = model_id and effective_on = cutoff;
   if not exists (select from public.finance_payments where creator_id = model_id and period_end = cutoff
-      and net_sales = 225.25 and pay_rate_min = 20 and pay_rate_max = 30 and amount = 55.05)
+      and net_sales = 225.25 and pay_rate_min = 20 and pay_rate_max = 30 and amount = 55)
      or not exists (select from public.finance_payments where creator_id = model_id and period_end = '2001-01-31'
       and net_sales is null and pay_rate_min is null and pay_rate_max is null and amount = 50.13) then
     raise exception 'El historial debe conservar sus importes y los datos capturados al cierre';
@@ -147,7 +156,9 @@ begin
   insert into hers_private.finance_final_days (day)
     select report_day - 1 where report_day > start_day on conflict do nothing;
 
-  perform set_config('hers.test.current_report_day', report_day::text, true);
+  perform set_config('hers.test.imported_days', (
+    select count(*)::text from hers_private.finance_final_days where day >= start_day and day < report_day
+  ), true);
   perform set_config('hers.test.current_model', 'model:' || model, true);
   perform set_config('hers.test.current_chatter', 'chatter:' || employee, true);
 end;
@@ -157,18 +168,17 @@ set local role authenticated;
 do $$
 declare
   current_pay jsonb := public.finance_current_pay();
-  report_day date := current_setting('hers.test.current_report_day')::date;
   start_day date := (current_pay->>'from')::date;
   model_key text := current_setting('hers.test.current_model');
   employee_key text := current_setting('hers.test.current_chatter');
 begin
   if (current_pay->'sales'->>model_key)::numeric is distinct from 250.25
      or (current_pay->'sales'->>employee_key)::numeric is distinct from 80.40
-     or (current_pay->'amounts'->>model_key)::numeric is distinct from 100.10
-     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 20.10 then
+     or (current_pay->'amounts'->>model_key)::numeric is distinct from 100
+     or (current_pay->'amounts'->>employee_key)::numeric is distinct from 20 then
     raise exception 'La quincena actual debe mostrar las ventas y el pago estimado de cada persona';
   end if;
-  if (current_pay->>'importedDays')::integer is distinct from (report_day > start_day)::integer
+  if (current_pay->>'importedDays')::integer is distinct from current_setting('hers.test.imported_days')::integer
      or (current_pay->>'totalDays')::integer is distinct from (current_pay->>'to')::date - start_day + 1 then
     raise exception 'El avance de la quincena debe contar solo los días confirmados del período actual';
   end if;

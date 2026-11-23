@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { dailyFinance, financeBreakdown, missingAgencyKeyDays, netSales, ONLYFANS, periodPresets, salesProfit, summarize, usd } from "../src/panel/finanzas/finance.js";
-import { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
+import worker, { importAgencyKey, importNet, normalizeReports, previousDay } from "../cloudflare/worker.js";
 
 const creator = "00000000-0000-4000-8000-000000000001";
 const member = "00000000-0000-4000-8000-000000000002";
@@ -158,6 +158,63 @@ test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async ()
   });
 });
 
+test("reintenta únicamente la página de transacciones que falló", async () => {
+  const calls = [];
+  const env = { AGENCYKEY_API_KEY: "fixture", HERS_INTEGRATIONS_SECRET: Buffer.alloc(32).toString("base64") };
+  await importNet("2026-11-19", env, async (url, options) => {
+    const request = new URL(url);
+    if (request.pathname.endsWith("/creators")) return Response.json({
+      data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
+    });
+    if (request.pathname.endsWith("/earnings/chart")) return Response.json([]);
+    if (request.pathname.endsWith("/payouts/transactions")) {
+      const marker = request.searchParams.get("marker");
+      calls.push(marker);
+      if (marker && calls.length === 2) return new Response("Temporal", { status: 502 });
+      const row = { id: marker ?? "first", createdAt: "2026-11-19T20:00:00Z", net: 5, currency: "USD" };
+      return Response.json({ list: [row], hasMore: !marker, nextMarker: "second" });
+    }
+    if (request.pathname.endsWith("/reports/employees")) return Response.json({ data: [] });
+    const body = JSON.parse(options.body);
+    if (body.p_action === "agencykey") return Response.json(null);
+    assert.equal(body.p_action, "import");
+    assert.equal(body.p_data.p_sales[0].net, 10);
+    calls.push("import");
+    return Response.json(null);
+  }, false, Date.parse("2026-11-20T11:00:00Z"));
+  assert.deepEqual(calls, [null, "second", "second", "import"]);
+});
+
+test("deja pendiente el día con tres fallos y prueba el siguiente en el ciclo programado", async (t) => {
+  const actions = [];
+  let failedRequests = 0;
+  const firstDay = "2026-11-18";
+  const laterDay = "2026-11-19";
+  const env = { AGENCYKEY_API_KEY: "fixture", HERS_INTEGRATIONS_SECRET: Buffer.alloc(32).toString("base64") };
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    const request = new URL(url);
+    if (request.pathname.endsWith("/creators")) return Response.json({
+      data: [{ id: creator, name: "Modelo", creatorExternalId: 42 }], pagination: { pages: 1 },
+    });
+    const start = request.searchParams.get("startDate");
+    if (request.pathname.endsWith("/earnings/chart")) return Response.json(start.startsWith(firstDay) ? [] : { total: { net: 8 } });
+    if (request.pathname.endsWith("/payouts/transactions")) {
+      assert.ok(start.startsWith(firstDay));
+      failedRequests += 1;
+      return new Response(null, { status: [502, 503, 504][failedRequests - 1] });
+    }
+    if (request.pathname.endsWith("/reports/employees")) return Response.json({ data: [] });
+    const { p_action, p_data } = JSON.parse(options.body);
+    if (p_action === "agencykey") return Response.json(null);
+    actions.push([p_action, p_data.after_day ?? p_data.p_day]);
+    if (p_action === "next") return Response.json({ day: p_data.after_day ? laterDay : firstDay });
+    return Response.json(null);
+  });
+  await worker.scheduled({ scheduledTime: Date.parse("2026-11-20T11:00:00Z") }, env);
+  assert.equal(failedRequests, 3);
+  assert.deepEqual(actions, [["next", undefined], ["next", firstDay], ["import", laterDay]]);
+});
+
 test("calcula quincenas y mes anterior cuando cambia el año y en febrero bisiesto", () => {
   assert.deepEqual(periodPresets("2024-02-01"), [
     ["Hoy", "2024-02-01", "2024-02-01"],
@@ -202,4 +259,7 @@ test("elige los días incompletos y conserva los ceros confirmados", () => {
   ];
   assert.deepEqual(missingAgencyKeyDays({ from: "2026-11-01", to: "2026-11-03" }, sales, models),
     ["2026-11-02", "2026-11-03"]);
+  const range = { from: "2026-11-01", to: "2026-11-03" };
+  assert.deepEqual(missingAgencyKeyDays(range, sales, models, "2026-11-01"), []);
+  assert.deepEqual(missingAgencyKeyDays(range, sales, models, "2026-11-01", true), ["2026-11-01"]);
 });

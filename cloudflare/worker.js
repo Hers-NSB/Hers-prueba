@@ -121,18 +121,51 @@ export async function importAgencyKey(instant, env, send = fetch, testOnly = fal
 
 const agencyRoot = "https://app.agencykey.com/api";
 
+const retryDelays = [1000, 3000];
+const transientStatuses = new Set([502, 503, 504]);
+const maxRateLimitWait = 10_000;
+
+function retryAfterMs(value) {
+  if (!value) return undefined;
+  const delay = /^\d+$/.test(value) ? Number(value) * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) ? Math.max(0, delay) : undefined;
+}
+
 async function queryAgencyKey(apiKey, path, params, send, code, stage) {
+  const url = `${agencyRoot}${path}?${new URLSearchParams(params)}`;
   let response;
-  try {
-    response = await send(`${agencyRoot}${path}?${new URLSearchParams(params)}`, {
-      redirect: "manual", headers: { "x-public-api-key": apiKey, Accept: "application/json" },
-    });
-  } catch {
-    throw new IntegrationError(502, `AgencyKey no respondió al consultar ${stage}`, `${code}-NETWORK`);
+  let retryAfter;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      response = await send(url, {
+        redirect: "manual", headers: { "x-public-api-key": apiKey, Accept: "application/json" },
+      });
+    } catch {
+      throw new IntegrationError(502, `AgencyKey no respondió al consultar ${stage}`, `${code}-NETWORK`);
+    }
+
+    retryAfter = response.status === 429 ? retryAfterMs(response.headers.get("Retry-After")) : undefined;
+    const delay = response.status === 429 ? retryAfter
+      : code === "AK-NET-TRANSACTIONS" && transientStatuses.has(response.status) ? retryDelays[attempt] : undefined;
+    if (attempt >= retryDelays.length || delay === undefined || delay > maxRateLimitWait) break;
+
+    console.info("Reintentando AgencyKey", { code, upstreamStatus: response.status, attempt: attempt + 1 });
+    await response.body?.cancel().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  if (response.status === 429) {
+    const retryAfterSeconds = retryAfter === undefined ? undefined : Math.ceil(retryAfter / 1000);
+    const delayMessage = retryAfterSeconds > 0 ? ` Vuelve a intentar en ${retryAfterSeconds} s.` : "";
+    const error = new IntegrationError(429, `AgencyKey alcanzó su límite de peticiones.${delayMessage}`, "AK-RATE-LIMIT");
+    error.retryAfterSeconds = retryAfterSeconds;
+    throw error;
   }
   if (!response.ok) {
     const reason = response.status === 401 || response.status === 403 ? " · Verifica los permisos de la clave" : "";
-    throw new IntegrationError(502, `AgencyKey respondió HTTP ${response.status} al consultar ${stage}${reason}`, `${code}-HTTP`);
+    const error = new IntegrationError(502, `AgencyKey respondió HTTP ${response.status} al consultar ${stage}${reason}`, `${code}-HTTP`);
+    error.upstreamStatus = response.status;
+    throw error;
   }
   try {
     return await response.json();
@@ -269,7 +302,7 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   let transactionModels = 0;
   const entries = [...creators.values()];
   for (let i = 0; i < entries.length; i += 5) {
-    const batch = await Promise.all(entries.slice(i, i + 5).map(async (row) => {
+    const batch = await Promise.allSettled(entries.slice(i, i + 5).map(async (row) => {
       const path = `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`;
       const chart = await queryAgencyKey(key, path, { ...params, type: "total" }, send, "AK-NET-CHART", `el gráfico de ingresos del ${day}`);
       let net = readEarningsNet(chart);
@@ -281,7 +314,12 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
       }
       return { creator_key: row.id, creator_name: row.name, net };
     }));
-    sales.push(...batch);
+    const rateLimit = batch.find((result) => result.status === "rejected" && result.reason?.status === 429);
+    if (rateLimit) throw rateLimit.reason;
+    for (const result of batch) {
+      if (result.status === "rejected") throw result.reason;
+      sales.push(result.value);
+    }
   }
   if (empty.length) {
     const report = await queryAgencyKey(key, "/v1/public/crm/reports/creators",
@@ -328,9 +366,19 @@ export default {
       }
     }
     const next = await workerRpc("hers_payroll_worker", project, env, "next", { report_zone }, fetch);
-    if (next.day) {
-      const result = await importNet(next.day, env, fetch, false, event.scheduledTime, true);
+    if (!next.day) return;
+    const importDay = async (day) => {
+      const result = await importNet(day, env, fetch, false, event.scheduledTime, true);
       if (result.skipped || result.future) throw new Error("No se pudo completar el día de pagos de AgencyKey");
+    };
+    try {
+      await importDay(next.day);
+    } catch (error) {
+      if (error.code !== "AK-NET-TRANSACTIONS-HTTP" || !transientStatuses.has(error.upstreamStatus)) throw error;
+      console.warn("Importación pendiente de AgencyKey", { day: next.day, code: error.code, upstreamStatus: error.upstreamStatus });
+      const later = await workerRpc("hers_payroll_worker", project, env, "next", { report_zone, after_day: next.day }, fetch);
+      if (!later.day || later.day <= next.day) throw error;
+      await importDay(later.day);
     }
   },
   fetch(request, env) {

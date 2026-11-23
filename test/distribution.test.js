@@ -85,6 +85,12 @@ test("paga al chatter sobre todas sus ventas atribuidas y conserva la base de ot
   assert.equal(result.payouts.get("model:A"), 400);
   assert.equal(result.payouts.get("hers"), 1018);
 
+  const availability = [{ member_id: "chatter", effective_on: day, available: false }];
+  const inactive = calculateModelDistribution(sales, [], members, rates, availability,
+    [{ day, totals: { "ak-chatter": 320 } }]);
+  assert.equal(inactive.payouts.get("chatter:chatter"), 32);
+  assert.equal(inactive.payouts.get("hers"), 1018);
+
   const missing = calculateModelDistribution(sales, [], members, rates);
   assert.ok(missing.pendingDays.has(day));
   assert.equal(missing.payouts.has("chatter:chatter"), false);

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bridgeToken, handleIntegrations, storedAgencyKey } from "../cloudflare/integrations.js";
+import worker from "../cloudflare/worker.js";
+import { bridgeToken, handleIntegrations, seal, storedAgencyKey } from "../cloudflare/integrations.js";
 
 const base = "https://example.test/api/admin/integrations";
 const project = "https://supabase.example.test";
@@ -82,4 +83,23 @@ test("devuelve un error JSON cuando falla el inicio OAuth", async () => {
   assert.equal(response.status, 502);
   assert.equal((await response.json()).code, "CON-UNEXPECTED");
   assert.ok(response.headers.get("X-HERS-Request-ID"));
+});
+
+
+test("reintenta un 429 breve y devuelve al cliente el Retry-After largo", async (t) => {
+  let calls = 0;
+  const ciphertext = await seal(env.HERS_INTEGRATIONS_SECRET, "agencykey", "api-key", "test-key");
+  t.mock.method(globalThis, "fetch", async (url) => {
+    if (url.endsWith("/auth/v1/user")) return Response.json({ id: user, app_metadata: { role: "admin" } });
+    if (url.endsWith("/hers_integration_worker")) return Response.json({ ciphertext });
+    assert.match(url, /agencykey[.]com.*creators/);
+    calls += 1;
+    return new Response(null, { status: 429, headers: { "Retry-After": calls === 1 ? "0" : "120" } });
+  });
+  const request = new Request(`${base}/test`, { method: "POST", headers: auth });
+  const response = await worker.fetch(request, env);
+  assert.equal(calls, 2);
+  assert.equal(response.status, 429);
+  assert.equal(response.headers.get("Retry-After"), "120");
+  assert.equal((await response.json()).code, "AK-RATE-LIMIT");
 });
