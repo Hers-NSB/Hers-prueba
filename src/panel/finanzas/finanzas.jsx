@@ -1,8 +1,8 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, FileCheck, Plus, RefreshCw } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import AdminLoading from "../AdminLoading.jsx";
-import { dateKey, financeBreakdown, investmentTotal, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
+import { dateKey, financeBreakdown, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, salesProfit, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
 import { effectiveShare, isChatter } from "./distribution";
@@ -11,53 +11,14 @@ import CategoryDescription from "./CategoryDescription";
 import PaymentHistory from "./PaymentHistory";
 import "./finanzas.css";
 
-const FinanceCharts = lazy(() => import("./FinanceCharts"));
+import Overview from "./Overview";
+import { inPeriod, loadOverview, readOverviewTotals, readPayroll, readRows } from "./financeData";
+import { AdminError, useAdminRefresh } from "../adminActions";
 
 const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], rates: [], balance: null, movementCategories: [], currentPay: {}, currentPaySales: {}, payPeriod: null };
 const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
-const pageSize = 500;
 const movementPageSize = 50;
-
-async function readRows(table, ordering, signal, filter = (query) => query, columns = "*") {
-  const rows = [];
-  for (let start = 0; ; start += pageSize) {
-    let query = filter(supabase.from(table).select(columns));
-    for (const column of ordering) query = query.order(column);
-    query = query.range(start, start + pageSize - 1);
-    if (signal) query = query.abortSignal(signal);
-    const { data, error } = await query;
-    if (error) throw error;
-    rows.push(...data);
-    if (data.length < pageSize) return rows;
-  }
-}
-
-async function readPayroll(signal) {
-  const { data, error } = await supabase.rpc("finance_current_pay").abortSignal(signal);
-  if (error) throw error;
-  const { amounts: currentPay, sales: currentPaySales = {}, ...payPeriod } = data;
-  return { currentPay, currentPaySales, payPeriod };
-}
-
-function inPeriod({ from, to }) {
-  return (query) => query.gte("day", from).lte("day", to);
-}
-
-async function readOverviewTotals(signal) {
-  const { data, error } = await supabase.rpc("finance_overview_totals").abortSignal(signal);
-  if (error) throw error;
-  return data;
-}
-
-async function loadOverview(range, signal) {
-  const dateFilter = inPeriod(range);
-  const [movements, sales] = await Promise.all([
-    readRows("finance_movements", ["day", "id"], signal, dateFilter),
-    readRows("finance_agencykey_sales", ["day", "creator_id"], signal, dateFilter),
-  ]);
-  return { movements, sales };
-}
 
 async function loadFinance(range, signal) {
   const { data: allowed, error } = await supabase.rpc("finance_is_admin").abortSignal(signal);
@@ -88,6 +49,7 @@ export default function Finanzas() {
   const [editor, setEditor] = useState(null);
   const [payments, setPayments] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [payrollError, setPayrollError] = useState("");
   const [syncError, setSyncError] = useState("");
   const [directoryError, setDirectoryError] = useState(null);
   const [directoryRevision, refreshDirectory] = useState(null);
@@ -140,9 +102,12 @@ export default function Finanzas() {
       request = controller;
       try {
         const payroll = await readPayroll(controller.signal);
-        if (!controller.signal.aborted) setData((current) => ({ ...current, ...payroll }));
+        if (!controller.signal.aborted) {
+          setPayrollError("");
+          setData((current) => ({ ...current, ...payroll }));
+        }
       } catch (error) {
-        if (!controller.signal.aborted) console.error("Pagos", error.code || error.message);
+        if (!controller.signal.aborted) setPayrollError(error.message || "No se pudo consultar la quincena");
       } finally {
         request = undefined;
       }
@@ -215,6 +180,10 @@ export default function Finanzas() {
 
   async function update() {
     if (updating || (tab === "Resumen" && invalid)) return;
+    if (tab === "Movimiento") {
+      reload();
+      return;
+    }
     const today = data.payPeriod?.day ?? dateKey(new Date());
     const range = tab === "Empleados" ? data.payPeriod : filters;
     setUpdating(true);
@@ -233,17 +202,20 @@ export default function Finanzas() {
     }
   }
 
+  useAdminRefresh("finance", !busy && access && !(tab === "Resumen" && invalid) ? update : !busy && access !== false ? reload : null);
+
   const paymentPerson = payments && (payments.type === "modelShare" ? data.creators : data.members)
     .find(({ id }) => id === payments.person.id);
   const paymentRate = payments && effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()));
   return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
       <div><h1>Finanzas {busy && access && <RefreshCw className="hf-refreshing" size={20} role="status" aria-label="Actualizando Finanzas" />}</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
-      <button type="button" className="hf-select-trigger" onClick={update} disabled={busy || (tab === "Resumen" && invalid) || !access}>
-        <RefreshCw size={16} aria-hidden="true" /> {updating ? "Actualizando…" : "Actualizar"}
-      </button>
     </header>
-    {access === false ? <p role="alert" className="hf-notice">Tu cuenta no tiene acceso a Finanzas</p> : <>
+    <AdminError id="finance-access" section="Finanzas" message={access === false ? "Tu cuenta no tiene acceso a Finanzas" : ""} />
+    <AdminError id="finance-payroll" section="Finanzas" message={payrollError} />
+    <AdminError id="finance-sync" section="Finanzas" message={syncError} />
+    <AdminError id="finance-load" section="Finanzas" message={loadError ? "No se pudieron actualizar los datos" : ""} />
+    {access !== false && <>
       <nav className="hf-tabs" aria-label="Secciones de Finanzas">
         {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => {
           setTab(item);
@@ -253,12 +225,15 @@ export default function Finanzas() {
       {tab === "Resumen" && <div className="hf-toolbar">
         <PeriodPicker value={filters} onChange={updateFilters} disabled={busy || !access} />
       </div>}
-      {syncError && <p className="hf-notice" role="alert">{syncError}</p>}
       {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
-      {loadError && <p className="hf-notice" role="alert">No se pudieron actualizar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
       {loading && access === null && <AdminLoading>Cargando Finanzas…</AdminLoading>}
       {access && <div aria-busy={busy}>
-        {tab === "Resumen" && <Overview data={data} range={filters} />}
+        {tab === "Resumen" && <Overview data={data} range={filters}>
+          <div className="hf-breakdowns">
+            <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
+            <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
+          </div>
+        </Overview>}
         {tab === "Movimiento" && <Movements data={data} revision={revision} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} />}
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
@@ -309,40 +284,11 @@ function Breakdown({ data, dimension, title, label, catalog }) {
   </section>;
 }
 
-function Overview({ data, range }) {
-  const { movements, sales } = data;
-  const totals = summarize(data);
-  const investment = investmentTotal(movements, totals);
-  const net = netSales(sales, movements);
-  const cards = [
-    ["Bóveda de HERS", data.balance, Wallet, "income"],
-    ["Inversión", investment, ArrowUpRight, "expenses"],
-    ["Ganancia", salesProfit(net, investment), CircleDollarSign, "profit"],
-    ["Ventas netas", net, BarChart3, "sales"],
-  ];
-  return <>
-    <h2>Resumen del período</h2>
-    <div className="hf-kpis hf-overview-kpis">{cards.map(([label, value, Icon, tone]) => <article key={label} data-tone={tone}>
-      <span className="hf-kpi-label"><Icon size={18} aria-hidden="true" />{label}</span>
-      <strong>{usd(value)}</strong>
-    </article>)}</div>
-    <Suspense fallback={<section className="hf-section hf-trend" aria-busy="true">
-      <h2>Resultado operativo</h2><div className="hf-chart" />
-    </section>}>
-      <FinanceCharts data={data} range={range} />
-    </Suspense>
-    <div className="hf-breakdowns">
-      <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
-      <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
-    </div>
-  </>;
-}
 
 function Movements({ data, revision, filters, onFilter, onEdit }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [attempt, retry] = useState(0);
   const [page, setPage] = useState(0);
   const hasNext = rows.length > movementPageSize;
   useEffect(() => {
@@ -377,7 +323,7 @@ function Movements({ data, revision, filters, onFilter, onEdit }) {
     }
     readPage();
     return () => controller.abort();
-  }, [filters, revision, attempt, page]);
+  }, [filters, revision, page]);
 
   function applyFilter(change) {
     setLoading(true);
@@ -403,11 +349,8 @@ function Movements({ data, revision, filters, onFilter, onEdit }) {
       {select("Plataforma", "platform", [...data.platforms, { id: "none", name: "Otros" }], "Todas")}
       {select("Actualizado", "updated", [{ id: "yes", name: "Sí" }, { id: "no", name: "No" }])}
     </div>
-    {error ? <p className="hf-notice" role="alert">No se pudieron consultar los movimientos <button type="button" onClick={() => {
-      setLoading(true);
-      setError(false);
-      retry((value) => value + 1);
-    }}>Reintentar</button></p> : loading ? <p role="status">Cargando movimientos…</p> :
+    <AdminError id="finance-movements" section="Finanzas" message={error ? "No se pudieron consultar los movimientos" : ""} />
+    {error ? null : loading ? <p role="status">Cargando movimientos…</p> :
     <Table headings={["Fecha", "Tipo", "Categoría", "Modelo", "Plataforma", "Importe", "Acción"]}
       emptyText="Sin movimientos para estos filtros"
       rows={rows.slice(0, movementPageSize).map((row) => [row.id, [row.day, kinds[row.kind],
@@ -471,9 +414,9 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     </div>
     <p className="hf-employee-count">{creators.length} modelos · {chatters.length} chatters
       {data.payPeriod && ` · Corte actual: ${data.payPeriod.from} a ${data.payPeriod.to}`}</p>
-    {directoryError && <p className="hf-notice" role="alert">{directoryError.message.startsWith("[AK-DIRECTORY-CONNECT]")
+    <AdminError id="finance-directory" section="Finanzas" message={directoryError?.message.startsWith("[AK-DIRECTORY-CONNECT]")
       ? "Autoriza el directorio de AgencyKey en Conectores para sincronizar el listado."
-      : directoryError.message}</p>}
+      : directoryError?.message} />
     <section className="hf-section" aria-labelledby="hf-models-title">
       <h2 id="hf-models-title">Modelos</h2>
       <Table labelledBy="hf-models-title" headings={headings} rows={models} emptyText="Sin modelos registrados" />

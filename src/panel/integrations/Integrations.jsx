@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, Plus, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { KeyRound, Plus, Save, ShieldCheck } from "lucide-react";
+import { AdminError } from "../adminActions";
 import AdminLoading from "../AdminLoading.jsx";
 import DropperFrame from "../dropper/DropperFrame.jsx";
 import callApi from "./connectorApi";
@@ -11,7 +12,7 @@ const kinds = { "api-key": "Clave API", token: "Token", password: "Contraseña d
 const blank = { service: "agencykey", kind: "api-key", value: "" };
 const dateTime = (date) => new Date(date).toLocaleString("es-VE");
 
-export default function Integrations() {
+export default function Integrations({ revision }) {
   const [bots, setBots] = useState(false);
   return <section className="hf hers-integrations" aria-labelledby="hers-integrations-title">
     <header className="hf-header">
@@ -21,11 +22,11 @@ export default function Integrations() {
       <button type="button" aria-pressed={!bots} onClick={() => setBots(false)}>Servicios</button>
       <button type="button" aria-pressed={bots} onClick={() => setBots(true)}>Bots</button>
     </nav>
-    {bots ? <DropperFrame view="bots" title="Bots de Telegram de Dropper" /> : <Services />}
+    {bots ? <DropperFrame view="bots" title="Bots y sesión compartida de Dropper" revision={revision} /> : <Services revision={revision} />}
   </section>;
 }
 
-function Services() {
+function Services({ revision }) {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [formError, setFormError] = useState("");
@@ -36,16 +37,20 @@ function Services() {
 
   useEffect(() => {
     const controller = new AbortController();
-    callApi("", "GET", undefined, controller.signal).then(setData).catch((error) => {
-      if (!controller.signal.aborted) setNotice({ error: error.message });
-    });
-    callApi("/agencykey-directory", "GET", undefined, controller.signal).then(({ connected }) => {
-      if (!controller.signal.aborted) setDirectoryConnected(connected);
-    }).catch((error) => {
-      if (!controller.signal.aborted) setNotice({ error: error.message });
+    Promise.allSettled([
+      callApi("", "GET", undefined, controller.signal),
+      callApi("/agencykey-directory", "GET", undefined, controller.signal),
+    ]).then(([status, directory]) => {
+      if (controller.signal.aborted) return;
+      if (status.status === "fulfilled") setData(status.value);
+      if (directory.status === "fulfilled") setDirectoryConnected(directory.value.connected);
+      const messages = [status, directory].filter((result) => result.status === "rejected")
+        .map((result) => result.reason.message);
+      setNotice((current) => messages.length ? { error: [...new Set(messages)].join(" · ") }
+        : current?.error ? null : current);
     });
     return () => controller.abort();
-  }, []);
+  }, [revision]);
 
   useEffect(() => {
     function complete(event) {
@@ -95,10 +100,6 @@ function Services() {
         setNotice({ success: `${label} · ${result.day} · ${result.creators} modelos${total}` });
       }
       setData(await callApi());
-      if (operation === "refresh") {
-        const { connected } = await callApi("/agencykey-directory");
-        setDirectoryConnected(connected);
-      }
     } catch (error) {
       if (operation === "save" && !saved) setFormError(error.message);
       else setNotice({ error: saved ? "Credencial guardada. No se pudo actualizar el estado" : error.message });
@@ -115,12 +116,8 @@ function Services() {
   const close = () => { if (!busy) setForm(null); };
 
   return <section aria-label="Servicios">
-    <div className="hf-actions">
-      <button type="button" onClick={() => perform("refresh")} disabled={busy}>
-        <RefreshCw size={16} aria-hidden="true" /> Actualizar estado
-      </button>
-    </div>
-    {notice && <p className="hf-notice" role={notice.error ? "alert" : "status"}>{notice.error || notice.success}</p>}
+    <AdminError id="connector-services" section="Conectores" message={notice?.error} />
+    {notice?.success && <p className="hf-notice" role="status">{notice.success}</p>}
     {!data && !notice && <AdminLoading>Cargando Conectores…</AdminLoading>}
     {data && <>
       <section className="hf-section hers-integration-card">

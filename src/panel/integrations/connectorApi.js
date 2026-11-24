@@ -1,11 +1,11 @@
 import { supabase } from "../../lib/supabase";
 
-export default async function callApi(path = "", method = "GET", payload, signal) {
+export default async function callApi(path = "", method = "GET", payload, signal, base = "/api/admin/integrations") {
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) throw new Error("[CON-SESSION-MISSING] Inicia sesión para continuar");
   let response;
   try {
-    response = await fetch(`/api/admin/integrations${path}`, {
+    response = await fetch(`${base}${path}`, {
       method, signal, cache: "no-store",
       headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
       body: payload && JSON.stringify(payload),

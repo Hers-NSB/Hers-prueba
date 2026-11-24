@@ -1,0 +1,137 @@
+name: Ejecutable Windows
+on:
+  pull_request:
+    paths:
+      - 'dropper/**'
+      - '.github/workflows/dropper-windows.yml'
+  push:
+    branches: [main]
+    tags: ['hers-dropper-*']
+    paths:
+      - 'dropper/**'
+      - '.github/workflows/dropper-windows.yml'
+permissions:
+  contents: read
+concurrency:
+  group: recorder-exe-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  encoder:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: dropper
+    permissions:
+      contents: read
+      actions: read
+    env:
+      FFMPEG_REV: 946fcce07b6dcd0331c8cc609192aeff5e1924f8
+      X264_REV: 31e19f92f00c7003fa115047ce50978bc98c3a0d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        id: encoder-cache
+        with:
+          path: dropper/vendor/encoder
+          key: encoder-win64-${{ env.FFMPEG_REV }}-${{ env.X264_REV }}-${{ hashFiles('dropper/scripts/build_minimal_ffmpeg.sh') }}
+      - uses: actions/checkout@v4
+        if: steps.encoder-cache.outputs.cache-hit != 'true'
+        with:
+          repository: FFmpeg/FFmpeg
+          ref: ${{ env.FFMPEG_REV }}
+          path: dropper/third_party/ffmpeg
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        if: steps.encoder-cache.outputs.cache-hit != 'true'
+        with:
+          repository: mirror/x264
+          ref: ${{ env.X264_REV }}
+          path: dropper/third_party/x264
+          persist-credentials: false
+      - name: Install cross compiler
+        if: steps.encoder-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64-posix nasm make pkg-config
+      - run: bash scripts/build_minimal_ffmpeg.sh
+        if: steps.encoder-cache.outputs.cache-hit != 'true'
+      - name: Include exact encoder sources
+        if: steps.encoder-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir encoder-sources
+          git -C third_party/ffmpeg archive HEAD > encoder-sources/ffmpeg.tar
+          git -C third_party/x264 archive HEAD > encoder-sources/x264.tar
+          cp scripts/build_minimal_ffmpeg.sh encoder-sources/
+          cp vendor/encoder/*LICENSE.txt encoder-sources/
+          tar -czf vendor/encoder/encoder-sources.tar.gz encoder-sources
+      - uses: actions/upload-artifact@v4
+        with:
+          name: minimal-windows-encoder
+          path: dropper/vendor/encoder/
+          retention-days: 30
+          if-no-files-found: error
+  build:
+    needs: encoder
+    runs-on: windows-2022
+    defaults:
+      run:
+        working-directory: dropper
+    permissions:
+      contents: write
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements-build.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: minimal-windows-encoder
+          path: dropper/vendor/encoder
+      - run: python recorder.py check-chrome
+      - run: python -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --prefix cloudflare
+      - run: node --test cloudflare/worker.test.mjs cloudflare/recording-session.test.mjs
+      - run: node --test cloudflare/admin.test.mjs
+      - name: Build standalone executable
+        run: python -m PyInstaller --clean --noconfirm Dropper.spec
+      - name: Prepare HERS download
+        run: Copy-Item dist/Dropper.exe dist/HERS-Dropper.exe
+      - name: Test EXE without Python commands
+        env:
+          AGENCYKEY_RECORDER_DEMO_EXPORT: qa-output/scroll-demo.mp4
+        run: python scripts/smoke_exe.py dist/HERS-Dropper.exe
+      - name: Preserve tested executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dropper-Windows
+          path: |
+            dropper/dist/HERS-Dropper.exe
+            dropper/qa-output/scroll-demo.mp4
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publicar y verificar la copia de Windows
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/hers-dropper-')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            tag="hers-dropper-${GITHUB_SHA:0:12}"
+          fi
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" dist/HERS-Dropper.exe vendor/encoder/encoder-sources.tar.gz \
+              --target "$GITHUB_SHA" --repo "$GITHUB_REPOSITORY" --title "HERS Dropper · Hers-prueba" --generate-notes
+          fi
+          mkdir -p verified-release
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir verified-release \
+            --pattern HERS-Dropper.exe --pattern encoder-sources.tar.gz
+          cmp dist/HERS-Dropper.exe verified-release/HERS-Dropper.exe
+          cmp vendor/encoder/encoder-sources.tar.gz verified-release/encoder-sources.tar.gz

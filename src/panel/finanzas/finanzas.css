@@ -91,7 +91,7 @@
   background: var(--hf-bg);
 }
 
-.hf-finance {
+:is(.hf-finance, .admin-month-overview) {
   --hf-expense: #df9f8c;
   --hf-profit: #b9c9a4;
 }

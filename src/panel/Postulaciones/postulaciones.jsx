@@ -7,12 +7,12 @@ import {
   Globe,
   Loader2,
   Mail,
-  RefreshCw,
   Trash2,
   User,
   X,
 } from "lucide-react";
 import { FaInstagram, FaTelegram, FaWhatsapp } from "react-icons/fa";
+import { AdminError } from "../adminActions";
 import AdminLoading from "../AdminLoading.jsx";
 import "./postulaciones.css";
 import {
@@ -30,7 +30,7 @@ const PHOTO_FIELDS = [
   { key: "foto_lenceria3_path", label: "Lencería 3" },
 ];
 
-export default function Postulaciones({ onBack = null }) {
+export default function Postulaciones({ revision = 0 }) {
   const [applications, setApplications] = useState([]);
   const [photoUrls, setPhotoUrls] = useState({});
   const [loading, setLoading] = useState(true);
@@ -76,6 +76,7 @@ export default function Postulaciones({ onBack = null }) {
       );
 
       setPhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
+      if (signedEntries.includes(null)) setError("No se pudieron cargar algunas fotografías");
     } catch (loadError) {
       setError(
         "No se pudieron cargar las postulaciones: " +
@@ -87,9 +88,13 @@ export default function Postulaciones({ onBack = null }) {
   }, []);
 
   useEffect(() => {
-    const start = setTimeout(loadApplications, 0);
+    const start = setTimeout(() => {
+      setLoading(true);
+      setError("");
+      void loadApplications();
+    }, 0);
     return () => clearTimeout(start);
-  }, [loadApplications]);
+  }, [loadApplications, revision]);
 
   const requestDelete = (app) => setConfirmApp(app);
 
@@ -188,30 +193,9 @@ export default function Postulaciones({ onBack = null }) {
       <div className="postulaciones-panel">
         <header className="postulaciones-header">
           <h2>Panel de postulaciones</h2>
-          <div className="postulaciones-actions">
-            <button
-              className="postulaciones-btn postulaciones-btn--outline"
-              onClick={() => { setLoading(true); setError(""); loadApplications(); }}
-              disabled={loading}
-            >
-              <RefreshCw
-                size={16}
-                className={loading ? "postulaciones-spin" : ""}
-              />
-              {loading ? "Actualizando…" : "Actualizar"}
-            </button>
-            {onBack && (
-              <button
-                className="postulaciones-btn postulaciones-btn--outline"
-                onClick={onBack}
-              >
-                Volver al administrador
-              </button>
-            )}
-          </div>
         </header>
 
-        {error && <p className="postulaciones-error">{error}</p>}
+        <AdminError id="applications" section="Postulaciones" message={error} />
 
         {loading ? (
           <AdminLoading>Cargando Postulaciones…</AdminLoading>
