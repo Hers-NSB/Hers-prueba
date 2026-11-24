@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Download } from "lucide-react";
 import { AdminError } from "../adminActions";
 import AdminLoading from "../AdminLoading";
 import PeriodPicker from "../finanzas/PeriodPicker";
@@ -22,7 +21,6 @@ export default function Dropper({ revision }) {
   return <section className="hf hers-dropper" aria-labelledby="hers-dropper-title">
     <header className="hers-dropper__header">
       <h1 id="hers-dropper-title">Dropper</h1>
-      <a href="/api/admin/dropper/download/windows"><Download size={16} aria-hidden="true" /> Descargar para Windows</a>
     </header>
     <ActiveBots revision={revision} section="Dropper" />
     <nav className="hf-tabs" aria-label="Secciones de Dropper">

@@ -14,6 +14,7 @@ test("Dropper routes only forward the embedded views and authorized API requests
   const call = (path, init) => worker.fetch(new Request(root + path, init), env);
 
   assert.equal((await call("/unknown")).status, 404);
+  assert.equal((await call("/download/windows")).status, 404);
   assert.equal((await call("/view/bots", { method: "POST" })).status, 405);
   assert.equal((await call("/api/profiles")).status, 401);
   assert.equal((await call("/api/access", { method: "POST", headers: { Origin: "https://other.example" } })).status, 403);
@@ -42,22 +43,4 @@ test("missing or unavailable Dropper is reported without using the public page f
   const response = await worker.fetch(request, env);
   assert.equal(response.status, 502);
   assert.doesNotMatch(await response.text(), /private upstream error/);
-});
-
-test("Windows downloads are served from R2 and report an unpublished installer", async () => {
-  const request = (method) => new Request(`${root}/download/windows`, { method });
-  assert.equal((await worker.fetch(request("GET"), {})).status, 503);
-  const verified = [];
-  const env = { DROPPER_DOWNLOADS: {
-    async get(key) { verified.push(key); return { body: "exe", size: 3 }; },
-    async head(key) { verified.push(key); return { size: 3 }; },
-  } };
-  const response = await worker.fetch(request("GET"), env);
-  assert.equal(await response.text(), "exe");
-  assert.match(response.headers.get("Content-Disposition"), /HERS-Dropper\.exe/);
-  const headers = await worker.fetch(request("HEAD"), env);
-  assert.equal(headers.headers.get("Content-Length"), "3");
-  assert.equal(await headers.text(), "");
-  assert.equal((await worker.fetch(request("POST"), env)).status, 405);
-  assert.deepEqual(verified, ["windows/HERS-Dropper.exe", "windows/HERS-Dropper.exe"]);
 });
