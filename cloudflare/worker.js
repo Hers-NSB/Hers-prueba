@@ -1,5 +1,6 @@
 import { beginDirectory, directoryStatus, finishDirectory, syncDirectory } from "./agencykey-directory.js";
 import { bridge, handleIntegrations, IntegrationError, storedAgencyKey, workerRpc } from "./integrations.js";
+import { dropperPath, handleDropper } from "./dropper.js";
 
 const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
 const dayMs = 86_400_000;
@@ -303,6 +304,7 @@ export default {
   },
   fetch(request, env) {
     const path = new URL(request.url).pathname;
+    if (path.startsWith(dropperPath)) return handleDropper(request, env.DROPPER);
     if (path === "/restablecer-contrasena" || path === "/restablecer-contrasena/") {
       return new Response("El acceso de HERS se gestiona desde Supabase", {
         status: 410,

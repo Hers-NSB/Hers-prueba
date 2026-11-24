@@ -1,6 +1,6 @@
 # HERS · Entorno de pruebas
 
-La aplicación de pruebas usa React, Vite, Supabase y Cloudflare Workers. El panel de administración incluye Finanzas y Conectores. Consulta el estado del despliegue en [STATUS.md](STATUS.md). [Abrir HERS de pruebas](https://hers-prueba.datosenviados07.workers.dev/).
+La aplicación de pruebas usa React, Vite, Supabase y Cloudflare Workers. El panel de administración incluye Finanzas, Dropper y Conectores. Consulta el estado del despliegue en [STATUS.md](STATUS.md). [Abrir HERS de pruebas](https://hers-prueba.datosenviados07.workers.dev/).
 
 ## Desarrollo
 
@@ -44,6 +44,14 @@ Después de cada conjunto de cambios, actualiza [STATUS.md](STATUS.md) con los a
 - La confirmación marca el corte como **Pagado** y registra un solo movimiento de **Inversión** en la fecha de confirmación. La categoría es **Equipo** para empleados y **Modelo** para modelos. Las ventas y el porcentaje histórico se guardan al cerrar cada corte nuevo.
 
 ## Cloudflare y AgencyKey
+
+### Dropper
+
+En **Dropper** puedes consultar el resumen por fecha, administrar la sesión compartida de Chrome, cambiar los ajustes y descargar HERS Dropper para Windows. Abre **Conectores → Bots** para añadir, editar, eliminar y verificar los bots de Telegram, o descargar el reporte de una verificación.
+
+La integración usa el binding de servicio `DROPPER` hacia el Worker `dropper`. Publica primero la versión de Dropper compatible con `/embed/` y `/v1/hers-admin/`, con `HERS_SUPABASE_PUBLISHABLE_KEY` configurada en ese Worker. Publica después Hers-prueba con el binding y la ruta registrados en `cloudflare/deploy.json`. El Worker de Dropper verifica el rol `admin` en el proyecto de Supabase de Hers-prueba. Los bots y el historial siguen en la D1 de Dropper.
+
+El botón de descarga requiere que la publicación de Windows de Dropper incluya `HERS-Dropper.exe`.
 
 ### Despliegue del entorno
 

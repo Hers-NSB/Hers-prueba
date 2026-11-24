@@ -34,6 +34,10 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 23 de noviembre de 2026 · Dropper en Administración
+
+La rama `codex/dropper-en-hers` agrega el resumen, los ajustes y la descarga de Windows en **Dropper**. **Conectores → Bots** usa las herramientas de configuración y verificación del Worker de Dropper. Los datos permanecen en D1. Pasaron las 28 pruebas de Node, el lint y la compilación. Chromium comprobó la recarga y ambas vistas a 390 px con los dos Workers y D1 local. Pendientes el despliegue coordinado de ambos Workers y la publicación de `HERS-Dropper.exe`.
+
 ### 23 de noviembre de 2026 · Carga de Administración
 
 La rama `codex/carga-panel-administracion` muestra una pantalla de carga durante la restauración de sesión y la descarga del panel. Postulaciones, Finanzas y Conectores comparten un indicador de carga que respeta la preferencia de movimiento reducido. Pasaron el lint, la compilación, las 26 pruebas de Node y la regresión de sesión y carga de Conectores en un DOM simulado. Pendiente de despliegue.
