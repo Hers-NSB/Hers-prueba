@@ -2,7 +2,7 @@ import { beginDirectory, directoryStatus, finishDirectory, syncDirectory } from 
 import { bridge, handleIntegrations, IntegrationError, storedAgencyKey, workerRpc } from "./integrations.js";
 import { dropperPath, handleDropper } from "./dropper.js";
 
-const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
+export const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
 const dayMs = 86_400_000;
 
 function formatDay(instant, zone) {

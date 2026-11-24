@@ -621,22 +621,10 @@ test('only one desktop instance can reserve a bot, with status and daily totals'
 
 test('HERS Dropper reads the API key stored in Services once the shared backend is enabled', async () => {
   await admin(env,'PUT',route,input);
-  env.HERS_INTEGRATIONS_SECRET=Buffer.alloc(32,9).toString('base64');
-  env.HERS_SUPABASE_PUBLISHABLE_KEY='test-publishable';
-  const {seal}=await import('../../cloudflare/integrations.js');
-  const key='shared-service-key';
-  const ciphertext=await seal(env.HERS_INTEGRATIONS_SECRET,'agencykey','api-key',key);
-  const mockedUpstream=globalThis.fetch;
-  globalThis.fetch=async (url, options)=>{
-    if(new URL(url).pathname.endsWith('/hers_integration_worker')){
-      assert.equal(options.headers.apikey,env.HERS_SUPABASE_PUBLISHABLE_KEY);
-      assert.equal(JSON.parse(options.body).p_action,'agencykey');
-      return Response.json({ciphertext});
-    }
-    return mockedUpstream(url,options);
-  };
-  try {
-    assert.equal((await admin(env,'PUT','/v1/admin/agencykey',{api_key:'unused-key'})).status,409);
-    assert.equal((await (await desktop(env,'POST',credentials)).json()).api_key,key);
-  } finally { globalThis.fetch=mockedUpstream; }
+  let key='shared-service-key';
+  env.HERS_AGENCY_KEY={async read(){return key;}};
+  assert.equal((await admin(env,'PUT','/v1/admin/agencykey',{api_key:'unused-key'})).status,409);
+  assert.equal((await (await desktop(env,'POST',credentials)).json()).api_key,key);
+  key=null;
+  assert.equal((await desktop(env,'POST',credentials)).status,409);
 });

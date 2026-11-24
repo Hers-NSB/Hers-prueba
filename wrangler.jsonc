@@ -1,6 +1,6 @@
 {
   "name": "hers-prueba",
-  "main": "cloudflare/worker.js",
+  "main": "cloudflare/entrypoint.js",
   "compatibility_date": "2026-11-20",
   "keep_vars": true,
   "assets": {

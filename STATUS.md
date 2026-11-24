@@ -38,7 +38,7 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ### 24 de noviembre de 2026 · Paneles, importaciones y escritorio
 
-La rama `codex/actualizar-paneles-y-dropper` actualiza los paneles y Postulaciones, incorpora una reserva única por bot y protege las importaciones de días finalizados. Antes de publicar, aplica la migración de Finanzas y el esquema D1, configura la clave compartida según el README, despliega Dropper y publica el ejecutable actualizado.
+La rama `codex/actualizar-paneles-y-dropper` actualiza los paneles y Postulaciones, incorpora una reserva única por bot y protege las importaciones de días finalizados. Antes de publicar, aplica la migración de Finanzas y el esquema D1, habilita el punto de entrada privado del Worker web, despliega Dropper y publica el ejecutable actualizado.
 
 - `wrangler.jsonc` es la configuración usada por Cloudflare Builds. El historial de Cloudflare muestra despliegues anteriores por API. Se conserva `cloudflare/deploy.json` hasta verificar las dependencias de despliegues manuales.
 - Los tres índices de Finanzas registraron cero lecturas por índice en la consulta inicial. Supabase de pruebas todavía tiene cero pagos cerrados, por lo que la comprobación se programó para después de la quincena del 1 al 15 de diciembre.

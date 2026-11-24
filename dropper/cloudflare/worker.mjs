@@ -1,4 +1,3 @@
-import {storedAgencyKey} from "../../cloudflare/integrations.js";
 import {adminPage} from './admin-page.mjs';
 import {cleanStorageState} from './recording-session.mjs';
 import {cleanWebDiagnostic, reportZip} from './web-report.mjs';
@@ -299,11 +298,8 @@ async function adminLogin(request,env,setup=false) {
 const hersProject = 'https://glpevkghlzzuwkxojpvc.supabase.co';
 
 async function globalApi(env) {
-  if (env.HERS_INTEGRATIONS_SECRET) {
-    const key = await storedAgencyKey(hersProject, {
-      HERS_INTEGRATIONS_SECRET: env.HERS_INTEGRATIONS_SECRET,
-      SUPABASE_PUBLISHABLE_KEY: env.HERS_SUPABASE_PUBLISHABLE_KEY,
-    });
+  if (env.HERS_AGENCY_KEY) {
+    const key = await env.HERS_AGENCY_KEY.read();
     if (!key) throw new ApiError(409, 'Guarda la clave de AgencyKey en Conectores → Servicios');
     return key;
   }
@@ -720,7 +716,7 @@ async function adminHandle(request, env, path, hersOwner) {
     return json({api_configured:configured});
   }
   if (path === '/v1/admin/agencykey' && request.method === 'PUT') {
-    if (env.HERS_INTEGRATIONS_SECRET) throw new ApiError(409, 'Gestiona la clave de AgencyKey en Conectores → Servicios');
+    if (env.HERS_AGENCY_KEY) throw new ApiError(409, 'Gestiona la clave de AgencyKey en Conectores → Servicios');
     const input = await body(request);
     const apiKey = text(input.api_key, 'API de AgencyKey',512);
     const creators = await listCreators(apiKey);

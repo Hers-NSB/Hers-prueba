@@ -2,13 +2,14 @@
   "worker": "hers-prueba",
   "assetDirectory": "dist",
   "modules": [
+    "cloudflare/entrypoint.js",
     "cloudflare/worker.js",
     "cloudflare/integrations.js",
     "cloudflare/agencykey-directory.js",
     "cloudflare/dropper.js"
   ],
   "metadata": {
-    "main_module": "worker.js",
+    "main_module": "entrypoint.js",
     "compatibility_date": "2026-11-20",
     "assets": {
       "config": {
