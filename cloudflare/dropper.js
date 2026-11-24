@@ -6,7 +6,7 @@ export async function handleDropper(request, service) {
   const error = (message, status) => Response.json({ error: message }, {
     status, headers: { "Cache-Control": "no-store" },
   });
-  const view = action.match(/^view\/(bots|operations)$/)?.[1];
+  const view = action.match(/^view\/(bots|operations|session)$/)?.[1];
   if (view && request.method !== "GET") return error("Método no permitido", 405);
   if (!view && !/^api\/[a-z0-9/-]+$/.test(action)) return error("Operación de Dropper no disponible", 404);
   const origin = request.headers.get("Origin");

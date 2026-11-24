@@ -157,7 +157,12 @@ class BotPanel:
         self.manager = manager
         self.profile = profile
         self.events = queue.Queue(maxsize=5000)
-        self.controller = BotController(self.events, runner, credential_loader=self.load_credentials, session_client=manager.client)
+        self.controller = BotController(self.events, runner, credential_loader=self.load_credentials,
+                                        session_client=manager.client)
+        if runner is None:
+            self.controller.runner = self.run_reserved_bot
+        self.active_elsewhere = False
+        self.published_today = None
         self.mode = 'stopped'
         self.pending_profile = None
         self.publication_id = None
@@ -166,13 +171,24 @@ class BotPanel:
         self.canvas = tk.Canvas(self.frame, bg=SURFACE, highlightthickness=0)
         scrollbar = ttk.Scrollbar(self.frame, orient='vertical', command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side='right', fill='y')
         self.canvas.pack(side='left', fill='both', expand=True)
         body = tk.Frame(self.canvas, bg=SURFACE)
         body.grid_columnconfigure(0, weight=1)
         body_window = self.canvas.create_window((0, 0), window=body, anchor='nw')
-        self.canvas.bind('<Configure>', lambda event: self.canvas.itemconfigure(body_window, width=event.width))
-        body.bind('<Configure>', lambda event: self.canvas.configure(scrollregion=self.canvas.bbox(body_window)))
+        def layout(event):
+            if event.widget is self.canvas:
+                self.canvas.itemconfigure(body_window, width=event.width)
+            region = self.canvas.bbox(body_window)
+            self.canvas.configure(scrollregion=region)
+            overflow = region and region[3] - region[1] > self.canvas.winfo_height() + 1
+            if overflow and not scrollbar.winfo_manager():
+                scrollbar.pack(side='right', fill='y', before=self.canvas)
+            elif not overflow and scrollbar.winfo_manager():
+                scrollbar.pack_forget()
+                self.canvas.yview_moveto(0)
+
+        self.canvas.bind('<Configure>', layout)
+        body.bind('<Configure>', layout)
         header = tk.Frame(body, bg=SURFACE)
         header.grid(row=0, column=0, sticky='ew', padx=28, pady=(24, 4))
         self.title = label(header, profile['name'], size=23, bold=True)
@@ -247,6 +263,43 @@ class BotPanel:
             steps = abs(event.delta) // 120 or 1
             self.canvas.yview_scroll(-steps if event.delta > 0 else steps, 'units')
 
+    def run_reserved_bot(self, stop_event, on_ready):
+        client = self.manager.client
+        profile_id = self.profile['id']
+        try:
+            client.acquire_bot(profile_id, self.profile['revision'])
+        except CloudError as error:
+            self.events.put(('lease_error', str(error)))
+            raise
+        done = threading.Event()
+        ready = threading.Event()
+
+        def renew():
+            while not done.wait(25):
+                try:
+                    client.renew_bot(profile_id, ready.is_set())
+                except CloudError as error:
+                    self.events.put(('lease_error', str(error)))
+                    stop_event.set()
+                    return
+
+        def report_ready():
+            client.renew_bot(profile_id, True)
+            ready.set()
+            on_ready()
+
+        heartbeat = threading.Thread(target=renew, name='dropper-bot-lease', daemon=True)
+        heartbeat.start()
+        try:
+            self.controller._run_bot(stop_event, report_ready)
+        finally:
+            done.set()
+            heartbeat.join()
+            try:
+                client.release_bot(profile_id)
+            except CloudError:
+                pass
+
     def load_credentials(self):
         self.controller.session_client = self.manager.client
         try:
@@ -270,13 +323,28 @@ class BotPanel:
     def refresh_profile(self, profile):
         self.profile = profile
         self.title.configure(text=profile['name'])
-        username = profile['creator'].get('username')
-        self.subtitle.configure(text=f'@{username}' if username else '')
+        self.update_cloud_status(profile)
+
+    def update_cloud_status(self, status):
+        self.active_elsewhere = status.get('active_elsewhere', self.active_elsewhere)
+        self.published_today = status.get('published_today', self.published_today)
+        username = self.profile['creator'].get('username')
+        details = [f'@{username}'] if username else []
+        if self.published_today is not None:
+            details.append(f'{self.published_today} / 400')
+        if self.active_elsewhere and not self.controller.running:
+            details.append('Activo en otra instancia')
+        self.subtitle.configure(text=' · '.join(details))
+        self.update_start_button()
+
+    def update_start_button(self):
+        disabled = self.mode in {'starting', 'running', 'stopping'} or self.manager.closing or self.removed or self.active_elsewhere
+        self.start_button.configure(state='disabled' if disabled else 'normal')
+
     def set_mode(self, mode):
         self.mode = mode
         self.badge.set(mode)
-        active = mode in {'starting', 'running', 'stopping'}
-        self.start_button.configure(state='disabled' if active or self.manager.closing or self.removed else 'normal')
+        self.update_start_button()
         self.stop_button.configure(state='normal' if mode in {'starting', 'running'} else 'disabled')
         if mode == 'starting':
             self.publication_id = None
@@ -353,7 +421,7 @@ class BotPanel:
             self.publication_order.pack(fill='x', pady=(2, 0))
 
     def start(self):
-        if self.controller.running or self.manager.closing:
+        if self.controller.running or self.manager.closing or self.active_elsewhere:
             return
         if self.manager.client is None or self.manager.auth_required:
             self.manager.refresh()
@@ -414,8 +482,14 @@ class BotPanel:
                 self.publication_detail.configure(text='Confirmación enviada a Telegram')
             elif event == 'ready' and self.mode == 'starting':
                 self.set_mode('running')
+            elif event == 'lease_error':
+                self.lease_error = value
+                self.append('ERROR', value)
             elif event == 'stopped':
                 self.set_mode('error' if value else 'stopped')
+                if getattr(self, 'lease_error', None):
+                    self.show_publication(self.lease_error, color=ERROR)
+                    self.lease_error = None
                 self.append('ERROR' if value else 'INFO', 'El bot se detuvo con error' if value else 'Bot detenido')
 
     def save_log(self):
@@ -789,6 +863,11 @@ class DropperWindow:
                 remote = self.revisions(profiles)
                 self.update_hint.set('Hay cambios disponibles' if remote != snapshot else '')
                 self.cloud_online = True
+                for profile in profiles:
+                    panel = self.panels.get(profile['id'])
+                    if panel:
+                        panel.update_cloud_status(profile)
+                self.refresh_sidebar()
                 if any(panel.controller.running and remote.get(key) != snapshot.get(key) for key, panel in self.panels.items()):
                     self.refresh()
 
@@ -805,15 +884,7 @@ class DropperWindow:
                 else:
                     self.status.set(str(error))
 
-        active = [{'id': key, 'revision': snapshot[key][0]} for key, panel in self.panels.items()
-                  if key in snapshot and panel.mode == 'running' and panel.controller.running]
-
-        def check():
-            if active:
-                client.report_bot_activity(active)
-            return client.profile_revisions()
-
-        self.background(check, complete, failed)
+        self.background(client.profile_revisions, complete, failed)
 
     def apply_profiles(self, profiles):
         remote = {profile['id']: profile for profile in profiles}
@@ -881,7 +952,7 @@ class DropperWindow:
             color = GREEN if panel.mode == 'running' else ACCENT if panel.mode in {'starting','stopping'} else ERROR if panel.mode == 'error' else MUTED
             name = label(row, f'●  {panel.profile["name"]}', color=color, bold=True, bg=background, anchor='w', wraplength=185)
             name.pack(fill='x')
-            model = label(row, '@' + panel.profile['creator']['username'] if panel.profile['creator'].get('username') else '', color=MUTED, size=9, bg=background, anchor='w', wraplength=185)
+            model = label(row, panel.subtitle.cget('text'), color=MUTED, size=9, bg=background, anchor='w', wraplength=185)
             model.pack(fill='x', padx=(17,0), pady=(4,0))
             for widget in (row, name, model):
                 widget.bind('<Button-1>', lambda event, selected=key: self.select(selected))

@@ -26,7 +26,7 @@ test('HERS separates the embedded bot tools from the history and settings',async
    const url=new URL(req.url());
    if(url.pathname==='/hers'){
     return route.fulfill({contentType:'text/html',body:`<iframe id="operations" title="Dropper" src="/embed/operations"></iframe>
-      <iframe id="bots" title="Bots" src="/embed/bots"></iframe><script>addEventListener('message',event=>{
+      <iframe id="bots" title="Bots" src="/embed/bots"></iframe><iframe id="session" title="Sesión" src="/embed/session"></iframe><script>addEventListener('message',event=>{
       if(event.origin===location.origin && event.data?.type==='hers-dropper-session'){
         event.ports[0].postMessage({token:'test-hers-admin'});event.ports[0].close();}
       });</script>`});
@@ -51,8 +51,11 @@ test('HERS separates the embedded bot tools from the history and settings',async
   await bots.getByRole('button',{name:'Editar Lilith',exact:true}).waitFor();
   await bots.getByRole('button',{name:'Verificar Mi perfil de Lilith',exact:true}).waitFor();
   assert.equal(await bots.getByRole('button',{name:'Ajustes',exact:true}).count(),0);
-  await bots.getByRole('button',{name:'Conectar AgencyKey'}).waitFor();
-  await bots.getByRole('heading',{name:'AgencyKey para los bots'}).waitFor();
+  assert.equal(await bots.getByRole('button',{name:'Conectar AgencyKey'}).count(),0);
+  assert.equal(await bots.getByRole('heading',{name:'AgencyKey para los bots'}).count(),0);
+  const session=page.frameLocator('#session');
+  await session.getByRole('button',{name:'Conectar AgencyKey'}).waitFor();
+  assert.equal(await session.getByRole('button',{name:'Añadir bot'}).count(),0);
   assert.equal(await bots.getByRole('button',{name:'Actualizar',exact:true}).count(),0);
   assert.deepEqual(errors,[]);
  }finally{
@@ -83,10 +86,10 @@ test('password administrator configures a shared API, selects models and rotates
  await page.locator('#nav-drops').click();
  const date = page.locator('#drops-date');
  await date.fill('2026-11-16');
- await page.locator('#drops-body article').filter({hasText:'Lilith'}).getByText('1 Drop · 2 posts · 1 automático · 1 manual').waitFor();
- await page.locator('#drops-body article').filter({hasText:'Lola'}).getByText('1 Drop · 1 post · 1 automático · 0 manuales').waitFor();
+ await page.locator('#drops-body article').filter({hasText:'Lilith'}).getByText('2 / 400').waitFor();
+ await page.locator('#drops-body article').filter({hasText:'Lola'}).getByText('1 / 400').waitFor();
  await date.fill('2026-11-15');
- await page.locator('#drops-status').filter({hasText:'No hay publicaciones'}).waitFor();
+ await page.locator('#drops-body article').filter({hasText:'Lilith'}).getByText('0 / 400').waitFor();
  await page.locator('#nav-profiles').click();
  await page.getByRole('button',{name:'Editar Lilith',exact:true}).click();await page.locator('#creator-id option[value="52"]').waitFor({state:'attached'});upstream.ofNames[52]='Lilith actualizada';await page.locator('#save').click();await page.getByRole('button',{name:'Editar Lilith actualizada',exact:true}).waitFor();
  await page.getByRole('button',{name:'Eliminar Lola',exact:true}).click();await page.locator('#confirm-accept').click();await page.waitForFunction(()=>document.querySelectorAll('#profiles-body .bot-row').length===1);

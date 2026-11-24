@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, APPLICATIONS_TABLE } from "../lib/supabase";
+import AdminRefresh from "./AdminRefresh";
 import AdminLoading from "./AdminLoading";
 import { AdminError } from "./adminActions";
 import { monthRange } from "./finanzas/finance";
@@ -8,6 +9,8 @@ import Overview from "./finanzas/Overview";
 import ActiveBots from "./dropper/ActiveBots";
 
 export default function AdminDashboardHome({ revision }) {
+  const [completed, setCompleted] = useState(0);
+  const [botsCompleted, setBotsCompleted] = useState(0);
   const [report, setReport] = useState(null);
   const [count, setCount] = useState(null);
   const [financeError, setFinanceError] = useState("");
@@ -17,7 +20,7 @@ export default function AdminDashboardHome({ revision }) {
     const controller = new AbortController();
     const { signal } = controller;
     const range = monthRange();
-    loadOverview(range, signal).then((period) => {
+    const finance = loadOverview(range, signal).then((period) => {
       if (signal.aborted) return;
       setReport({ range, data: { ...period, commissions: [] } });
       setFinanceError("");
@@ -33,15 +36,16 @@ export default function AdminDashboardHome({ revision }) {
       setCount(result.count);
       setApplicationsError("");
     }
-    loadCount().catch(() => {
+    const applications = loadCount().catch(() => {
       if (!signal.aborted) setApplicationsError("No se pudo consultar el conteo de postulaciones");
     });
+    void Promise.all([finance, applications]).then(() => { if (!signal.aborted) setCompleted(revision); });
     return () => controller.abort();
   }, [revision]);
 
   return <section className="admin-dashboard-home">
     <div className="admin-dashboard-hero">
-      <div><h1>Centro de Administración</h1></div>
+      <div><h1>Centro de Administración <AdminRefresh busy={completed !== revision || botsCompleted !== revision} section="Centro de Administración" /></h1></div>
       <div className="admin-dashboard-hero__mark"><img src="/HERSl.jpg" alt="HERS" /></div>
     </div>
     <AdminError id="home-finance" section="Inicio" message={financeError} />
@@ -52,7 +56,7 @@ export default function AdminDashboardHome({ revision }) {
         <strong>{count ?? "—"}</strong>
         <span>Registros recibidos</span>
       </div>
-      <ActiveBots revision={revision} section="Inicio" />
+      <ActiveBots revision={revision} section="Inicio" onLoaded={setBotsCompleted} />
     </div>
     <div className="hf admin-month-overview">
       {report ? <Overview {...report} monthly /> : financeError ? null : <AdminLoading>Cargando el resumen del mes…</AdminLoading>}

@@ -16,7 +16,7 @@
 .hers-dropper-frame {
   display: block;
   inline-size: 100%;
-  block-size: max(32rem, 70dvh);
+  block-size: 12rem;
   border: 1px solid #392f28;
   border-radius: 12px;
   background: #171614;
@@ -45,20 +45,27 @@
   max-width: min(100%, 22rem);
 }
 
+.hers-dropper > .hf-tabs { margin-block: 1rem; }
+
+.hers-dropper-models { margin-top: 1rem; }
 .hers-dropper-model {
-  border-top: 1px solid #473b32;
-  margin-top: 1rem;
-  padding-top: 1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: clamp(.5rem, 3vw, 1.5rem);
+  border-top: 1px solid var(--hf-line);
+  padding-block: .65rem;
 }
-
-.hers-dropper-model h3,
-.hers-dropper-model p {
-  margin: 0 0 .4rem;
+.hers-dropper-model h3 { margin: 0; }
+.hers-dropper-model strong { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hers-dropper-bots ul { list-style: none; display: flex; flex-wrap: wrap; gap: .55rem 1.25rem; margin: 0; padding: 0; }
+.hers-dropper-online-row { display: flex; align-items: center; gap: .6rem; }
+.hers-dropper-online {
+  display: inline-block; flex: none; width: .55rem; height: .55rem; border-radius: 50%;
+  background: #63d5a3; animation: hers-dropper-pulse 1.8s infinite;
 }
-
-.hers-dropper-model ul,
-.hers-dropper-bots ul {
-  margin: .5rem 0 0;
-  padding-inline-start: 1.15rem;
-  overflow-wrap: anywhere;
+@keyframes hers-dropper-pulse {
+  0% { box-shadow: 0 0 0 0 #63d5a390; }
+  75%, 100% { box-shadow: 0 0 0 .35rem #63d5a300; }
 }
+@media (prefers-reduced-motion: reduce) { .hers-dropper-online { animation: none; } }

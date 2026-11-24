@@ -4,7 +4,7 @@ import { AdminError } from "../adminActions";
 import AdminLoading from "../AdminLoading.jsx";
 import DropperFrame from "../dropper/DropperFrame.jsx";
 import callApi from "./connectorApi";
-import { usd } from "../finanzas/finance";
+import AdminRefresh from "../AdminRefresh";
 import "../finanzas/finanzas.css";
 import "./integrations.css";
 
@@ -14,19 +14,23 @@ const dateTime = (date) => new Date(date).toLocaleString("es-VE");
 
 export default function Integrations({ revision }) {
   const [bots, setBots] = useState(false);
+  const [completed, setCompleted] = useState(0);
+  const [sessionCompleted, setSessionCompleted] = useState(0);
+  const refreshing = completed !== revision || (!bots && sessionCompleted !== revision);
   return <section className="hf hers-integrations" aria-labelledby="hers-integrations-title">
     <header className="hf-header">
-      <div><h1 id="hers-integrations-title">Conectores</h1><p>Conexiones y credenciales de HERS</p></div>
+      <div><h1 id="hers-integrations-title">Conectores <AdminRefresh busy={refreshing} section="Conectores" /></h1><p>Conexiones y credenciales de HERS</p></div>
     </header>
     <nav className="hf-tabs" aria-label="Secciones de Conectores">
       <button type="button" aria-pressed={!bots} onClick={() => setBots(false)}>Servicios</button>
       <button type="button" aria-pressed={bots} onClick={() => setBots(true)}>Bots</button>
     </nav>
-    {bots ? <DropperFrame view="bots" title="Bots y sesión compartida de Dropper" revision={revision} /> : <Services revision={revision} />}
+    {bots ? <DropperFrame view="bots" title="Bots de Dropper" revision={revision} onLoaded={setCompleted} /> :
+      <Services revision={revision} onLoaded={setCompleted} onSessionLoaded={setSessionCompleted} />}
   </section>;
 }
 
-function Services({ revision }) {
+function Services({ revision, onLoaded, onSessionLoaded }) {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [formError, setFormError] = useState("");
@@ -42,6 +46,7 @@ function Services({ revision }) {
       callApi("/agencykey-directory", "GET", undefined, controller.signal),
     ]).then(([status, directory]) => {
       if (controller.signal.aborted) return;
+      onLoaded(revision);
       if (status.status === "fulfilled") setData(status.value);
       if (directory.status === "fulfilled") setDirectoryConnected(directory.value.connected);
       const messages = [status, directory].filter((result) => result.status === "rejected")
@@ -50,7 +55,7 @@ function Services({ revision }) {
         : current?.error ? null : current);
     });
     return () => controller.abort();
-  }, [revision]);
+  }, [revision, onLoaded]);
 
   useEffect(() => {
     function complete(event) {
@@ -82,27 +87,20 @@ function Services({ revision }) {
     }
   }
 
-  async function perform(operation) {
-    setAction(operation);
+  async function saveCredential() {
+    setAction("save");
     setNotice(null);
     setFormError("");
     let saved = false;
     try {
-      if (operation === "save") {
-        await callApi("/credential", "PUT", form);
-        saved = true;
-        setForm(null);
-        setNotice({ success: "Credencial guardada" });
-      } else if (operation === "test") {
-        const result = await callApi(`/${operation}`, "POST");
-        const label = "Conexión correcta";
-        const total = typeof result.netTotal === "number" ? ` · Neto ${usd(result.netTotal)}` : "";
-        setNotice({ success: `${label} · ${result.day} · ${result.creators} modelos${total}` });
-      }
+      await callApi("/credential", "PUT", form);
+      saved = true;
+      setForm(null);
+      setNotice({ success: "Credencial guardada" });
       setData(await callApi());
     } catch (error) {
-      if (operation === "save" && !saved) setFormError(error.message);
-      else setNotice({ error: saved ? "Credencial guardada. No se pudo actualizar el estado" : error.message });
+      if (!saved) setFormError(error.message);
+      else setNotice({ error: "Credencial guardada. No se pudo actualizar el estado" });
     } finally { setAction(""); }
   }
 
@@ -135,9 +133,7 @@ function Services({ revision }) {
         <div className="hf-actions">
           {directoryConnected && <span role="status">Directorio de AgencyKey autorizado</span>}
           {directoryConnected === false && <button type="button" disabled={busy} onClick={connectDirectory}>Autorizar directorio de AgencyKey</button>}
-          {agencyKeySaved ? <>
-            <button type="button" disabled={busy} onClick={() => perform("test")}>{action === "test" ? "Probando…" : "Probar conexión"}</button>
-          </> : <button type="button" className="hf-primary" disabled={busy} onClick={() => edit()}>Configurar AgencyKey</button>}
+          {!agencyKeySaved && <button type="button" className="hf-primary" disabled={busy} onClick={() => edit()}>Configurar AgencyKey</button>}
         </div>
       </section>
       <section className="hf-section hers-integration-card">
@@ -151,9 +147,10 @@ function Services({ revision }) {
         </li>)}</ul> : <p className="hf-empty">Sin credenciales guardadas</p>}
       </section>
     </>}
+    <DropperFrame view="session" title="Sesión compartida de AgencyKey" revision={revision} onLoaded={onSessionLoaded} />
     {form && <dialog className="hf-dialog" aria-labelledby="hers-credential-title"
       ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(event) => { event.preventDefault(); close(); }}>
-      <form onSubmit={(event) => { event.preventDefault(); perform("save"); }}>
+      <form onSubmit={(event) => { event.preventDefault(); saveCredential(); }}>
         <h2 id="hers-credential-title">Guardar credencial</h2>
         <fieldset className="hf-form hers-integration-form" disabled={busy}>
           <label>Servicio<input required maxLength={40} pattern="[a-z0-9][a-z0-9\x2d]{0,39}" placeholder="agencykey" value={form.service}

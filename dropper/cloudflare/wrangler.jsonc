@@ -4,6 +4,14 @@
   "compatibility_date": "2026-11-10",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "keep_vars": true,
+  "services": [
+    {
+      "binding": "HERS_AGENCY_KEY",
+      "service": "hers-prueba",
+      "entrypoint": "DropperAgencyKey"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

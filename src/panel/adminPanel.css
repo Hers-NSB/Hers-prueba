@@ -213,7 +213,6 @@
   min-width: 0;
   min-height: 100%;
   box-sizing: border-box;
-  overflow: auto;
 }
 
 .admin-overlay .admin-dashboard-hero h1 {
@@ -685,3 +684,7 @@
     padding-inline: 2px;
   }
 }
+
+.hf-refreshing { color: var(--hf-accent, #c7a78d); vertical-align: middle; animation: hf-rotate .85s linear infinite; }
+@keyframes hf-rotate { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .hf-refreshing { animation: none; } }

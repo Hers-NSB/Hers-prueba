@@ -82,14 +82,33 @@ test("importa solo el neto verificado y lo guarda en un lote sin reemplazar atri
       assert.equal(new URL(url).searchParams.get("fromDate"), "2026-11-19T04:00:00.000Z");
       return Response.json({ data: [{ senderId: member, totalSalesSum: 12.51 }, { senderId: "__unknown__", totalSalesSum: 10 }] });
     }
-    return Response.json(null);
+    const { p_action } = JSON.parse(options.body);
+    return Response.json(p_action === "reserve_import" ? { acquired: true } : null);
   }, false, Date.parse("2026-11-20T11:00:00Z"));
   assert.equal(result.creators, 1);
   const batch = JSON.parse(calls.at(-1)[1].body).p_data;
+  const reservation = JSON.parse(calls[1][1].body);
+  assert.equal(reservation.p_action, "reserve_import");
+  assert.equal(batch.claim, reservation.p_data.claim);
+  assert.match(calls.at(-1)[0], /hers_payroll_worker$/);
+  delete batch.claim;
   assert.deepEqual(batch, { p_day: "2026-11-19", p_sales: [{ creator_key: creator, creator_name: "Modelo", net: 28 }], p_attributions: null, p_employee_net: { [member]: 10.01 } });
-  assert.equal(new URL(calls[2][0]).searchParams.get("startDate"), "2026-11-19 04:00:00");
+  assert.equal(new URL(calls[3][0]).searchParams.get("startDate"), "2026-11-19 04:00:00");
   assert.deepEqual(await importNet("2026-11-21", env, () => assert.fail("No consultar en fechas futuras"),
     false, Date.parse("2026-11-20T11:00:00Z")), { day: "2026-11-21", future: true });
+});
+
+test("omite días finalizados o reservados sin consultar AgencyKey", async () => {
+  const env = { AGENCYKEY_API_KEY: "fixture", HERS_INTEGRATIONS_SECRET: Buffer.alloc(32).toString("base64") };
+  const day = "2026-11-19";
+  for (const [reservation, expected] of [[{ finalized: true }, { finalized: true }], [{ acquired: false }, { reserved: true }]]) {
+    const result = await importNet(day, env, async (url, options) => {
+      assert.match(url, /hers_integration_worker$/);
+      const { p_action } = JSON.parse(options.body);
+      return Response.json(p_action === "agencykey" ? null : reservation);
+    }, false, Date.parse("2026-11-20T11:00:00Z"));
+    assert.deepEqual(result, { day, ...expected });
+  }
 });
 
 test("recurre a transacciones paginadas y bloquea ceros sin confirmar", async () => {
@@ -150,6 +169,7 @@ test("reintenta únicamente la página de transacciones que falló", async () =>
     if (request.pathname.endsWith("/reports/employees")) return Response.json({ data: [] });
     const body = JSON.parse(options.body);
     if (body.p_action === "agencykey") return Response.json(null);
+    if (body.p_action === "reserve_import") return Response.json({ acquired: true });
     assert.equal(body.p_action, "import");
     assert.equal(body.p_data.p_sales[0].net, 10);
     calls.push("import");
@@ -180,12 +200,14 @@ test("deja pendiente el día con tres fallos y prueba el siguiente en el ciclo p
     const { p_action, p_data } = JSON.parse(options.body);
     if (p_action === "agencykey") return Response.json(null);
     actions.push([p_action, p_data.after_day ?? p_data.p_day]);
+    if (p_action === "reserve_import") return Response.json({ acquired: true });
     if (p_action === "next") return Response.json({ day: p_data.after_day ? laterDay : firstDay });
     return Response.json(null);
   });
   await worker.scheduled({ scheduledTime: Date.parse("2026-11-20T11:00:00Z") }, env);
   assert.equal(failedRequests, 3);
-  assert.deepEqual(actions, [["next", undefined], ["next", firstDay], ["import", laterDay]]);
+  assert.deepEqual(actions, [["next", undefined], ["reserve_import", firstDay], ["release_import", firstDay],
+    ["next", firstDay], ["reserve_import", laterDay], ["import", laterDay]]);
 });
 
 test("calcula quincenas y mes anterior cuando cambia el año y en febrero bisiesto", () => {

@@ -1,5 +1,6 @@
+import AdminRefresh from "../AdminRefresh";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, FileCheck, Plus, RefreshCw } from "lucide-react";
+import { ChevronDown, FileCheck, Plus } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import AdminLoading from "../AdminLoading.jsx";
 import { dateKey, financeBreakdown, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, salesProfit, usd } from "./finance";
@@ -37,7 +38,7 @@ async function loadFinance(range, signal) {
   return { ...period, ...payroll, ...overview, creators, platforms, members, categories, rates };
 }
 
-export default function Finanzas() {
+export default function Finanzas({ refreshRequested, clearRefresh }) {
   const [filters, setFilters] = useState(monthRange);
   const [data, setData] = useState(empty);
   const [tab, setTab] = useState(tabs[0]);
@@ -128,19 +129,12 @@ export default function Finanzas() {
     return missingAgencyKeyDays(range, sales, data.creators, today, refreshToday);
   }
 
-  async function updateFilters(period) {
+  function updateFilters(period) {
     if (period.from === filters.from && period.to === filters.to) return;
     setLoading(true);
     setLoadError(false);
     setSyncError("");
-    try {
-      const synced = await syncDays(await findDaysToSync(period, data.payPeriod?.day));
-      if (synced) refresh((value) => value + 1);
-    } catch {
-      setSyncError("No se pudo comprobar qué días faltan por sincronizar");
-    } finally {
-      setFilters(period);
-    }
+    setFilters(period);
   }
 
   function reload() {
@@ -161,7 +155,7 @@ export default function Finanzas() {
         try {
           const result = await callApi("/sync", "POST", { day });
           if (result.future) break;
-          synced += 1;
+          if (!result.finalized && !result.reserved) synced += 1;
         } catch (error) {
           errors.push(error.message);
           if (error.status === 429 || /\[(?:CON-|AK-KEY-MISSING)/.test(error.message)) break;
@@ -202,14 +196,16 @@ export default function Finanzas() {
     }
   }
 
-  useAdminRefresh("finance", !busy && access && !(tab === "Resumen" && invalid) ? update : !busy && access !== false ? reload : null);
+  const refreshAction = !busy && access && !(tab === "Resumen" && invalid) ? update
+    : !busy && access === null ? reload : null;
+  useAdminRefresh("finance", refreshAction, refreshRequested, clearRefresh, busy);
 
   const paymentPerson = payments && (payments.type === "modelShare" ? data.creators : data.members)
     .find(({ id }) => id === payments.person.id);
   const paymentRate = payments && effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()));
   return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
-      <div><h1>Finanzas {busy && access && <RefreshCw className="hf-refreshing" size={20} role="status" aria-label="Actualizando Finanzas" />}</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
+      <div><h1>Finanzas {(refreshRequested || (busy && access)) && <AdminRefresh busy section="Finanzas" />}</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
     </header>
     <AdminError id="finance-access" section="Finanzas" message={access === false ? "Tu cuenta no tiene acceso a Finanzas" : ""} />
     <AdminError id="finance-payroll" section="Finanzas" message={payrollError} />
@@ -217,10 +213,7 @@ export default function Finanzas() {
     <AdminError id="finance-load" section="Finanzas" message={loadError ? "No se pudieron actualizar los datos" : ""} />
     {access !== false && <>
       <nav className="hf-tabs" aria-label="Secciones de Finanzas">
-        {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => {
-          setTab(item);
-          if (item === "Empleados") refreshDirectory((value) => value ?? 0);
-        }}>{item}</button>)}
+        {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{item}</button>)}
       </nav>
       {tab === "Resumen" && <div className="hf-toolbar">
         <PeriodPicker value={filters} onChange={updateFilters} disabled={busy || !access} />

@@ -212,9 +212,6 @@
 .hf-dialog .hf-model-options input { flex: none; width: 1rem; min-height: 1rem; accent-color: var(--hf-accent); }
 
 .hf-finance h1 { display: flex; align-items: center; gap: .55rem; }
-.hf-refreshing { color: var(--hf-accent); animation: hf-rotate .85s linear infinite; }
-@keyframes hf-rotate { to { transform: rotate(1turn); } }
-@media (prefers-reduced-motion: reduce) { .hf-refreshing { animation: none; } }
 .hf-choice { position: relative; display: block; }
 .hf-choice select { appearance: none; padding-right: 2rem; text-overflow: ellipsis; }
 .hf-choice svg { position: absolute; top: 50%; right: .65rem; transform: translateY(-50%); pointer-events: none; }

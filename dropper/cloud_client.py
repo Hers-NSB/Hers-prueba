@@ -1,4 +1,5 @@
 import base64
+from uuid import uuid4
 
 import httpx
 
@@ -25,6 +26,7 @@ class CloudClient:
             raise ValueError('La conexión requiere HTTPS')
         self.base_url = base_url.rstrip('/')
         self.transport = transport
+        self.instance = uuid4().hex
         register_secrets(self.access_token)
 
     def request(self, method, path, **kwargs):
@@ -38,7 +40,8 @@ class CloudClient:
                 if proxy:
                     options['proxy'] = proxy
             with httpx.Client(base_url=self.base_url, timeout=httpx.Timeout(45, connect=20), follow_redirects=False,
-                              headers={'Authorization': authorization, 'X-Recorder-Protocol': '2'},
+                              headers={'Authorization': authorization, 'X-Recorder-Protocol': '2',
+                                       'X-Dropper-Instance': self.instance},
                               transport=self.transport, **options) as client:
                 response = client.request(method, path, **kwargs)
             if response.status_code == 401:
@@ -67,6 +70,15 @@ class CloudClient:
             raise CloudError('No se pudo leer la configuración')
         self.recording_configured = data.get('recording_session', {}).get('configured')
         return result
+
+    def acquire_bot(self, profile_id, revision):
+        return self.request('POST', f'/v1/profiles/{profile_id}/lease', json={'revision': revision})
+
+    def renew_bot(self, profile_id, ready):
+        return self.request('PUT', f'/v1/profiles/{profile_id}/lease', json={'ready': ready})
+
+    def release_bot(self, profile_id):
+        return self.request('DELETE', f'/v1/profiles/{profile_id}/lease')
 
     def report_bot_activity(self, profiles):
         for start in range(0, len(profiles), 100):

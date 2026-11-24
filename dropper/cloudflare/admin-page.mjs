@@ -8,12 +8,16 @@ const PAGE = String.raw`<!doctype html>
 @media(pointer:coarse){input,select{font-size:16px}button{min-height:44px}}
 .report-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.report-actions button{font-size:13px;padding:6px 10px}.report-dialog{width:850px}.report-detail{white-space:pre-wrap;overflow-wrap:anywhere;font:13px/1.5 monospace;margin:16px 0}.report-image{max-width:100%;height:auto;border:1px solid var(--line)}.row-actions{flex-wrap:wrap}
 #drops-date{width:fit-content}#drops-body article{display:block;margin-bottom:12px}
-#drops-body h2{margin:0}#drops-body ul{padding-left:22px;margin:10px 0 0}#drops-body li{margin:4px 0}
+#drops-body h2{margin:0}
 [data-embedded]:not([data-embedded=""]){background:#0b0b0a;--brand:#c7a78d;--surface:#171614;--panel:#28231f;--line:#473b32;--muted:#c2b5aa}
 [data-embedded]:not([data-embedded=""]) .top,[data-embedded]:not([data-embedded=""]) #login-view,[data-embedded] #embed-error:empty{display:none}
-[data-embedded="bots"] .shell{display:block;min-height:0}
+[data-embedded="bots"] .shell,[data-embedded="session"] .shell{display:block;min-height:0}
 [data-embedded="bots"] #reload,[data-embedded="bots"] .error{display:none}
 [data-embedded="bots"] main{overflow-wrap:anywhere}
+[data-embedded="bots"],[data-embedded="session"]{overflow:hidden}
+[data-embedded="bots"] #recording-settings,[data-embedded="session"] .nav,
+[data-embedded="session"] #profiles-section > :not(#recording-settings){display:none}
+[data-embedded="session"] #recording-settings{padding:0;border:0}
 [data-embedded="operations"] .shell{display:block;min-height:0}
 [data-embedded="operations"] .nav{flex-direction:row;padding:0 0 12px}
 #embed-error{padding:0 16px}
@@ -23,7 +27,7 @@ const PAGE = String.raw`<!doctype html>
 <div class="shell" id="app-view" hidden><nav class="nav" aria-label="Administración"><button id="nav-profiles" aria-selected="true">Bots</button><button id="nav-drops" aria-selected="false">Drops</button><button id="nav-access" aria-selected="false">Ajustes</button></nav><main>
 <section id="profiles-section"><div class="heading"><h1>Bots</h1><div class="actions"><button id="reload">Actualizar</button><button class="primary" id="add">Añadir bot</button></div></div><div class="bot-row" id="recording-settings"><div><h3>Sesión compartida de AgencyKey</h3><span class="muted" id="recording-session-status">Consultando sesión…</span></div><button id="connect-recording">Conectar AgencyKey</button></div><div id="profiles-error" class="error" role="alert"></div><div id="profiles-body" aria-label="Bots configurados"></div><div class="empty" id="empty" hidden>No hay bots configurados</div></section>
 <section id="drops-section" hidden>
-<div class="heading"><div><h1>Resumen diario de Drops</h1><p class="muted">Hora de Caracas</p></div><div class="actions"><button id="drops-today">Hoy</button></div></div>
+<div class="heading"><div><h1>Resumen diario de Drops</h1><p class="muted">Hora de Caracas</p></div><div class="actions"><button id="drops-refresh">Actualizar</button><button id="drops-today">Hoy</button></div></div>
 <label class="field">Fecha<input id="drops-date" type="date"></label>
 <p class="muted" id="drops-status" role="status"></p><div id="drops-body"></div>
 </section>
@@ -90,12 +94,16 @@ async function showApp(){
   $('nav-profiles').hidden=true;$('admin-password-form').hidden=true;
   if(embedded==='bots'){
    $('app-view').querySelector('nav').hidden=true;
-   $('profiles-section').append($('agency-form'));
+   $('agency-form').hidden=true;
    section('profiles');
-   await Promise.all([reload(), resumeRecordingConnection(), recordingStatus(), agencyStatus()]);
+   await reload();
    return;
   }
   $('agency-form').hidden=true;
+  if(embedded==='session'){
+   await Promise.all([recordingStatus(), resumeRecordingConnection()]);
+   return;
+  }
  }
  section(embedded==='operations'?'drops':'profiles');
  await resumeRecordingConnection();
@@ -119,10 +127,7 @@ function section(which){
  if(which==='drops')void loadDrops();
 }
 const dropTime = new Intl.DateTimeFormat('es-VE',{timeZone:'America/Caracas',hour:'2-digit',minute:'2-digit'});
-function counted(total,singular,plural){return total+' '+(total===1?singular:plural);}
-function postCounts(automatic,manual){
- return [counted(automatic+manual,'post','posts'),counted(automatic,'automático','automáticos'),counted(manual,'manual','manuales')].join(' · ');
-}
+const caracasDay = new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Caracas',dateStyle:'short'});
 async function loadDrops(){
  const generation=++dropsRequest;
  const date=followToday?'':$('drops-date').value;
@@ -130,35 +135,34 @@ async function loadDrops(){
   const data=await api('/drops'+(date?'?date='+encodeURIComponent(date):''));
   if(generation!==dropsRequest)return;
   $('drops-date').value=data.date;$('drops-date').max=data.today;
-  const models=new Map();
+  const models=new Map(data.models.map(model=>[model.creator_id,{name:model.creator_name,total:0,lastAt:0}]));
   for(const drop of data.drops){
-   if(!models.has(drop.creator_id))models.set(drop.creator_id,{name:drop.creator_name,drops:[],auto:0,manual:0});
-   const model=models.get(drop.creator_id);
-   model.drops.push(drop);model.auto+=drop.automatic;model.manual+=drop.manual;
+   const model=models.get(drop.creator_id)||{name:drop.creator_name,total:0,lastAt:0};
+   model.total+=drop.automatic+drop.manual;
+   model.lastAt=Math.max(model.lastAt,drop.last_at);
+   models.set(drop.creator_id,model);
   }
   const cards=document.createDocumentFragment();
   for(const model of models.values()){
    const card=document.createElement('article');card.className='bot-row';
    const heading=document.createElement('h2');heading.textContent=model.name;
-   const total=document.createElement('div');total.className='muted';
-   total.textContent=model.drops.length+(model.drops.length===1?' Drop · ':' Drops · ')+postCounts(model.auto,model.manual);
-   const list=document.createElement('ul');
-   for(const drop of model.drops){
-    const item=document.createElement('li');
-    item.textContent=dropTime.format(new Date(drop.last_at*1000))+' · '+postCounts(drop.automatic,drop.manual);
-    list.append(item);
-   }
-   card.append(heading,total,list);cards.append(card);
+   const summary=document.createElement('div');summary.className='muted';
+   summary.textContent=(model.lastAt?dropTime.format(new Date(model.lastAt*1000))+' · ':'')+model.total+' / 400';
+   card.append(heading,summary);cards.append(card);
   }
   $('drops-body').replaceChildren(cards);
-  $('drops-status').textContent=models.size?'':'No hay publicaciones confirmadas para esta fecha';
+  $('drops-status').textContent=models.size?'':'No hay modelos configuradas';
  }catch(error){
   if(generation===dropsRequest){$('drops-body').replaceChildren();$('drops-status').textContent=error.message;}
  }
 }
 $('drops-date').addEventListener('change',()=>{followToday=!$('drops-date').value;void loadDrops();});
 $('drops-today').addEventListener('click',()=>{followToday=true;void loadDrops();});
-setInterval(()=>{if(!$('app-view').hidden&&!$('drops-section').hidden&&!document.hidden)void loadDrops();},45000);
+$('drops-refresh').addEventListener('click',()=>{void loadDrops();});
+setInterval(()=>{
+ if(!$('app-view').hidden&&!$('drops-section').hidden&&!document.hidden
+   &&(followToday||$('drops-date').value===caracasDay.format(new Date())))void loadDrops();
+},45000);
 function render(){
  if(feedBusy){renderPending=true;return;}
  feedRows.clear();$('profiles-body').replaceChildren();$('empty').hidden=profiles.length>0;
@@ -349,7 +353,7 @@ async function cancelRecording(){
 }
 $('recording-cancel').addEventListener('click',cancelRecording);$('recording-dialog').addEventListener('cancel',event=>{event.preventDefault();cancelRecording();});
 if(embedded){
- if(embedded==='bots'&&parent!==window){
+ if((embedded==='bots'||embedded==='session')&&parent!==window){
   let lastError='';
   const sendErrors=()=>{
    const messages=[...document.querySelectorAll('[role="alert"]')].map(node=>node.textContent.trim())
@@ -358,14 +362,23 @@ if(embedded){
    if(message!==lastError){lastError=message;parent.postMessage({type:'hers-dropper-error',message},location.origin);}
   };
   new MutationObserver(sendErrors).observe(document.body,{childList:true,subtree:true,characterData:true});
-  window.addEventListener('message',event=>{
-   if(event.origin!==location.origin||event.source!==parent||event.data?.type!=='hers-dropper-refresh'||$('app-view').hidden)return;
-   if(!$('reload').disabled)void reload();
-   void recordingStatus();
-   void agencyStatus();
+  const sendSize=()=>{
+   const dialogs=[...document.querySelectorAll('dialog[open]')];
+   const height=Math.max(document.body.getBoundingClientRect().height,
+     ...dialogs.map(dialog=>dialog.scrollHeight+40));
+   parent.postMessage({type:'hers-dropper-size',height:Math.ceil(height)+2},location.origin);
+  };
+  new ResizeObserver(sendSize).observe(document.body);
+  new MutationObserver(sendSize).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
+  window.addEventListener('message',async event=>{
+   if(event.origin!==location.origin||event.source!==parent||event.data?.type!=='hers-dropper-refresh')return;
+   try{
+    if(!$('app-view').hidden)await (embedded==='bots'?reload():recordingStatus());
+   }finally{parent.postMessage({type:'hers-dropper-ready',revision:event.data.revision},location.origin);}
   });
  }
- if(parent!==window)api('/session').then(showApp).catch(error=>{$('embed-error').textContent=error.message;});
+ if(parent!==window)api('/session').then(showApp).catch(error=>{$('embed-error').textContent=error.message;})
+  .finally(()=>parent.postMessage({type:'hers-dropper-ready'},location.origin));
  else $('embed-error').textContent='Abre esta sección desde el Panel Administración de HERS';
 }else if(setupToken)showLogin();else api('/session').then(showApp).catch(showLogin);
 })();

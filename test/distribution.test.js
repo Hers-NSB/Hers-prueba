@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateDistribution, calculateModelDistribution, effectivePlan, shareUnits, totalShares } from "../src/panel/finanzas/distribution.js";
+import { calculateDistribution, calculateModelDistribution, effectivePlan, shareUnits, totalShares } from "./legacy-distribution.js";
 
 test("reparte la suma de todos los modelos con el plan vigente de cada fecha", () => {
   const plans = [

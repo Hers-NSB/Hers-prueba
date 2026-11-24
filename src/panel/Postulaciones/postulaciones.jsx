@@ -1,3 +1,4 @@
+import AdminRefresh from "../AdminRefresh";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
@@ -30,71 +31,58 @@ const PHOTO_FIELDS = [
   { key: "foto_lenceria3_path", label: "Lencería 3" },
 ];
 
+const PAGE_SIZE = 24;
+
+async function signPhotos(app) {
+  const paths = [...new Set(PHOTO_FIELDS.map(({ key }) => app[key]).filter(Boolean))];
+  if (!paths.length) return {};
+  const { data, error } = await supabase.storage.from(PHOTOS_BUCKET).createSignedUrls(paths, 3600);
+  if (error) throw error;
+  return Object.fromEntries(data.filter((photo) => !photo.error && photo.signedUrl)
+    .map((photo) => [photo.path, photo.signedUrl]));
+}
+
 export default function Postulaciones({ revision = 0 }) {
   const [applications, setApplications] = useState([]);
-  const [photoUrls, setPhotoUrls] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [reload, setReload] = useState(0);
+  const [completed, setCompleted] = useState(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [confirmApp, setConfirmApp] = useState(null);
-
-  const loadApplications = useCallback(async () => {
-    try {
-      const { data, error: fetchError } = await supabase
-        .from(APPLICATIONS_TABLE)
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (fetchError) {
-        setError(
-          "No se pudieron cargar las postulaciones: " + fetchError.message,
-        );
-        return;
-      }
-
-      const nextApplications = data || [];
-      setApplications(nextApplications);
-
-      const paths = [
-        ...new Set(
-          nextApplications.flatMap((app) =>
-            PHOTO_FIELDS.map(({ key }) => app[key]).filter(Boolean),
-          ),
-        ),
-      ];
-
-      const signedEntries = await Promise.all(
-        paths.map(async (path) => {
-          const { data: signed, error: signedError } = await supabase.storage
-            .from(PHOTOS_BUCKET)
-            .createSignedUrl(path, 3600);
-
-          if (signedError || !signed?.signedUrl) return null;
-          return [path, signed.signedUrl];
-        }),
-      );
-
-      setPhotoUrls(Object.fromEntries(signedEntries.filter(Boolean)));
-      if (signedEntries.includes(null)) setError("No se pudieron cargar algunas fotografías");
-    } catch (loadError) {
-      setError(
-        "No se pudieron cargar las postulaciones: " +
-          (loadError?.message || "Error desconocido"),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const requestKey = `${revision}:${page}:${reload}`;
+  const loading = completed !== requestKey;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   useEffect(() => {
-    const start = setTimeout(() => {
-      setLoading(true);
-      setError("");
-      void loadApplications();
-    }, 0);
-    return () => clearTimeout(start);
-  }, [loadApplications, revision]);
+    const controller = new AbortController();
+    async function load() {
+      try {
+        const offset = page * PAGE_SIZE;
+        const { data, count, error } = await supabase.from(APPLICATIONS_TABLE)
+          .select("*", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(offset, offset + PAGE_SIZE - 1)
+          .abortSignal(controller.signal);
+        if (controller.signal.aborted) return;
+        if (error) throw error;
+        setError("");
+        setTotal(count ?? 0);
+        setApplications(data ?? []);
+        const lastPage = Math.max(0, Math.ceil((count ?? 0) / PAGE_SIZE) - 1);
+        if (page > lastPage) setPage(lastPage);
+      } catch (error) {
+        if (!controller.signal.aborted) setError("No se pudieron cargar las postulaciones: " + error.message);
+      } finally {
+        if (!controller.signal.aborted) setCompleted(requestKey);
+      }
+    }
+    void load();
+    return () => controller.abort();
+  }, [page, requestKey]);
 
   const requestDelete = (app) => setConfirmApp(app);
 
@@ -124,8 +112,7 @@ export default function Postulaciones({ revision = 0 }) {
           "Error borrando la postulación: " + deleteError.message,
         );
 
-      const nextApplications = applications.filter((a) => a.id !== app.id);
-      setApplications(nextApplications);
+      setReload((value) => value + 1);
       if (selected?.id === app.id) setSelected(null);
     } catch (deleteError) {
       setError(deleteError?.message || "Error borrando la postulación");
@@ -139,6 +126,9 @@ export default function Postulaciones({ revision = 0 }) {
     setError("");
 
     try {
+      const photoUrls = await signPhotos(app);
+      const missing = PHOTO_FIELDS.filter(({ key }) => !photoUrls?.[app[key]]).map(({ label }) => label);
+      if (missing.length) throw new Error(`Faltan fotos: ${missing.join(", ")}`);
       const zip = new JSZip();
 
       const infoLines = [
@@ -164,11 +154,7 @@ export default function Postulaciones({ revision = 0 }) {
 
       for (const { key, label } of PHOTO_FIELDS) {
         const path = app[key];
-        if (!path) continue;
-        const url = photoUrls[path];
-        if (!url) continue;
-
-        const response = await fetch(url);
+        const response = await fetch(photoUrls[path]);
         if (!response.ok) throw new Error(`No se pudo descargar ${label}`);
 
         const blob = await response.blob();
@@ -192,7 +178,7 @@ export default function Postulaciones({ revision = 0 }) {
     <div className="postulaciones-module">
       <div className="postulaciones-panel">
         <header className="postulaciones-header">
-          <h2>Panel de postulaciones</h2>
+          <h2>Panel de postulaciones <AdminRefresh busy={revision > 0 && loading} section="Postulaciones" /></h2>
         </header>
 
         <AdminError id="applications" section="Postulaciones" message={error} />
@@ -251,10 +237,18 @@ export default function Postulaciones({ revision = 0 }) {
           </div>
         )}
 
+        {pageCount > 1 && <nav className="postulaciones-form-row-buttons" aria-label="Páginas de postulaciones">
+          <button className="postulaciones-btn postulaciones-btn--outline" type="button"
+            disabled={loading || page === 0} onClick={() => setPage(page - 1)}>Anterior</button>
+          <span>Página {page + 1} de {pageCount}</span>
+          <button className="postulaciones-btn postulaciones-btn--outline" type="button"
+            disabled={loading || page + 1 >= pageCount} onClick={() => setPage(page + 1)}>Siguiente</button>
+        </nav>}
+
         {selected && (
           <ApplicationDetail
             app={selected}
-            photoUrls={photoUrls}
+            key={selected.id}
             onClose={() => setSelected(null)}
             onDelete={() => requestDelete(selected)}
             onDownload={() => handleDownload(selected)}
@@ -333,20 +327,31 @@ function ConfirmDialog({
 
 function ApplicationDetail({
   app,
-  photoUrls,
   onClose,
   onDelete,
   onDownload,
   busy,
 }) {
   const [expandedPhoto, setExpandedPhoto] = useState(null);
+  const [photoUrls, setPhotoUrls] = useState(null);
+  const [photoError, setPhotoError] = useState("");
+  useEffect(() => {
+    let active = true;
+    signPhotos(app).then((urls) => {
+      if (!active) return;
+      setPhotoUrls(urls);
+      if (PHOTO_FIELDS.some(({ key }) => !urls[app[key]])) setPhotoError("Faltan fotos en esta postulación.");
+    }).catch(() => { if (active) setPhotoError("No se pudieron cargar las fotografías."); });
+    return () => { active = false; };
+  }, [app]);
+
 
   const availablePhotos = useMemo(() => PHOTO_FIELDS.filter(
-    ({ key }) => app[key] && photoUrls[app[key]],
+    ({ key }) => app[key] && photoUrls?.[app[key]],
   ).map(({ key, label }) => ({
     key,
     label,
-    url: photoUrls[app[key]],
+    url: photoUrls?.[app[key]],
   })), [app, photoUrls]);
 
   const expandedPhotoIndex = expandedPhoto
@@ -398,20 +403,22 @@ function ApplicationDetail({
           Postulación del {new Date(app.created_at).toLocaleString()}
         </p>
 
+        {photoError ? <p role="alert">{photoError}</p> : !photoUrls && <p role="status">Cargando fotos…</p>}
         <div className="postulaciones-detail__photos">
           {PHOTO_FIELDS.map(({ key, label }) =>
-            app[key] && photoUrls[app[key]] ? (
+            app[key] && photoUrls?.[app[key]] ? (
               <figure
                 key={key}
                 className="postulaciones-detail__photo"
                 onClick={() =>
                   setExpandedPhoto({
-                    url: photoUrls[app[key]],
+                    key,
+                    url: photoUrls?.[app[key]],
                     label,
                   })
                 }
               >
-                <img src={photoUrls[app[key]]} alt={label} />
+                <img src={photoUrls?.[app[key]]} alt={label} />
                 <figcaption>{label}</figcaption>
               </figure>
             ) : null,

@@ -295,7 +295,14 @@ async function adminLogin(request,env,setup=false) {
   return issueSession(env);
 }
 
+const hersProject = 'https://glpevkghlzzuwkxojpvc.supabase.co';
+
 async function globalApi(env) {
+  if (env.HERS_AGENCY_KEY) {
+    const key = await env.HERS_AGENCY_KEY.read();
+    if (!key) throw new ApiError(409, 'Guarda la clave de AgencyKey en Conectores → Servicios');
+    return key;
+  }
   const saved = await env.DB.prepare("SELECT value FROM settings WHERE key = 'agencykey'").first();
   if (saved) return (await decrypt(saved.value, 'agencykey', env)).api_key;
   const rows = await env.DB.prepare("SELECT id, encrypted_secrets FROM profiles WHERE encrypted_secrets NOT LIKE 'legacy:%'").all();
@@ -405,10 +412,13 @@ async function listAdminProfiles(env) {
   })), recording_session:session});
 }
 
-async function listProfiles(env) {
+async function listProfiles(request, env) {
   const {results} = await env.DB.prepare(`SELECT ${columns}, encrypted_secrets FROM profiles WHERE encrypted_secrets NOT LIKE 'legacy:%' ORDER BY name COLLATE NOCASE`).all();
+  const status = request.headers.has('X-Dropper-Instance')
+    ? new Map((await desktopProfiles(request, env)).map((row) => [row.id, row]))
+    : new Map();
   const profiles = await Promise.all(results.map(async row => ({
-    ...profile(row), telegram_users:(await decrypt(row.encrypted_secrets,row.id,env)).telegram_users ?? [],
+    ...status.get(row.id), ...profile(row), telegram_users:(await decrypt(row.encrypted_secrets,row.id,env)).telegram_users ?? [],
   })));
   return json({profiles, recording_session:await sharedSession(env)});
 }
@@ -672,7 +682,9 @@ async function dailyDrops(request, env) {
     FROM drop_publications d LEFT JOIN profiles p ON p.creator_id = d.creator_id
     WHERE d.local_date = ? GROUP BY d.creator_id, d.drop_id
     ORDER BY creator_name COLLATE NOCASE, d.creator_id, last_at DESC, d.drop_id`).bind(day).all();
-  return json({date:day,today,drops:results});
+  const {results:models} = await env.DB.prepare(`SELECT creator_id, creator_name FROM profiles
+    ORDER BY creator_name COLLATE NOCASE, creator_id`).all();
+  return json({date:day,today,models,drops:results});
 }
 
 async function adminHandle(request, env, path, hersOwner) {
@@ -704,6 +716,7 @@ async function adminHandle(request, env, path, hersOwner) {
     return json({api_configured:configured});
   }
   if (path === '/v1/admin/agencykey' && request.method === 'PUT') {
+    if (env.HERS_AGENCY_KEY) throw new ApiError(409, 'Gestiona la clave de AgencyKey en Conectores → Servicios');
     const input = await body(request);
     const apiKey = text(input.api_key, 'API de AgencyKey',512);
     const creators = await listCreators(apiKey);
@@ -724,9 +737,12 @@ async function adminHandle(request, env, path, hersOwner) {
   }
   if (path === '/v1/admin/profiles' && request.method === 'GET') return listAdminProfiles(env);
   if (path === '/v1/admin/active-bots' && request.method === 'GET') {
-    const {results} = await env.DB.prepare(`SELECT p.* FROM profiles p JOIN bot_activity a ON
-      a.profile_id = p.id AND a.revision = p.revision WHERE a.last_seen > ?
-      ORDER BY p.name COLLATE NOCASE`).bind(Date.now() - 90_000).all();
+    const now = Date.now();
+    const {results} = await env.DB.prepare(`SELECT p.* FROM profiles p
+      LEFT JOIN bot_activity a ON a.profile_id = p.id AND a.revision = p.revision
+      LEFT JOIN bot_leases l ON l.profile_id = p.id AND l.revision = p.revision
+      WHERE a.last_seen > ? OR (l.expires_at > ? AND l.ready = 1)
+      ORDER BY p.name COLLATE NOCASE`).bind(now - 90_000, now).all();
     return json({profiles: results.map(profile)});
   }
   if (path === '/v1/admin/resolve' && request.method === 'POST') {
@@ -787,7 +803,7 @@ async function hersAdmin(request, env, action) {
   if (!env.HERS_SUPABASE_PUBLISHABLE_KEY) throw new ApiError(503, 'Acceso desde HERS sin configurar');
   let response;
   try {
-    response = await fetch('https://glpevkghlzzuwkxojpvc.supabase.co/auth/v1/user', {
+    response = await fetch(hersProject + '/auth/v1/user', {
       headers: {apikey:env.HERS_SUPABASE_PUBLISHABLE_KEY, Authorization:token}, redirect:'manual', cache:'no-store',
     });
   } catch {
@@ -811,11 +827,61 @@ function adminDocument(request, embedded = '') {
     'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; connect-src 'self'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors ${ancestors}`}});
 }
 
+const leaseLifetime = 120_000;
+const instancePattern = /^[a-f0-9]{32}$/;
+
+async function botLease(request, env, id) {
+  const owner = request.headers.get('X-Dropper-Instance') ?? '';
+  if (!instancePattern.test(owner)) throw new ApiError(400, 'Identificador de la app inválido');
+  if (request.method === 'DELETE') {
+    await env.DB.prepare('DELETE FROM bot_leases WHERE profile_id = ? AND owner = ?').bind(id, owner).run();
+    return json({released:true});
+  }
+  const now = Date.now();
+  if (request.method === 'PUT') {
+    const {ready} = await body(request, 128);
+    const result = await env.DB.prepare(`UPDATE bot_leases SET expires_at = ?, ready = MAX(ready, ?)
+      WHERE profile_id = ? AND owner = ? AND expires_at > ?
+      AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = bot_leases.profile_id AND p.revision = bot_leases.revision)`)
+      .bind(now + leaseLifetime, Number(ready === true), id, owner, now).run();
+    if (result.meta.changes) return json({renewed:true});
+    throw new ApiError(409, 'La reserva del bot venció o la configuración cambió');
+  }
+  if (request.method !== 'POST') throw new ApiError(405, 'Método no permitido');
+  const {revision} = await body(request, 128);
+  if (!Number.isSafeInteger(revision)) throw new ApiError(400, 'Revisión del bot inválida');
+  const result = await env.DB.prepare(`INSERT INTO bot_leases (profile_id, revision, owner, expires_at)
+    SELECT p.id, p.revision, ?, ? FROM profiles p WHERE p.id = ? AND p.revision = ?
+      AND p.encrypted_secrets NOT LIKE 'legacy:%'
+      AND NOT EXISTS (SELECT 1 FROM bot_activity a WHERE a.profile_id = p.id AND a.last_seen > ?)
+    ON CONFLICT(profile_id) DO UPDATE SET revision = excluded.revision, owner = excluded.owner,
+      expires_at = excluded.expires_at, ready = 0
+    WHERE bot_leases.expires_at <= ? OR bot_leases.owner = excluded.owner`)
+    .bind(owner, now + leaseLifetime, id, revision, now - 90_000, now).run();
+  if (result.meta.changes) return json({acquired:true});
+  const current = await env.DB.prepare('SELECT revision FROM profiles WHERE id = ?').bind(id).first();
+  if (current?.revision !== revision) throw new ApiError(409, 'La configuración cambió. Pulsa Actualizar');
+  throw new ApiError(409, 'Este bot ya está activo en otra instancia');
+}
+
+async function desktopProfiles(request, env) {
+  const now = Date.now();
+  const day = caracasDate.format(new Date(now));
+  const instance = request.headers.get('X-Dropper-Instance') ?? '';
+  const {results:profiles} = await env.DB.prepare(`SELECT p.id, p.revision, p.updated_at,
+    EXISTS (SELECT 1 FROM bot_leases l WHERE l.profile_id = p.id AND l.expires_at > ? AND l.owner <> ?)
+      OR EXISTS (SELECT 1 FROM bot_activity a WHERE a.profile_id = p.id AND a.last_seen > ?) AS active_elsewhere,
+    (SELECT COUNT(*) FROM drop_publications d WHERE d.local_date = ? AND d.creator_id = p.creator_id) AS published_today
+    FROM profiles p WHERE p.encrypted_secrets NOT LIKE 'legacy:%'`)
+    .bind(now, instance, now - 90_000, day).all();
+  return profiles;
+}
+
 async function handle(request, env) {
   const path = new URL(request.url).pathname;
   if (path === '/') return Response.redirect(new URL('/admin',request.url).href,302);
   if (path === '/admin' || path === '/admin/') return adminDocument(request);
-  const view = path.match(/^\/embed\/(bots|operations)$/);
+  const view = path.match(/^\/embed\/(bots|operations|session)$/);
   if (view) return adminDocument(request, view[1]);
   if (path.startsWith('/v1/hers-admin/')) return hersAdmin(request, env, path.slice('/v1/hers-admin'.length));
   if (path === '/health' && request.method === 'GET') return json({service: 'dropper', version: 9});
@@ -837,7 +903,9 @@ async function handle(request, env) {
     }
     throw new ApiError(405,'Método no permitido');
   }
-  if (path === '/v1/profiles' && request.method === 'GET') return listProfiles(env);
+  if (path === '/v1/profiles' && request.method === 'GET') return listProfiles(request, env);
+  const lease = path.match(/^\/v1\/profiles\/([a-f0-9-]{36})\/lease$/);
+  if (lease) return botLease(request, env, lease[1]);
   if (path === '/v1/bot-activity' && request.method === 'POST') {
     const {profiles} = await body(request, 16384);
     if (!Array.isArray(profiles) || profiles.length > 100 || profiles.some((entry) =>
@@ -848,13 +916,15 @@ async function handle(request, env) {
     if (profiles.length) await env.DB.batch(profiles.map(({id, revision}) => env.DB.prepare(`
       INSERT INTO bot_activity (profile_id, revision, last_seen)
       SELECT id, revision, ? FROM profiles WHERE id = ? AND revision = ? AND encrypted_secrets NOT LIKE 'legacy:%'
+        AND NOT EXISTS (SELECT 1 FROM bot_leases WHERE profile_id = profiles.id AND expires_at > ?)
       ON CONFLICT(profile_id) DO UPDATE SET revision = excluded.revision, last_seen = excluded.last_seen
     `).bind(now, id, revision)));
     return json({received: true});
   }
   if (path === '/v1/profile-revisions' && request.method === 'GET') {
-    const {results} = await env.DB.prepare("SELECT id, revision, updated_at FROM profiles WHERE encrypted_secrets NOT LIKE 'legacy:%'").all();
-    return json({profiles:results});
+    if (request.headers.has('X-Dropper-Instance')) return json({profiles:await desktopProfiles(request, env)});
+    const {results:profiles} = await env.DB.prepare("SELECT id, revision, updated_at FROM profiles WHERE encrypted_secrets NOT LIKE 'legacy:%'").all();
+    return json({profiles});
   }
   const match = path.match(/^\/v1\/profiles\/([a-f0-9-]{36})\/credentials$/);
   if (match && request.method === 'POST') {
@@ -864,6 +934,12 @@ async function handle(request, env) {
     const secret = await decrypt(row.encrypted_secrets,row.id,env);
     if (request.headers.get('X-Recorder-Protocol') !== '2')
       throw new ApiError(409, 'Actualiza la app de Windows antes de iniciar este bot');
+    const now = Date.now();
+    const owner = request.headers.get('X-Dropper-Instance');
+    const active = await env.DB.prepare('SELECT owner FROM bot_leases WHERE profile_id = ? AND expires_at > ?')
+      .bind(row.id, now).first();
+    if (active && active.owner !== owner) throw new ApiError(409, 'Este bot ya está activo en otra instancia');
+    if (owner && !active) throw new ApiError(409, 'Reserva el bot antes de iniciarlo');
     return json({...profile(row), telegram_users:secret.telegram_users ?? [],
       telegram_token:secret.telegram_token, api_key:await globalApi(env)});
   }
