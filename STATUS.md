@@ -1,10 +1,10 @@
 # Estado de Hers-prueba
 
-Verificado el 23 de noviembre de 2026.
+Verificado el 24 de noviembre de 2026.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **34** de Cloudflare Workers al **100 %**. Código publicado `2b5e6f7` del [PR #16](https://github.com/Hers-NSB/Hers-prueba/pull/16), versión `a91b19aa-4dd8-4b15-a7b3-c3a84b82f4a6`.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **35** de Cloudflare Workers al **100 %**. Código publicado `35855f5` del [PR #18](https://github.com/Hers-NSB/Hers-prueba/pull/18), versión `252645fc-f438-4a25-88af-7fec9b953a06`. El [PR #17](https://github.com/Hers-NSB/Hers-prueba/pull/17) incluye la corrección de carga de Administración.
 - Supabase de pruebas tiene aplicadas las migraciones hasta `20261123174135_finance_overview_totals`.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 
@@ -36,11 +36,11 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ### 23 de noviembre de 2026 · Dropper en Administración
 
-La rama `codex/dropper-en-hers` agrega el resumen, los ajustes y la descarga de Windows en **Dropper**. **Conectores → Bots** usa las herramientas de configuración y verificación del Worker de Dropper. Los datos permanecen en D1. Pasaron las 28 pruebas de Node, el lint y la compilación. Chromium comprobó la recarga y ambas vistas a 390 px con los dos Workers y D1 local. Pendientes el despliegue coordinado de ambos Workers y la publicación de `HERS-Dropper.exe`.
+La rama `codex/dropper-en-hers` agrega el resumen, los ajustes y la descarga de Windows en **Dropper**. **Conectores → Bots** usa las herramientas de configuración y verificación del Worker de Dropper. Los datos permanecen en D1. Pasaron las 28 pruebas de Node, el lint y la compilación. Chromium comprobó la recarga y ambas vistas a 390 px con los dos Workers y D1 local. Ambos Workers y [HERS Dropper para Windows](https://github.com/Hers-NSB/Dropper/releases/tag/recorder-58-1) se publicaron el 24 de noviembre.
 
 ### 23 de noviembre de 2026 · Carga de Administración
 
-La rama `codex/carga-panel-administracion` muestra una pantalla de carga durante la restauración de sesión y la descarga del panel. Postulaciones, Finanzas y Conectores comparten un indicador de carga que respeta la preferencia de movimiento reducido. Pasaron el lint, la compilación, las 26 pruebas de Node y la regresión de sesión y carga de Conectores en un DOM simulado. Pendiente de despliegue.
+La rama `codex/carga-panel-administracion` muestra una pantalla de carga durante la restauración de sesión y la descarga del panel. Postulaciones, Finanzas y Conectores comparten un indicador de carga que respeta la preferencia de movimiento reducido. Pasaron el lint, la compilación, las 26 pruebas de Node y la regresión de sesión y carga de Conectores en un DOM simulado. Publicado el 24 de noviembre.
 
 ### 23 de noviembre de 2026 · Importes del gráfico
 
