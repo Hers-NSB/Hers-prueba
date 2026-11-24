@@ -304,7 +304,7 @@ export default {
   },
   fetch(request, env) {
     const path = new URL(request.url).pathname;
-    if (path.startsWith(dropperPath)) return handleDropper(request, env.DROPPER, env.DROPPER_DOWNLOADS);
+    if (path.startsWith(dropperPath)) return handleDropper(request, env.DROPPER);
     if (path === "/restablecer-contrasena" || path === "/restablecer-contrasena/") {
       return new Response("El acceso de HERS se gestiona desde Supabase", {
         status: 410,

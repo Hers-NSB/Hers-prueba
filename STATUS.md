@@ -4,7 +4,9 @@ Verificado el 24 de noviembre de 2026.
 
 ## Despliegue
 
-- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) sirve la versión **35** de Cloudflare Workers al **100 %**. Código publicado `35855f5` del [PR #18](https://github.com/Hers-NSB/Hers-prueba/pull/18), versión `252645fc-f438-4a25-88af-7fec9b953a06`. El [PR #17](https://github.com/Hers-NSB/Hers-prueba/pull/17) incluye la corrección de carga de Administración.
+- [Hers-prueba](https://hers-prueba.datosenviados07.workers.dev/) se despliega con Cloudflare Builds desde `main`. El [PR #20](https://github.com/Hers-NSB/Hers-prueba/pull/20) incorporó la configuración de Wrangler para el Worker web.
+- El [PR #19](https://github.com/Hers-NSB/Hers-prueba/pull/19) integró el resumen mensual en Inicio, la actualización por sección y Dropper con su Worker y D1 propios.
+- La aplicación de Windows se descarga desde [GitHub Releases de Hers-prueba](https://github.com/Hers-NSB/Hers-prueba/releases). El [release de Windows](https://github.com/Hers-NSB/Hers-prueba/releases/tag/hers-dropper-8b42f44b2bbc) incluye `HERS-Dropper.exe`. Se retiraron el botón del panel y la ruta de descarga de R2.
 - Supabase de pruebas tiene aplicadas las migraciones hasta `20261123174135_finance_overview_totals`.
 - La importación de AgencyKey se ejecuta con el disparador `5,20,35,50 * * * *` en UTC. El cierre usa la zona de reporte `America/Halifax`.
 

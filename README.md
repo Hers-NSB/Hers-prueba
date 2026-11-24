@@ -55,4 +55,4 @@ Después de la migración, configura la clave de AgencyKey en **Conectores → B
 
 Si una cuenta necesita ajustes de carga de AgencyKey, guarda su `agencykey-perfiles.json` privado al lado del ejecutable. El instalador público lleva una plantilla vacía.
 
-Para publicar el instalador, GitHub Actions compila y prueba `HERS-Dropper.exe` al integrar cambios de Windows en `main` o al publicar un tag `hers-dropper-*`. El release conserva el ejecutable y las fuentes del codificador. Con R2 activado, sube ese ejecutable al objeto `windows/HERS-Dropper.exe` en un bucket privado, añade al Worker web el binding R2 `DROPPER_DOWNLOADS` y regístralo en `cloudflare/deploy.json`. Verifica que `/api/admin/dropper/download/windows` entregue el mismo ejecutable.
+Para publicar el instalador, GitHub Actions compila y prueba `HERS-Dropper.exe` al integrar cambios de Windows en `main` o al publicar un tag `hers-dropper-*`. El release conserva el ejecutable y las fuentes del codificador. Descarga la aplicación desde [GitHub Releases de Hers-prueba](https://github.com/Hers-NSB/Hers-prueba/releases).
