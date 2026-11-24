@@ -11,43 +11,40 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
+  RefreshCw,
+  X,
 } from "lucide-react";
-import { supabase, APPLICATIONS_TABLE, adminLogout } from "../lib/supabase";
+import { adminLogout } from "../lib/supabase";
+import { AdminActions } from "./adminActions";
+import AdminDashboardHome from "./AdminDashboardHome";
 
 const Postulaciones = lazy(() => import("./Postulaciones/postulaciones.jsx"));
 const Finanzas = lazy(() => import("./finanzas/finanzas.jsx"));
 const Integrations = lazy(() => import("./integrations/Integrations.jsx"));
 const Dropper = lazy(() => import("./dropper/Dropper.jsx"));
-const sectionNames = {
-  applications: "Postulaciones",
-  finance: "Finanzas",
-  integrations: "Conectores",
-  dropper: "Dropper",
-};
+const sections = [
+  ["dashboard", "Inicio", Home],
+  ["applications", "Postulaciones", ClipboardList],
+  ["finance", "Finanzas", BarChart3],
+  ["dropper", "Dropper", Download],
+  ["integrations", "Conectores", Plug],
+];
 
 export default function AdminPanel({ onClose }) {
   const [activeSection, setActiveSection] = useState("dashboard");
-  const [applications, setApplications] = useState({ count: null, warning: "" });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [revisions, setRevisions] = useState({});
+  const [errors, setErrors] = useState({});
+  const [handlers] = useState(() => new Map());
 
-  useEffect(() => {
-    if (activeSection !== "dashboard") return;
-    let mounted = true;
-    const loadCount = async () => {
-      const { count, error, status } = await supabase
-        .from(APPLICATIONS_TABLE)
-        .select("id", { count: "exact", head: true });
-      if (!mounted) return;
-      const warning = status === 404
-        ? "[SB-APPLICATIONS-404] La tabla de Postulaciones no está disponible en Supabase"
-        : error ? "[SB-APPLICATIONS-READ] No se pudo consultar el conteo de Postulaciones" : "";
-      setApplications({ count, warning });
-    };
-    loadCount();
-    return () => {
-      mounted = false;
-    };
-  }, [activeSection]);
+  function refresh(section) {
+    if (section === activeSection && handlers.has(section)) {
+      handlers.get(section)?.();
+      return;
+    }
+    setRevisions((current) => ({ ...current, [section]: (current[section] ?? 0) + 1 }));
+    setActiveSection(section);
+  }
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -63,13 +60,15 @@ export default function AdminPanel({ onClose }) {
     };
   }, []);
 
-  const goTo = (section) => setActiveSection(section);
+  const revision = revisions[activeSection] ?? 0;
+  const sectionName = sections.find(([id]) => id === activeSection)[1];
   const logout = async () => {
     await adminLogout();
     onClose();
   };
 
   return createPortal(
+    <AdminActions.Provider value={{ handlers, setErrors }}>
     <div
       className="admin-overlay"
       role="dialog"
@@ -108,46 +107,16 @@ export default function AdminPanel({ onClose }) {
           </div>
 
           <nav className="admin-sidebar__nav" aria-label="Administración HERS">
-            <button
-              className={`admin-nav-item ${activeSection === "dashboard" ? "is-active" : ""}`}
-              onClick={() => goTo("dashboard")}
-              aria-label="Inicio"
-            >
-              <Home size={18} />
-              <span>Inicio</span>
-            </button>
-            <button
-              className={`admin-nav-item ${activeSection === "applications" ? "is-active" : ""}`}
-              onClick={() => goTo("applications")}
-              aria-label="Postulaciones"
-            >
-              <ClipboardList size={18} />
-              <span>Postulaciones</span>
-            </button>
-            <button
-              className={`admin-nav-item ${activeSection === "finance" ? "is-active" : ""}`}
-              onClick={() => goTo("finance")}
-              aria-label="Finanzas"
-            >
-              <BarChart3 size={18} />
-              <span>Finanzas</span>
-            </button>
-            <button
-              className={`admin-nav-item ${activeSection === "dropper" ? "is-active" : ""}`}
-              onClick={() => goTo("dropper")}
-              aria-label="Dropper"
-            >
-              <Download size={18} aria-hidden="true" />
-              <span>Dropper</span>
-            </button>
-            <button
-              className={`admin-nav-item ${activeSection === "integrations" ? "is-active" : ""}`}
-              onClick={() => goTo("integrations")}
-              aria-label="Conectores"
-            >
-              <Plug size={18} />
-              <span>Conectores</span>
-            </button>
+            {sections.map(([id, label, Icon]) => <div key={id} className="admin-nav-row">
+              <button type="button" className={`admin-nav-item ${activeSection === id ? "is-active" : ""}`}
+                onClick={() => setActiveSection(id)} aria-label={label} aria-current={activeSection === id ? "page" : undefined}>
+                <Icon size={18} aria-hidden="true" /><span>{label}</span>
+              </button>
+              <button type="button" className="admin-nav-refresh" onClick={() => refresh(id)}
+                aria-label={`Actualizar ${label}`} title={`Actualizar ${label}`}>
+                <RefreshCw size={15} aria-hidden="true" />
+              </button>
+            </div>)}
           </nav>
 
           <div className="admin-sidebar__footer">
@@ -165,70 +134,30 @@ export default function AdminPanel({ onClose }) {
         </aside>
 
         <main className="admin-workspace">
-          {applications.warning && <p className="admin-workspace-notice" role="status">{applications.warning}</p>}
-          {activeSection === "dashboard" && (
-            <AdminDashboardHome applicationCount={applications.count} />
-          )}
-
-          <Suspense fallback={<AdminLoading>Cargando {sectionNames[activeSection]}…</AdminLoading>}>
-            {activeSection === "applications" && (
+          {Object.keys(errors).length > 0 && <section className="admin-workspace-notice" aria-label="Notificaciones de errores">
+            <h2>Notificaciones de errores</h2>
+            <ul aria-live="polite">{Object.entries(errors).map(([id, { section, message }]) => <li key={id}>
+              <span><strong>{section}</strong> · {message}</span>
+              <button type="button" aria-label={`Descartar aviso de ${section}`} onClick={() => setErrors((current) => {
+                const next = { ...current };
+                delete next[id];
+                return next;
+              })}><X size={17} aria-hidden="true" /></button>
+            </li>)}</ul>
+          </section>}
+          <Suspense fallback={<AdminLoading>Cargando {sectionName}…</AdminLoading>}>
+            {activeSection === "dashboard" ? <AdminDashboardHome revision={revision} /> :
               <div className="admin-module-view">
-                <Postulaciones onBack={() => goTo("dashboard")} />
-              </div>
-            )}
-
-            {activeSection === "integrations" && (
-              <div className="admin-module-view">
-                <Integrations />
-              </div>
-            )}
-
-            {activeSection === "dropper" && (
-              <div className="admin-module-view"><Dropper /></div>
-            )}
-
-            {activeSection === "finance" && (
-              <div className="admin-module-view">
-                <Finanzas onBack={() => goTo("dashboard")} />
-              </div>
-            )}
+                {activeSection === "applications" && <Postulaciones revision={revision} />}
+                {activeSection === "finance" && <Finanzas revision={revision} />}
+                {activeSection === "dropper" && <Dropper revision={revision} />}
+                {activeSection === "integrations" && <Integrations revision={revision} />}
+              </div>}
           </Suspense>
         </main>
       </div>
-    </div>,
+    </div>
+    </AdminActions.Provider>,
     document.body,
-  );
-}
-
-function AdminDashboardHome({ applicationCount }) {
-  return (
-    <section className="admin-dashboard-home">
-      <div className="admin-dashboard-hero">
-        <div>
-          <span className="admin-eyebrow">HERS AGENCY · ADMINISTRACIÓN</span>
-          <h1>Centro de Administración</h1>
-          <p>
-            Gestiona las áreas internas de HERS desde un único espacio seguro.
-            Selecciona una función para comenzar.
-          </p>
-        </div>
-        <div className="admin-dashboard-hero__mark">
-          <img src="/HERSl.jpg" alt="HERS" />
-        </div>
-      </div>
-
-      <div className="admin-dashboard-stats">
-        <div className="admin-stat-card">
-          <span className="admin-stat-card__label">Postulaciones</span>
-          <strong>{applicationCount ?? "—"}</strong>
-          <span>Registros recibidos</span>
-        </div>
-        <div className="admin-stat-card">
-          <span className="admin-stat-card__label">Estado</span>
-          <strong>Seguro</strong>
-          <span>Sesión de administrador activa</span>
-        </div>
-      </div>
-    </section>
   );
 }

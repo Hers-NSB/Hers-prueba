@@ -1,3 +1,4 @@
+import { AdminError } from "../adminActions";
 import { useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
@@ -114,7 +115,7 @@ export default function CategoryPicker({ categories, value, onChange, onSaved })
           <button type="button" className="hf-primary" disabled={saving} onClick={save}>Confirmar eliminación</button>
         </div>
       </div>}
-      {error && <p className="hf-notice" role="alert">{error}</p>}
+      <AdminError id="finance-category" section="Finanzas" message={error} />
     </dialog>, document.body)}
   </div>;
 }

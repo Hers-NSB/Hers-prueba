@@ -31,7 +31,7 @@
   },
   "bindings": {
     "ASSETS": { "type": "assets" },
-    "DROPPER": { "type": "service", "service": "dropper" },
+    "DROPPER": { "type": "service", "service": "hers-prueba-dropper" },
     "AGENCYKEY_REPORT_TIMEZONE": { "type": "plain_text", "text": "America/Halifax" },
     "SUPABASE_PUBLISHABLE_KEY": { "type": "plain_text" },
     "HERS_INTEGRATIONS_SECRET": { "type": "secret_text" }

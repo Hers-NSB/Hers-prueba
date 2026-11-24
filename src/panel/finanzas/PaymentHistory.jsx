@@ -1,3 +1,4 @@
+import { AdminError } from "../adminActions";
 import { useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -168,7 +169,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
           <span aria-hidden="true">%</span>
           <button type="submit" disabled={busy}>{busy ? "Guardando…" : "Guardar"}</button>
           <button type="button" disabled={busy} onClick={() => { setRateError(""); setRateInput(null); }}>Cancelar</button>
-          {rateError && <p className="hf-notice" role="alert">{rateError}</p>}
+          <AdminError id="finance-payment-rate" section="Finanzas" message={rateError} />
         </form>}
       </div>
       <div className="hf-actions">
@@ -236,7 +237,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
       <p>{person.name}</p>
       <PaymentFacts row={confirming} />
       <p><strong>Total a pagar {usd(confirming.amount)}</strong></p>
-      {error && <p className="hf-notice" role="alert">{error}</p>}
+      <AdminError id="finance-payment" section="Finanzas" message={error} />
       <div className="hf-actions">
         <button type="button" disabled={busy} onClick={closeConfirmation}>Cancelar</button>
         <button type="button" className="hf-primary" disabled={busy} onClick={confirm}>

@@ -41,3 +41,39 @@
 .hers-dropper-frame[hidden] {
   display: none;
 }
+
+.hers-dropper.hf {
+  max-width: 1380px;
+  min-width: 0;
+}
+
+.hers-dropper-daily {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hers-dropper-daily .hf-period {
+  width: min(100%, 18rem);
+}
+
+.hers-dropper-daily .hf-calendar {
+  max-width: min(100%, 22rem);
+}
+
+.hers-dropper-model {
+  border-top: 1px solid #473b32;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+.hers-dropper-model h3,
+.hers-dropper-model p {
+  margin: 0 0 .4rem;
+}
+
+.hers-dropper-model ul,
+.hers-dropper-bots ul {
+  margin: .5rem 0 0;
+  padding-inline-start: 1.15rem;
+  overflow-wrap: anywhere;
+}

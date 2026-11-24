@@ -1,0 +1,14 @@
+{
+  "name": "hers-prueba-dropper",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hers-prueba-dropper",
+      "database_id": "81b417fc-cc2b-4d52-8f94-49bc7a6c2091"
+    }
+  ]
+}

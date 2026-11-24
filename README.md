@@ -47,32 +47,12 @@ Después de cada conjunto de cambios, actualiza [STATUS.md](STATUS.md) con los a
 
 ### Dropper
 
-En **Dropper** puedes consultar el resumen por fecha, administrar la sesión compartida de Chrome, cambiar los ajustes y descargar HERS Dropper para Windows. Abre **Conectores → Bots** para añadir, editar, eliminar y verificar los bots de Telegram, o descargar el reporte de una verificación.
+**Dropper** muestra los bots en línea, el resumen diario según la hora de Caracas y el cambio de contraseña de Windows. **Conectores → Bots** reúne la clave API para los bots, la sesión compartida de AgencyKey y la administración de Telegram. La app informa cada 30 segundos qué bots están en ejecución. El panel considera en línea el último aviso recibido en los 90 segundos anteriores.
 
-La integración usa el binding de servicio `DROPPER` hacia el Worker `dropper`. Publica primero la versión de Dropper compatible con `/embed/` y `/v1/hers-admin/`, con `HERS_SUPABASE_PUBLISHABLE_KEY` configurada en ese Worker. Publica después Hers-prueba con el binding y la ruta registrados en `cloudflare/deploy.json`. El Worker de Dropper verifica el rol `admin` en el proyecto de Supabase de Hers-prueba. Los bots y el historial siguen en la D1 de Dropper.
+El código de Windows y su Worker viven en [`dropper/`](dropper/). El Worker `hers-prueba-dropper` usa su propia D1. HERS lo consulta mediante el binding de servicio `DROPPER` y verifica la sesión administrativa de Supabase. Al cambiar de instalación, detén primero los bots anteriores para evitar que ambas instalaciones usen los mismos tokens al mismo tiempo.
 
-El botón de descarga requiere que la publicación de Windows de Dropper incluya `HERS-Dropper.exe`.
+Después de la migración, configura la clave de AgencyKey en **Conectores → Bots**, abre **Editar** para cada ficha y guarda su token y sus usuarios autorizados. Define la contraseña de escritorio desde **Dropper → Ajustes**. Abre la aplicación nueva y conecta la sesión compartida de AgencyKey desde **Conectores → Bots**.
 
-### Despliegue del entorno
+Si una cuenta necesita ajustes de carga de AgencyKey, guarda su `agencykey-perfiles.json` privado al lado del ejecutable. El instalador público lleva una plantilla vacía.
 
-Consulta [cloudflare/deploy.json](cloudflare/deploy.json) para los módulos, las rutas, los bindings, la observabilidad y el cron vigentes. Publica `dist/` como recursos estáticos del Worker `hers-prueba` y `cloudflare/worker.js` como módulo de entrada junto con `cloudflare/integrations.js` y `cloudflare/agencykey-directory.js`. Activa la redacción de cadenas de consulta en Observabilidad del Worker para que los códigos OAuth queden fuera de sus registros. Vincula los recursos como `ASSETS` y dirige primero al Worker las rutas `/api/admin/integrations`, `/api/admin/integrations/*` y `/restablecer-contrasena` (con y sin la barra final). Aplica las migraciones pendientes a Supabase de pruebas antes de publicar el Worker. El disparador del entorno es `5,20,35,50 * * * *` (UTC). El Worker empieza por el día completo pendiente más antiguo. Si una consulta de transacciones devuelve 502, 503 o 504, reintenta esa consulta dos veces con pausas de uno y tres segundos. Si se agotan los intentos, deja el día pendiente y prueba el siguiente día disponible de la misma quincena en ese ciclo. El cierre requiere todos los días completos. La zona del día de reporte es `America/Halifax`, según AgencyKey, y se puede ajustar con `AGENCYKEY_REPORT_TIMEZONE`.
-
-Después de publicar, confirma que el Worker sirve el HTML y los recursos del build, que `/api/admin/integrations` devuelve 401 sin sesión y que la ruta retirada `/restablecer-contrasena` devuelve 410. Registra la versión activa y la última migración aplicada en [STATUS.md](STATUS.md).
-
-### Sincronización de AgencyKey
-
-En **Administrador → Conectores**, pulsa **Configurar AgencyKey** o **Reemplazar** y guarda una clave API con acceso a los modelos, sus estadísticas de ingresos de OnlyFans y al reporte de empleados. **Probar conexión** consulta el último día cerrado sin guardar ventas. Al cambiar el rango en **Finanzas → Resumen**, se importan los días con datos incompletos. Pulsa **Actualizar** para sincronizar los días incompletos y volver a consultar el día en curso si está dentro del período. Desde **Empleados**, la acción usa la quincena actual. Al mantener abierta esa pestaña, solo se consulta automáticamente el avance y los importes de la quincena.
-
-La activación del directorio es opcional. Cuando quieras conectarlo, abre **Conectores → Autorizar directorio de AgencyKey** y usa una cuenta con acceso a todo el equipo y a los modelos de la agencia. Una vez autorizado, los modelos y los chatters se sincronizan al abrir **Empleados** por primera vez en cada visita a Finanzas y al pulsar **Actualizar**. El directorio incluye los que estén desactivados en AgencyKey. Los modelos inactivos aparecen con su estado en la tabla **Modelos**. La importación de ventas usa la clave API de Conectores.
-
-El panel permite guardar o reemplazar claves API, tokens y contraseñas de otros servicios. El Worker usa actualmente la credencial de AgencyKey. La lista de credenciales devuelve el nombre, el tipo y la fecha de actualización. La contraseña de acceso a HERS pertenece a Supabase Auth.
-
-La configuración inicial del Worker requiere `HERS_INTEGRATIONS_SECRET` (32 bytes aleatorios en Base64) como secreto, `SUPABASE_PUBLISHABLE_KEY` (clave publicable de «Hers prueba») como variable y el hash SHA-256 del token derivado por `bridgeToken` en `hers_private.integration_backend.token_hash`. Configura estos valores una vez por entorno mediante Cloudflare y Supabase. El secreto cifra las credenciales y permite al Worker llamar al RPC acotado de integración. Su reemplazo requiere recifrar las credenciales guardadas.
-
-El Worker consulta los modelos accesibles y el gráfico de ingresos de OnlyFans mediante el [proxy público de AgencyKey](https://app.agencykey.com/api/public-docs/). Si el gráfico no devuelve el neto, usa el campo neto de las transacciones en USD del período y excluye las revertidas por contracargo. En la misma importación diaria, consulta el reporte de ventas atribuidas por empleado para todas las cuentas accesibles y guarda el importe neto tras descontar la comisión de OnlyFans. Si AgencyKey devuelve 429 con un `Retry-After` de hasta diez segundos, el Worker espera antes de reintentar. Para una espera mayor, devuelve el 429 con la cabecera y Finanzas detiene el lote. Los avisos de integración muestran un código de diagnóstico y una referencia por intento.
-
-Referencias de la vista web.
-
-- [QuickBooks · Informes financieros](https://quickbooks.intuit.com/community/getting-the-most-out-of-quickbooks-11/how-to-run-and-read-financial-reports-in-quickbooks-online-376028)
-- [Xero · Filtros de informes](https://central.xero.com/0/guide/a5B3m000000rnPSEAY/get-ready-to-use-xero)
-- [Float · Importación diaria](https://intercom.help/floatapp/en/articles/1888809-daily-sync)
+Para publicar el instalador, GitHub Actions compila y prueba `HERS-Dropper.exe` al integrar cambios de Windows en `main` o al publicar un tag `hers-dropper-*`. El release conserva el ejecutable y las fuentes del codificador. Con R2 activado, sube ese ejecutable al objeto `windows/HERS-Dropper.exe` en un bucket privado, añade al Worker web el binding R2 `DROPPER_DOWNLOADS` y regístralo en `cloudflare/deploy.json`. Verifica que `/api/admin/dropper/download/windows` entregue el mismo ejecutable.

@@ -621,3 +621,67 @@
   color: #f4d59d;
   font-size: .82rem;
 }
+
+.admin-overlay .admin-nav-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.admin-overlay .admin-nav-refresh,
+.admin-overlay .admin-workspace-notice button {
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  padding: 4px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.admin-overlay .admin-nav-refresh:hover,
+.admin-overlay .admin-workspace-notice button:hover {
+  border-color: currentColor;
+}
+
+.admin-overlay .admin-shell--collapsed .admin-nav-row {
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 0;
+}
+
+.admin-overlay .admin-workspace-notice h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.admin-overlay .admin-workspace-notice ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-overlay .admin-workspace-notice li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.admin-overlay .admin-month-overview {
+  margin-block: 1.5rem;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .admin-overlay .admin-nav-row {
+    grid-template-columns: minmax(0, 1fr) 25px;
+    gap: 0;
+  }
+
+  .admin-overlay .admin-nav-row .admin-nav-item {
+    padding-inline: 2px;
+  }
+}
