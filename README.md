@@ -1,6 +1,6 @@
 # HERS · Entorno de pruebas
 
-La aplicación de pruebas usa React, Vite, Supabase y Cloudflare Workers. El panel de administración incluye Finanzas, Dropper y Conectores. Consulta el estado del despliegue en [STATUS.md](STATUS.md). [Abrir HERS de pruebas](https://hers-prueba.datosenviados07.workers.dev/).
+La aplicación de pruebas usa React, Vite, Supabase y Cloudflare Workers. El entorno tiene su propio proyecto de Supabase y sus propios Workers. El panel de administración incluye Inicio, Finanzas, Dropper, Postulaciones y Conectores. Consulta el estado del despliegue en [STATUS.md](STATUS.md). [Abrir HERS de pruebas](https://hers-prueba.datosenviados07.workers.dev/).
 
 ## Desarrollo
 
@@ -14,7 +14,7 @@ npm run build
 npm test
 ```
 
-El proyecto de pruebas nace vacío. Aplica las migraciones de `supabase/migrations` y despliega `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Equipo → Administrador e inicia sesión con el correo completo. El inicio de sesión de pruebas también acepta el nombre de una cuenta del dominio `@hers-prueba.example`. Una sesión tiene que renovarse si cambia su rol.
+Si preparas una instancia local nueva, aplica las migraciones de `supabase/migrations` y sirve la función `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Equipo → Administrador e inicia sesión con el correo completo. El inicio de sesión de pruebas también acepta el nombre de una cuenta del dominio `@hers-prueba.example`. Una sesión tiene que renovarse si cambia su rol.
 
 GitHub Actions ejecuta las pruebas SQL en una instancia local desechable de Supabase. Para ejecutarlas en **Hers prueba**, aplica primero las migraciones pendientes. Cada prueba revierte sus datos al terminar.
 
@@ -22,8 +22,9 @@ GitHub Actions ejecuta las pruebas SQL en una instancia local desechable de Supa
 - `test/finance_movements_model_shares.integration.sql` prueba los movimientos, las categorías y las bajas del directorio.
 - `test/finance_pay_periods.integration.sql` prueba el cierre quincenal, los porcentajes de pago, el avance de la quincena, la importación de chatters inactivos y que confirmar dos veces un pago genere una sola inversión.
 - `test/finance_current_period.integration.sql` comprueba los pagos por modelos asignados, los cambios de porcentaje en la quincena, los permisos y las descripciones de categorías.
+- `test/finance_import_reservations.integration.sql` verifica que la reserva de un día se pueda reintentar y que una importación posterior conserve el neto finalizado.
 
-La portada reutiliza el HTML, los estilos y las imágenes del ZIP vigente. Las migraciones configuran la tabla de Postulaciones y su almacenamiento privado de fotos. El acceso de modelos requiere su configuración propia en el proyecto de pruebas.
+La portada usa los recursos de `src/` y `public/`. El acceso de modelos requiere su configuración propia en el proyecto de pruebas.
 
 ## Estructura y continuidad
 
@@ -35,6 +36,8 @@ Después de cada conjunto de cambios, actualiza [STATUS.md](STATUS.md) con los a
 
 ## Finanzas y pagos
 
+Cambiar de período consulta los datos guardados en Supabase. **Actualizar** y el cron comparten una reserva por fecha antes de consultar AgencyKey. Los días finalizados conservan sus ventas registradas. Para rectificaciones contables, registra un movimiento explícito con una descripción y la referencia al corte.
+
 - **Resumen** muestra Bóveda de HERS, Inversión, Ganancia y Ventas netas. Ganancia es Ventas netas menos Inversión. **Resultado operativo** muestra las ventas netas diarias antes del reparto como Ingreso, junto con la Inversión diaria. El gráfico de áreas muestra los importes en dólares enteros. Consulta la fecha y los importes con el puntero o las flechas del teclado. En **Por modelo** y **Por plataforma**, Ganancia muestra la diferencia entre Inversión y Ventas netas sin signo.
 - **Movimiento** permite filtrar por **Fechas**, **Tipo**, **Categoría**, **Modelo**, **Plataforma** y **Actualizado**. Los movimientos sin modelo o plataforma se muestran como **Otros**. La descripción del movimiento admite varias líneas. En **Categoría** puedes seleccionar, crear, editar o eliminar y guardar una descripción propia. Pasa el cursor, enfoca o toca la categoría en la tabla para ver la descripción del movimiento. En el panel **Categorías**, el icono de información muestra la descripción de la categoría.
 - **Empleados** separa **Modelos** y **Otros empleados**. Los chatters desactivados conservan el acceso a sus ventas, pagos e historial con la etiqueta **Inactivo** en la tabla y en el panel **Pagos**.
@@ -43,18 +46,27 @@ Después de cada conjunto de cambios, actualiza [STATUS.md](STATUS.md) con los a
 - **Pagos** muestra las ventas netas acumuladas, el pago estimado en dólares enteros y los días importados de la quincena en curso. Los pagos nuevos y sus movimientos se guardan en dólares enteros. Las quincenas van del 1 al 15 y del 16 al último día del mes en la zona de reporte de AgencyKey. HERS cierra el corte al terminar el período y confirmar la importación de todos sus días. El historial se puede filtrar por fecha y habilita **Pagar** en los cortes pendientes con importe positivo.
 - La confirmación marca el corte como **Pagado** y registra un solo movimiento de **Inversión** en la fecha de confirmación. La categoría es **Equipo** para empleados y **Modelo** para modelos. Las ventas y el porcentaje histórico se guardan al cerrar cada corte nuevo.
 
-## Cloudflare y AgencyKey
+## Postulaciones
 
-### Dropper
+El formulario guarda las fotos en un bucket privado. El panel carga las postulaciones por páginas y solicita las URL firmadas de una postulación juntas al abrir su detalle o iniciar su descarga. Si falta alguna foto esperada, muestra un aviso y detiene el ZIP.
 
-**Dropper** muestra las modelos con bots en línea y el total diario de publicaciones según la hora de Caracas. El día actual se actualiza automáticamente y el histórico se consulta al seleccionar una fecha o al pulsar **Actualizar**. La app muestra `publicadas / 400` por modelo y reserva el bot en el servidor antes de conectarse a Telegram. Actualiza todos los ejecutables para que cada instancia reserve el bot desde el inicio.
+## Dropper y AgencyKey
+
+**Inicio** muestra cuántos bots están en línea. **Dropper** muestra sus nombres y el resumen diario de todas las modelos configuradas, incluidas las que tienen cero publicaciones. Cada fila indica la hora de la última publicación, cuando existe, y el total `publicadas / 400` según la hora de Caracas. El día actual se actualiza automáticamente y el histórico se consulta al seleccionar una fecha o al pulsar **Actualizar**. La app muestra `publicadas / 400` por modelo y reserva el bot en el servidor antes de conectarse a Telegram. Actualiza todos los ejecutables para que cada instancia reserve el bot desde el inicio.
 
 **Conectores → Servicios** administra la clave API común de AgencyKey y la sesión compartida que usa Windows para verificar perfiles y grabar. La autorización OAuth del directorio se mantiene para consultar empleados. **Conectores → Bots** administra los tokens de Telegram y las modelos asociadas.
 
-El código de Windows y su Worker viven en [dropper/](dropper/). El Worker `hers-prueba-dropper` usa su propia D1. HERS lo consulta mediante el binding de servicio `DROPPER` y verifica la sesión administrativa de Supabase. Desde Dropper, el binding privado `HERS_AGENCY_KEY` lee la clave guardada en el Worker web. El secreto de integración se guarda únicamente en `hers-prueba`. En el primer despliegue, aplica el esquema D1 y habilita el punto de entrada privado del Worker web antes de publicar Dropper y el panel. La app de Windows conserva la contraseña configurada desde **Dropper → Ajustes**.
-
-En Finanzas, cambiar el período consulta Supabase. **Actualizar** y el disparador programado reservan cada fecha antes de importarla. Los días finalizados conservan las ventas y el reparto registrados. Para rectificaciones contables, registra un movimiento explícito con su descripción y una referencia al corte correspondiente.
+La contraseña de Windows se configura en **Dropper → Ajustes**. El ejecutable se descarga desde [GitHub Releases de Hers-prueba](https://github.com/Hers-NSB/Hers-prueba/releases).
 
 Si una cuenta necesita ajustes de carga de AgencyKey, guarda su `agencykey-perfiles.json` privado al lado del ejecutable. El instalador público lleva una plantilla vacía.
 
-Para publicar el instalador, GitHub Actions compila y prueba `HERS-Dropper.exe` al integrar cambios de Windows en `main` o al publicar un tag `hers-dropper-*`. El release conserva el ejecutable y las fuentes del codificador. Descarga la aplicación desde [GitHub Releases de Hers-prueba](https://github.com/Hers-NSB/Hers-prueba/releases).
+## Despliegue
+
+| Componente | Configuración y publicación |
+| --- | --- |
+| Web `hers-prueba` | [wrangler.jsonc](wrangler.jsonc). Cloudflare Builds compila y despliega desde `main`. El cron de importación se ejecuta a los minutos 5, 20, 35 y 50 en UTC. |
+| Dropper `hers-prueba-dropper` | [wrangler.jsonc de Dropper](dropper/cloudflare/wrangler.jsonc) y [esquema D1](dropper/cloudflare/schema.sql). Se despliega por separado. |
+| Supabase | [Migraciones](supabase/migrations/) y [función team-login](supabase/functions/team-login/). |
+| Windows | [GitHub Actions](.github/workflows/dropper-windows.yml) compila, prueba y publica `HERS-Dropper.exe` al integrar cambios de Windows en `main` o al publicar un tag `hers-dropper-*`. El release incluye las fuentes del codificador. |
+
+La web consulta a Dropper con el binding `DROPPER` y Dropper verifica la sesión administrativa de Supabase. Dropper lee la clave de AgencyKey por medio del binding privado `HERS_AGENCY_KEY`, que apunta a `DropperAgencyKey` en el Worker web. `HERS_INTEGRATIONS_SECRET` se configura únicamente en `hers-prueba`. En un entorno nuevo, aplica el esquema de D1 y habilita ese punto de entrada web antes de desplegar el Worker de Dropper con el binding.
