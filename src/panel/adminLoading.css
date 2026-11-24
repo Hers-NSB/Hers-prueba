@@ -1,0 +1,36 @@
+.admin-loading {
+  display: flex;
+  min-block-size: 12rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1rem;
+  color: #e8ddd3;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.admin-loading--fullscreen {
+  position: fixed;
+  inset: 0;
+  background: #0b0b0a;
+}
+
+.admin-loading__spinner {
+  inline-size: 2rem;
+  block-size: 2rem;
+  border: 2px solid #544438;
+  border-block-start-color: #c7a78d;
+  border-inline-end-color: #c7a78d;
+  border-radius: 50%;
+  animation: admin-loading-spin 0.8s linear infinite;
+}
+
+@keyframes admin-loading-spin {
+  to { transform: rotate(1turn); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-loading__spinner { animation: none; }
+}

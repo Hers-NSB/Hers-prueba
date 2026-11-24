@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, BarChart3, ChevronDown, CircleDollarSign, FileCheck, Plus, RefreshCw, Wallet } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import AdminLoading from "../AdminLoading.jsx";
 import { dateKey, financeBreakdown, investmentTotal, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, netSales, salesProfit, summarize, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
@@ -237,7 +238,7 @@ export default function Finanzas() {
   const paymentRate = payments && effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()));
   return <section className="hf hf-finance" aria-label="Finanzas">
     <header className="hf-header">
-      <div><h1>Finanzas {busy && <RefreshCw className="hf-refreshing" size={20} role="status" aria-label="Actualizando Finanzas" />}</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
+      <div><h1>Finanzas {busy && access && <RefreshCw className="hf-refreshing" size={20} role="status" aria-label="Actualizando Finanzas" />}</h1><p>Ventas de plataforma y resultados de la agencia</p></div>
       <button type="button" className="hf-select-trigger" onClick={update} disabled={busy || (tab === "Resumen" && invalid) || !access}>
         <RefreshCw size={16} aria-hidden="true" /> {updating ? "Actualizando…" : "Actualizar"}
       </button>
@@ -255,6 +256,7 @@ export default function Finanzas() {
       {syncError && <p className="hf-notice" role="alert">{syncError}</p>}
       {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
       {loadError && <p className="hf-notice" role="alert">No se pudieron actualizar los datos de Finanzas <button type="button" onClick={reload}>Reintentar</button></p>}
+      {loading && access === null && <AdminLoading>Cargando Finanzas…</AdminLoading>}
       {access && <div aria-busy={busy}>
         {tab === "Resumen" && <Overview data={data} range={filters} />}
         {tab === "Movimiento" && <Movements data={data} revision={revision} filters={movementFilters} onFilter={setMovementFilters}

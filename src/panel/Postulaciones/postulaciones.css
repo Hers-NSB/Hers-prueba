@@ -62,7 +62,6 @@
   gap: 9px;
 }
 .postulaciones-error,
-.postulaciones-loading,
 .postulaciones-empty {
   margin: 22px 26px;
   padding: 15px 17px;
@@ -75,18 +74,10 @@
   color: var(--post-danger-hover);
 }
 
-.postulaciones-loading,
 .postulaciones-empty {
   background: var(--post-surface);
   border: 1px solid var(--post-border);
   color: var(--post-muted);
-}
-
-.postulaciones-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
 }
 
 .postulaciones-grid {
@@ -659,7 +650,6 @@
   border-color: #76533e;
   color: #dfc8b4;
 }
-.postulaciones-loading,
 .postulaciones-empty {
   background: #191817;
   border-color: var(--post-border);

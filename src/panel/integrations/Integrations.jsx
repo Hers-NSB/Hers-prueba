@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { KeyRound, Plus, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import AdminLoading from "../AdminLoading.jsx";
 import callApi from "./connectorApi";
 import { usd } from "../finanzas/finance";
 import "../finanzas/finanzas.css";
@@ -106,7 +107,7 @@ export default function Integrations() {
       </button>
     </header>
     {notice && <p className="hf-notice" role={notice.error ? "alert" : "status"}>{notice.error || notice.success}</p>}
-    {!data && !notice && <p role="status">Cargando conectores…</p>}
+    {!data && !notice && <AdminLoading>Cargando Conectores…</AdminLoading>}
     {data && <>
       <section className="hf-section hers-integration-card">
         <div className="hf-summary-head">
