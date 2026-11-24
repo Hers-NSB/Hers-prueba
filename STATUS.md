@@ -36,6 +36,14 @@ El formulario de pruebas guarda en Supabase y muestra la confirmación al enviar
 
 ## Registro de cambios
 
+### 24 de noviembre de 2026 · Paneles, importaciones y escritorio
+
+La rama `codex/actualizar-paneles-y-dropper` actualiza los paneles y Postulaciones, incorpora una reserva única por bot y protege las importaciones de días finalizados. Antes de publicar, aplica la migración de Finanzas y el esquema D1, configura la clave compartida según el README, despliega Dropper y publica el ejecutable actualizado.
+
+- `wrangler.jsonc` es la configuración usada por Cloudflare Builds. El historial de Cloudflare muestra despliegues anteriores por API. Se conserva `cloudflare/deploy.json` hasta verificar las dependencias de despliegues manuales.
+- Los tres índices de Finanzas registraron cero lecturas por índice en la consulta inicial. Supabase de pruebas todavía tiene cero pagos cerrados, por lo que la comprobación se programó para después de la quincena del 1 al 15 de diciembre.
+- Los registros del Worker antiguo `dropper` confirman solicitudes a `/v1/recording-desktop-job` y `/v1/profile-revisions`. La app que se compila aquí apunta a `hers-prueba-dropper`.
+
 ### 23 de noviembre de 2026 · Dropper en Administración
 
 La rama `codex/dropper-en-hers` agrega el resumen, los ajustes y la descarga de Windows en **Dropper**. **Conectores → Bots** usa las herramientas de configuración y verificación del Worker de Dropper. Los datos permanecen en D1. Pasaron las 28 pruebas de Node, el lint y la compilación. Chromium comprobó la recarga y ambas vistas a 390 px con los dos Workers y D1 local. Ambos Workers y [HERS Dropper para Windows](https://github.com/Hers-NSB/Dropper/releases/tag/recorder-58-1) se publicaron el 24 de noviembre.
@@ -110,7 +118,7 @@ El total de días ya se calculaba con fechas inclusivas del período. Cada día 
 Hers-prueba es el entorno de pruebas del panel de administración y la portada de HERS. Usa Node.js 24, React, Vite, Recharts y Supabase. Cloudflare Workers sirve los recursos y conecta la importación diaria con AgencyKey. La configuración de entorno está descrita en [README.md](README.md).
 
 1. Revisa el PR y compara la versión del Worker con la última migración aplicada en **Despliegue**.
-2. Para continuar con la interfaz, empieza en `src/panel/finanzas/finanzas.jsx`, `FinanceCharts.jsx`, `PaymentHistory.jsx` y `finanzas.css`. El reparto de Resumen se calcula en `distribution.js`.
+2. Para continuar con la interfaz, empieza en `src/panel/finanzas/finanzas.jsx`, `FinanceCharts.jsx`, `PaymentHistory.jsx` y `finanzas.css`. El reparto se calcula en las funciones SQL de Finanzas.
 3. Para continuar con ventas, porcentajes o pagos, revisa la migración del 23 de noviembre en UTC junto con `20261122203513_finance_payment_details.sql`, `20261123015138_finance_current_pay_independent_sales.sql` y `cloudflare/integrations.js`. Guarda las ventas y los porcentajes históricos con el corte e importa días usando la zona de AgencyKey.
 4. Cuando se registre el primer pago real, verifica que tenga una sola inversión vinculada por `finance_payment_id`, con el mismo importe y la categoría correspondiente. Para repetir la prueba de integración en Supabase de pruebas, ejecuta `test/finance_current_period.integration.sql`.
 5. Al terminar cada conjunto de cambios, actualiza este archivo y revisa el README.

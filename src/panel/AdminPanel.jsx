@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { FaTelegram } from "react-icons/fa";
 import AdminLoading from "./AdminLoading.jsx";
 import "./adminPanel.css";
 import {
   BarChart3,
   ClipboardList,
-  Download,
   Home,
   LogOut,
   PanelLeftClose,
@@ -26,7 +26,7 @@ const sections = [
   ["dashboard", "Inicio", Home],
   ["applications", "Postulaciones", ClipboardList],
   ["finance", "Finanzas", BarChart3],
-  ["dropper", "Dropper", Download],
+  ["dropper", "Dropper", FaTelegram],
   ["integrations", "Conectores", Plug],
 ];
 
@@ -34,6 +34,7 @@ export default function AdminPanel({ onClose }) {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [revisions, setRevisions] = useState({});
+  const [financeRequested, setFinanceRequested] = useState(false);
   const [errors, setErrors] = useState({});
   const [handlers] = useState(() => new Map());
 
@@ -42,6 +43,7 @@ export default function AdminPanel({ onClose }) {
       handlers.get(section)?.();
       return;
     }
+    if (section === "finance") setFinanceRequested(true);
     setRevisions((current) => ({ ...current, [section]: (current[section] ?? 0) + 1 }));
     setActiveSection(section);
   }
@@ -149,7 +151,7 @@ export default function AdminPanel({ onClose }) {
             {activeSection === "dashboard" ? <AdminDashboardHome revision={revision} /> :
               <div className="admin-module-view">
                 {activeSection === "applications" && <Postulaciones revision={revision} />}
-                {activeSection === "finance" && <Finanzas revision={revision} />}
+                {activeSection === "finance" && <Finanzas refreshRequested={financeRequested} clearRefresh={setFinanceRequested} />}
                 {activeSection === "dropper" && <Dropper revision={revision} />}
                 {activeSection === "integrations" && <Integrations revision={revision} />}
               </div>}

@@ -35,3 +35,11 @@ CREATE TABLE IF NOT EXISTS bot_activity (
   revision INTEGER NOT NULL,
   last_seen INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS bot_leases (
+  profile_id TEXT PRIMARY KEY REFERENCES profiles(id) ON DELETE CASCADE,
+  revision INTEGER NOT NULL,
+  owner TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  ready INTEGER NOT NULL DEFAULT 0 CHECK (ready IN (0, 1))
+);

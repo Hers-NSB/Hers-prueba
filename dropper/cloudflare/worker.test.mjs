@@ -585,3 +585,58 @@ test('daily summaries group confirmed publications by Drop and model in Caracas 
  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM drop_publications').get().count,5);
  assert.equal((await admin(env,'GET','/v1/admin/drops?date=2026-02-30')).status,400);
 });
+
+test('only one desktop instance can reserve a bot, with status and daily totals', async () => {
+  assert.equal((await admin(env,'PUT',route,input)).status,200);
+  const lease='/v1/profiles/'+firstId+'/lease';
+  const call=(owner,method,path,body)=>request(env,method,path,body,{
+    Authorization:'Bearer '+env.ACCESS_TOKEN,'X-Recorder-Protocol':'2','X-Dropper-Instance':owner.repeat(32),
+  });
+  const starts=await Promise.all(['a','b'].map(owner=>call(owner,'POST',lease,{revision:1})));
+  assert.deepEqual(starts.map(response=>response.status).sort(),[200,409]);
+  const owner=starts[0].ok?'a':'b';
+  const other=owner==='a'?'b':'a';
+  assert.equal((await call(other,'POST',credentials)).status,409);
+  assert.equal((await desktop(env,'POST',credentials)).status,409);
+  assert.equal((await call(owner,'POST',credentials)).status,200);
+  assert.deepEqual((await (await admin(env,'GET','/v1/admin/active-bots')).json()).profiles,[]);
+  assert.equal((await call(owner,'PUT',lease,{ready:true})).status,200);
+  assert.equal((await (await admin(env,'GET','/v1/admin/active-bots')).json()).profiles[0].id,firstId);
+
+  const today=(await (await admin(env,'GET','/v1/admin/drops')).json()).date;
+  const empty=await (await admin(env,'GET','/v1/admin/drops')).json();
+  assert.equal(empty.models[0].creator_name,'Lilith');
+  assert.deepEqual(empty.drops,[]);
+  const posts=[{creator_id:52,creator_name:'Lilith',drop_id:'a'.repeat(32),position:1,
+    post_id:'501',confirmed_at:Date.parse(today+'T12:00:00Z')/1000,manual:false}];
+  assert.equal((await desktop(env,'POST','/v1/drop-publications',{posts})).status,200);
+  const status=await (await call(other,'GET','/v1/profile-revisions')).json();
+  assert.equal(status.profiles[0].active_elsewhere,1);
+  assert.equal(status.profiles[0].published_today,1);
+  assert.equal((await call(other,'DELETE',lease)).status,200);
+  assert.equal((await call(other,'POST',lease,{revision:1})).status,409);
+  assert.equal((await call(owner,'DELETE',lease)).status,200);
+  assert.equal((await call(other,'POST',lease,{revision:1})).status,200);
+});
+
+test('HERS Dropper reads the API key stored in Services once the shared backend is enabled', async () => {
+  await admin(env,'PUT',route,input);
+  env.HERS_INTEGRATIONS_SECRET=Buffer.alloc(32,9).toString('base64');
+  env.HERS_SUPABASE_PUBLISHABLE_KEY='test-publishable';
+  const {seal}=await import('../../cloudflare/integrations.js');
+  const key='shared-service-key';
+  const ciphertext=await seal(env.HERS_INTEGRATIONS_SECRET,'agencykey','api-key',key);
+  const mockedUpstream=globalThis.fetch;
+  globalThis.fetch=async (url, options)=>{
+    if(new URL(url).pathname.endsWith('/hers_integration_worker')){
+      assert.equal(options.headers.apikey,env.HERS_SUPABASE_PUBLISHABLE_KEY);
+      assert.equal(JSON.parse(options.body).p_action,'agencykey');
+      return Response.json({ciphertext});
+    }
+    return mockedUpstream(url,options);
+  };
+  try {
+    assert.equal((await admin(env,'PUT','/v1/admin/agencykey',{api_key:'unused-key'})).status,409);
+    assert.equal((await (await desktop(env,'POST',credentials)).json()).api_key,key);
+  } finally { globalThis.fetch=mockedUpstream; }
+});

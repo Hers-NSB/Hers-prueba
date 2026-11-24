@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useLayoutEffect } from "react";
 
 export const AdminActions = createContext(null);
 
-export function useAdminRefresh(section, refresh) {
+export function useAdminRefresh(section, refresh, requested, clear, busy) {
   const actions = useContext(AdminActions);
   const handlers = actions?.handlers;
   useLayoutEffect(() => {
@@ -10,6 +10,11 @@ export function useAdminRefresh(section, refresh) {
     handlers.set(section, refresh);
     return () => handlers.delete(section);
   }, [handlers, section, refresh]);
+  useEffect(() => {
+    if (!requested || busy) return;
+    clear(false);
+    void refresh?.();
+  }, [requested, busy, clear, refresh]);
 }
 
 export function AdminError({ id, section, message }) {

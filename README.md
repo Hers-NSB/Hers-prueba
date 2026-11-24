@@ -47,11 +47,13 @@ Después de cada conjunto de cambios, actualiza [STATUS.md](STATUS.md) con los a
 
 ### Dropper
 
-**Dropper** muestra los bots en línea, el resumen diario según la hora de Caracas y el cambio de contraseña de Windows. **Conectores → Bots** reúne la clave API para los bots, la sesión compartida de AgencyKey y la administración de Telegram. La app informa cada 30 segundos qué bots están en ejecución. El panel considera en línea el último aviso recibido en los 90 segundos anteriores.
+**Dropper** muestra las modelos con bots en línea y el total diario de publicaciones según la hora de Caracas. El día actual se actualiza automáticamente y el histórico se consulta al seleccionar una fecha o al pulsar **Actualizar**. La app muestra `publicadas / 400` por modelo y reserva el bot en el servidor antes de conectarse a Telegram. Actualiza todos los ejecutables para que cada instancia reserve el bot desde el inicio.
 
-El código de Windows y su Worker viven en [`dropper/`](dropper/). El Worker `hers-prueba-dropper` usa su propia D1. HERS lo consulta mediante el binding de servicio `DROPPER` y verifica la sesión administrativa de Supabase. Al cambiar de instalación, detén primero los bots anteriores para evitar que ambas instalaciones usen los mismos tokens al mismo tiempo.
+**Conectores → Servicios** administra la clave API común de AgencyKey y la sesión compartida que usa Windows para verificar perfiles y grabar. La autorización OAuth del directorio se mantiene para consultar empleados. **Conectores → Bots** administra los tokens de Telegram y las modelos asociadas.
 
-Después de la migración, configura la clave de AgencyKey en **Conectores → Bots**, abre **Editar** para cada ficha y guarda su token y sus usuarios autorizados. Define la contraseña de escritorio desde **Dropper → Ajustes**. Abre la aplicación nueva y conecta la sesión compartida de AgencyKey desde **Conectores → Bots**.
+El código de Windows y su Worker viven en [dropper/](dropper/). El Worker `hers-prueba-dropper` usa su propia D1. HERS lo consulta mediante el binding de servicio `DROPPER` y verifica la sesión administrativa de Supabase. Antes de desplegar esta actualización, aplica el esquema D1 en `dropper/cloudflare/schema.sql` y configura `HERS_INTEGRATIONS_SECRET` con el mismo valor que usa el Worker web. Después, despliega Dropper antes de publicar el panel web. La app de Windows conserva la contraseña configurada desde **Dropper → Ajustes**.
+
+En Finanzas, cambiar el período consulta Supabase. **Actualizar** y el disparador programado reservan cada fecha antes de importarla. Los días finalizados conservan las ventas y el reparto registrados. Para rectificaciones contables, registra un movimiento explícito con su descripción y una referencia al corte correspondiente.
 
 Si una cuenta necesita ajustes de carga de AgencyKey, guarda su `agencykey-perfiles.json` privado al lado del ejecutable. El instalador público lleva una plantilla vacía.
 

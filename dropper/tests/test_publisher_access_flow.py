@@ -52,11 +52,12 @@ class AccessFlowTests(unittest.TestCase):
 
     def test_idle_check_only_requests_revisions_and_shows_notice(self):
         manager = self.manager()
-        manager.panels = {'one': SimpleNamespace(mode='stopped', controller=SimpleNamespace(running=False))}
+        manager.panels = {'one': SimpleNamespace(mode='stopped', controller=SimpleNamespace(running=False), update_cloud_status=Mock())}
         manager.client = Mock()
         manager.client.profile_revisions.return_value = [{'id': 'one', 'revision': 2}]
         manager.profile_snapshot = {'one': (1, None)}
         manager.apply_profiles = Mock()
+        manager.refresh_sidebar = Mock()
         manager.background = lambda work, complete, failed: complete(work())
         manager.check_updates()
         manager.client.profile_revisions.assert_called_once_with()
@@ -67,15 +68,16 @@ class AccessFlowTests(unittest.TestCase):
 
     def test_active_profile_revision_change_refreshes_configuration(self):
         manager = self.manager()
-        manager.panels = {'one': SimpleNamespace(mode='running', controller=SimpleNamespace(running=True))}
+        manager.panels = {'one': SimpleNamespace(mode='running', controller=SimpleNamespace(running=True), update_cloud_status=Mock())}
         manager.client = Mock()
         manager.client.profile_revisions.return_value = [{'id': 'one', 'revision': 2}]
         manager.profile_snapshot = {'one': (1, None)}
         manager.refresh = Mock()
+        manager.refresh_sidebar = Mock()
         manager.background = lambda work, complete, failed: complete(work())
         manager.check_updates()
         manager.refresh.assert_called_once_with()
-        manager.client.report_bot_activity.assert_called_once_with([{'id': 'one', 'revision': 1}])
+        manager.client.report_bot_activity.assert_not_called()
 
     def test_saved_password_does_not_download_profiles_on_launch(self):
         manager = self.manager()

@@ -190,7 +190,7 @@ function employeeNetTotals(report) {
   return Object.fromEntries(totals);
 }
 
-export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now(), closeDay = false) {
+export async function importNet(day, env, send = fetch, testOnly = false, instant = Date.now()) {
   const zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
   const currentDay = formatDay(instant, zone);
   day ??= previousDay(instant, zone).day;
@@ -199,9 +199,31 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   const key = await storedAgencyKey(project, env, send);
   if (!key) return { skipped: true };
 
+  if (testOnly) return fetchAgencyNet(day, currentDay, zone, instant, key, env, send, true);
+  const claim = crypto.randomUUID();
+  const reservation = { p_day: day, claim };
+  const reserved = await bridge(project, env, "reserve_import", reservation, send);
+  if (!reserved.acquired) {
+    return { day, ...(reserved.finalized ? { finalized: true } : reserved.future ? { future: true } : { reserved: true }) };
+  }
+  try {
+    const deadline = AbortSignal.timeout(19 * 60_000);
+    return await fetchAgencyNet(day, currentDay, zone, instant, key, env, send, false, claim, deadline);
+  } catch (error) {
+    try {
+      await bridge(project, env, "release_import", reservation, send);
+    } catch (releaseError) {
+      console.warn("Reserva de AgencyKey", { day, code: releaseError.code || releaseError.name });
+    }
+    throw error;
+  }
+}
+
+async function fetchAgencyNet(day, currentDay, zone, instant, key, env, send, testOnly, claim, deadline) {
+  const sendAgency = deadline ? (url, options) => send(url, { ...options, signal: deadline }) : send;
   const creators = new Map();
   for (let page = 1; ; page += 1) {
-    const result = await queryAgencyKey(key, "/v1/onlyfans/creators", { page, limit: 100 }, send, "AK-MODELS", "los modelos");
+    const result = await queryAgencyKey(key, "/v1/onlyfans/creators", { page, limit: 100 }, sendAgency, "AK-MODELS", "los modelos");
     if (!Array.isArray(result?.data) || !Number.isInteger(result.pagination?.pages)) throw new IntegrationError(502, "AgencyKey devolvió un formato de modelos inesperado", "AK-MODELS-FORMAT");
     for (const row of result.data) {
       if (!isId(row.id) || !isName(row.name) || !Number.isSafeInteger(row.creatorExternalId) || creators.has(row.id)) {
@@ -225,10 +247,10 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   for (let i = 0; i < entries.length; i += 5) {
     const batch = await Promise.allSettled(entries.slice(i, i + 5).map(async (row) => {
       const path = `/v1/onlyfans/${row.creatorExternalId}/api2/v2/earnings/chart`;
-      const chart = await queryAgencyKey(key, path, { ...params, type: "total" }, send, "AK-NET-CHART", `el gráfico de ingresos del ${day}`);
+      const chart = await queryAgencyKey(key, path, { ...params, type: "total" }, sendAgency, "AK-NET-CHART", `el gráfico de ingresos del ${day}`);
       let net = readEarningsNet(chart);
       if (net === null) {
-        const result = await readTransactionsNet(key, row.creatorExternalId, { day, fromDate, toDate, params }, send);
+        const result = await readTransactionsNet(key, row.creatorExternalId, { day, fromDate, toDate, params }, sendAgency);
         if (result.count === 0) empty.push(row.id);
         transactionModels += 1;
         net = result.net;
@@ -244,7 +266,7 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
   }
   if (empty.length) {
     const report = await queryAgencyKey(key, "/v1/public/crm/reports/creators",
-      { fromDate, toDate }, send, "AK-CRM", "el reporte CRM de contraste");
+      { fromDate, toDate }, sendAgency, "AK-CRM", "el reporte CRM de contraste");
     const byCreator = new Map();
     for (const row of Array.isArray(report?.data) ? report.data : []) {
       const count = money(row?.totalSalesCount);
@@ -264,11 +286,11 @@ export async function importNet(day, env, send = fetch, testOnly = false, instan
     }
   }
   const employeeReport = await queryAgencyKey(key, "/v1/public/crm/reports/employees",
-    { fromDate, toDate }, send, "AK-EMPLOYEE-SALES", "las ventas atribuidas a empleados");
+    { fromDate, toDate }, sendAgency, "AK-EMPLOYEE-SALES", "las ventas atribuidas a empleados");
   const employeeNet = employeeNetTotals(employeeReport);
   if (!testOnly) {
-    const payload = { p_day: day, p_sales: sales, p_attributions: null, p_employee_net: employeeNet };
-    if (closeDay) await workerRpc("hers_payroll_worker", project, env, "import", payload, send);
+    const payload = { p_day: day, claim, p_sales: sales, p_attributions: null, p_employee_net: employeeNet };
+    if (day < currentDay) await workerRpc("hers_payroll_worker", project, env, "import", payload, send);
     else await bridge(project, env, "import", payload, send);
   }
   return { day, creators: sales.length, attributions: Object.keys(employeeNet).length, ...(testOnly ? { transactionModels,
@@ -289,7 +311,7 @@ export default {
     const next = await workerRpc("hers_payroll_worker", project, env, "next", { report_zone }, fetch);
     if (!next.day) return;
     const importDay = async (day) => {
-      const result = await importNet(day, env, fetch, false, event.scheduledTime, true);
+      const result = await importNet(day, env);
       if (result.skipped || result.future) throw new Error("No se pudo completar el día de pagos de AgencyKey");
     };
     try {

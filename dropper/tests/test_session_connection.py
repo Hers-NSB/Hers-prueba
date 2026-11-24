@@ -14,6 +14,7 @@ class SessionButtonTests(unittest.TestCase):
         panel.controller=SimpleNamespace(running=False,start=Mock())
         panel.manager=SimpleNamespace(closing=False,panels={},client=Mock(),auth_required=False)
         panel.set_mode=Mock()
+        panel.active_elsewhere=False
         panel.start()
         panel.controller.start.assert_called_once()
 
