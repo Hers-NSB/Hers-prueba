@@ -14,7 +14,7 @@ npm run build
 npm test
 ```
 
-Si preparas una instancia local nueva, aplica las migraciones de `supabase/migrations` y sirve la función `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Equipo → Administrador e inicia sesión con el correo completo. El inicio de sesión de pruebas también acepta el nombre de una cuenta del dominio `@hers-prueba.example`. Una sesión tiene que renovarse si cambia su rol.
+Si preparas una instancia local nueva, aplica las migraciones de `supabase/migrations` y sirve la función `team-login`. Para dar acceso a una cuenta existente y autorizada del Supabase de pruebas, configura su `app_metadata.role` como `admin` usando la API administrativa de Supabase. En la página, abre Equipo → Administrador e inicia sesión con el alias de administrador configurado en `admin_login_aliases` y la contraseña de la cuenta. El correo no se admite en el formulario de administrador. La tabla de alias es accesible únicamente desde el servidor. Una sesión tiene que renovarse si cambia su rol.
 
 GitHub Actions ejecuta las pruebas SQL en una instancia local desechable de Supabase. Para ejecutarlas en **Hers prueba**, aplica primero las migraciones pendientes. Cada prueba revierte sus datos al terminar.
 
