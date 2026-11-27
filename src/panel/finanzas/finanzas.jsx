@@ -6,7 +6,7 @@ import AdminLoading from "../AdminLoading.jsx";
 import { dateKey, financeBreakdown, isActiveFinanceEntry, kinds, missingAgencyKeyDays, monthRange, salesProfit, usd } from "./finance";
 import callApi from "../integrations/connectorApi";
 import PeriodPicker from "./PeriodPicker";
-import { effectiveShare, isChatter } from "./distribution";
+import { effectiveShare, isChatter, memberRateInputs, memberRateAllocation, memberRateLabel } from "./distribution";
 import CategoryPicker from "./CategoryPicker";
 import CategoryDescription from "./CategoryDescription";
 import PaymentHistory from "./PaymentHistory";
@@ -16,7 +16,7 @@ import Overview from "./Overview";
 import { inPeriod, loadOverview, readOverviewTotals, readPayroll, readRows } from "./financeData";
 import { AdminError, AdminNotice, useAdminRefresh } from "../adminActions";
 
-const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], rates: [], balance: null, movementCategories: [], currentPay: {}, currentPaySales: {}, payPeriod: null };
+const empty = { movements: [], sales: [], commissions: [], creators: [], platforms: [], members: [], categories: [], rates: [], balance: null, movementCategories: [], currentPay: {}, currentPaySales: {}, payPeriod: null, deletedEmployees: [] };
 const catalog = { platform: "Plataforma" };
 const tabs = ["Resumen", "Movimiento", "Empleados"];
 const movementPageSize = 50;
@@ -25,7 +25,7 @@ async function loadFinance(range, signal) {
   const { data: allowed, error } = await supabase.rpc("finance_is_admin").abortSignal(signal);
   if (error?.code === "42501" || !error && !allowed) return null;
   if (error) throw error;
-  const [period, creators, platforms, members, categories, rates, payroll, overview] = await Promise.all([
+  const [period, creators, platforms, members, categories, rates, payroll, overview, deletedPayments] = await Promise.all([
     loadOverview(range, signal),
     readRows("finance_creators", ["name", "id"], signal),
     readRows("finance_platforms", ["name", "id"], signal),
@@ -34,8 +34,12 @@ async function loadFinance(range, signal) {
     readRows("finance_model_shares", ["effective_on", "id"], signal),
     readPayroll(signal),
     readOverviewTotals(signal),
+    readRows("finance_payments", ["id"], signal, (query) => query.not("deleted_member_id", "is", null),
+      "id,deleted_member_id,deleted_member_name"),
   ]);
-  return { ...period, ...payroll, ...overview, creators, platforms, members, categories, rates };
+  const deletedEmployees = [...new Map(deletedPayments.map(({ deleted_member_id: id, deleted_member_name: name }) =>
+    [id, { id, name }])).values()].sort((a, b) => a.name.localeCompare(b.name, "es"));
+  return { ...period, ...payroll, ...overview, creators, platforms, members, categories, rates, deletedEmployees };
 }
 
 export default function Finanzas({ refreshRequested, clearRefresh }) {
@@ -200,8 +204,9 @@ export default function Finanzas({ refreshRequested, clearRefresh }) {
     : !busy && access === null ? reload : null;
   useAdminRefresh("finance", refreshAction, refreshRequested, clearRefresh, busy);
 
-  const paymentPerson = payments && (payments.type === "modelShare" ? data.creators : data.members)
-    .find(({ id }) => id === payments.person.id);
+  const paymentPeople = payments?.type === "modelShare" ? data.creators
+    : payments?.type === "deletedMember" ? data.deletedEmployees : data.members;
+  const paymentPerson = payments && paymentPeople.find(({ id }) => id === payments.person.id);
   const paymentRate = payments && effectiveShare(data.rates, payments.recipient, data.payPeriod?.day ?? dateKey(new Date()));
   if (loading && access === null) return <AdminLoading>Cargando Finanzas…</AdminLoading>;
 
@@ -213,7 +218,7 @@ export default function Finanzas({ refreshRequested, clearRefresh }) {
     <AdminError id="finance-payroll" section="Finanzas" message={payrollError} />
     <AdminError id="finance-sync" section="Finanzas" message={syncError} />
     <AdminError id="finance-load" section="Finanzas" message={loadError ? "No se pudieron actualizar los datos" : ""} />
-    {access !== false && <>
+    {access && <>
       <nav className="hf-tabs" aria-label="Secciones de Finanzas">
         {tabs.map((item) => <button type="button" key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{item}</button>)}
       </nav>
@@ -221,27 +226,33 @@ export default function Finanzas({ refreshRequested, clearRefresh }) {
         <PeriodPicker value={filters} onChange={updateFilters} disabled={busy || !access} />
       </div>}
       {tab === "Resumen" && invalid && <p className="hf-notice" role="alert">Selecciona un período válido</p>}
-      {access && <div aria-busy={busy}>
-        {tab === "Resumen" && <Overview data={data} range={filters}>
+      <div aria-busy={busy}>
+        {tab === "Resumen" && !invalid && (loading ? <AdminLoading>Cargando el resumen…</AdminLoading>
+          : !loadError && <Overview data={data} range={filters}>
           <div className="hf-breakdowns">
             <Breakdown title="Por modelo" label="Modelo" data={data} dimension="model" catalog={data.creators} />
             <Breakdown title="Por plataforma" label="Plataforma" data={data} dimension="platform" catalog={data.platforms} />
           </div>
-        </Overview>}
+        </Overview>)}
         {tab === "Movimiento" && <Movements data={data} revision={revision} filters={movementFilters} onFilter={setMovementFilters}
           onEdit={(row) => setEditor({ type: "movement", row })} onDeleted={reload} />}
         {tab === "Empleados" && <Employees data={data} directoryError={directoryError}
           onEdit={(type, row) => setEditor({ type, row })} onPayments={setPayments} />}
-      </div>}
+      </div>
       {payments && paymentPerson && <PaymentHistory key={payments.recipient} {...payments} person={paymentPerson}
         rate={paymentRate}
-        currentPeriod={payments.type === "modelShare" || isChatter(paymentPerson.role) || paymentRate ? data.payPeriod : null}
+        currentPeriod={payments.type !== "deletedMember" &&
+          (payments.type === "modelShare" || isChatter(paymentPerson.role) || paymentRate) ? data.payPeriod : null}
         currentAmount={data.currentPay[payments.recipient]} currentNet={data.currentPaySales[payments.recipient]}
         financeRevision={revision}
         onEdit={() => setEditor({ type: payments.type, row: paymentPerson })}
-        onArchive={() => setEditor({ type: "archive", row: paymentPerson })} onConfirmed={reload} onClose={() => setPayments(null)} />}
+        onDelete={() => setEditor({ type: "deleteMember", row: paymentPerson })} onConfirmed={reload} onClose={() => setPayments(null)} />}
       {editor && <Editor editor={editor} data={data} onChange={reload} onClose={() => setEditor(null)}
-        onSaved={() => { setEditor(null); reload(); }} />}
+        onSaved={() => {
+          if (editor.type === "deleteMember") setPayments(null);
+          setEditor(null);
+          reload();
+        }} />}
 
     </>}
   </section>;
@@ -285,9 +296,12 @@ function Movements({ data, revision, filters, onFilter, onEdit, onDeleted }) {
   const [error, setError] = useState(false);
   const [page, setPage] = useState(0);
   const [deleting, setDeleting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [loadedRevision, setLoadedRevision] = useState(null);
   const [deleteError, setDeleteError] = useState("");
   const [deleteNotice, setDeleteNotice] = useState("");
   const hasNext = rows.length > movementPageSize;
+  const pendingPage = loading || loadedRevision !== revision;
   useEffect(() => {
     const { from, to, kind, category, creator, platform, updated } = filters;
     const controller = new AbortController();
@@ -315,23 +329,33 @@ function Movements({ data, revision, filters, onFilter, onEdit, onDeleted }) {
       } catch {
         if (!controller.signal.aborted) setError(true);
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoadedRevision(revision);
+          setLoading(false);
+        }
       }
     }
     readPage();
     return () => controller.abort();
   }, [filters, revision, page]);
 
-  async function remove(row) {
-    if (deleting || !window.confirm(`¿Eliminar ${row.category} del ${row.day} por ${usd(row.amount)}?`)) return;
+  function closeDelete() {
+    setPendingDelete(null);
+    setDeleteError("");
+  }
+
+  async function remove(event) {
+    event.preventDefault();
+    if (deleting) return;
     setDeleting(true);
     setDeleteError("");
     setDeleteNotice("");
     try {
       const { data: deleted, error } = await supabase.from("finance_movements").delete()
-        .eq("id", row.id).is("finance_payment_id", null).select("id").maybeSingle();
+        .eq("id", pendingDelete.id).is("finance_payment_id", null).select("id").maybeSingle();
       if (error) throw error;
       if (!deleted) throw new Error("El movimiento ya no está disponible para eliminar");
+      closeDelete();
       setDeleteNotice("Movimiento eliminado");
       setLoading(true);
       if (page > 0 && rows.length === 1) setPage(page - 1);
@@ -368,9 +392,8 @@ function Movements({ data, revision, filters, onFilter, onEdit, onDeleted }) {
       {select("Actualizado", "updated", [{ id: "yes", name: "Sí" }, { id: "no", name: "No" }])}
     </div>
     <AdminError id="finance-movements" section="Finanzas" message={error ? "No se pudieron consultar los movimientos" : ""} />
-    <AdminError id="finance-movement-delete" section="Finanzas" message={deleteError} />
     <AdminNotice id="finance-movement-deleted" section="Finanzas" message={deleteNotice} />
-    {error ? null : loading ? <p role="status">Cargando movimientos…</p> :
+    {pendingPage ? <AdminLoading>Cargando movimientos…</AdminLoading> : error ? null :
     <Table headings={["Fecha", "Tipo", "Categoría", "Modelo", "Plataforma", "Importe", "Acción"]}
       emptyText="Sin movimientos para estos filtros"
       rows={rows.slice(0, movementPageSize).map((row) => [row.id, [row.day, kinds[row.kind],
@@ -380,13 +403,13 @@ function Movements({ data, revision, filters, onFilter, onEdit, onDeleted }) {
         <div className="hf-actions">{row.finance_payment_id ? <span>Pago confirmado</span>
           : <>
             <button type="button" disabled={deleting} aria-label={`Editar ${kinds[row.kind]} del ${row.day}`} onClick={() => onEdit(row)}>Editar</button>
-            <button type="button" disabled={deleting} aria-label={`Eliminar ${kinds[row.kind]} del ${row.day}`} onClick={() => remove(row)}>Eliminar</button>
+            <button type="button" disabled={deleting} aria-label={`Eliminar ${kinds[row.kind]} del ${row.day}`} aria-haspopup="dialog" onClick={() => setPendingDelete(row)}>Eliminar</button>
           </>}
           {row.updated_at && <span className="hf-updated" title={`Actualizado el ${new Date(row.updated_at).toLocaleString("es-VE")}`}>
             <FileCheck size={17} aria-label="Movimiento actualizado" />
           </span>}
         </div>]])} />}
-    {(page > 0 || hasNext) && <nav className="hf-actions" aria-label="Páginas de movimientos">
+    {!pendingPage && !error && (page > 0 || hasNext) && <nav className="hf-actions" aria-label="Páginas de movimientos">
       <button type="button" disabled={loading || page === 0} onClick={() => {
         setLoading(true);
         setPage(page - 1);
@@ -397,6 +420,19 @@ function Movements({ data, revision, filters, onFilter, onEdit, onDeleted }) {
         setPage(page + 1);
       }}>Siguiente</button>
     </nav>}
+    {pendingDelete && <dialog className="hf-dialog hf-finance-dialog" aria-labelledby="hf-delete-movement-title"
+      ref={(node) => { if (node && !node.open) node.showModal(); }}
+      onCancel={(event) => { event.preventDefault(); if (!deleting) closeDelete(); }}>
+      <form onSubmit={remove}>
+        <h2 id="hf-delete-movement-title">Eliminar movimiento</h2>
+        <p>¿Eliminar {pendingDelete.category} del {pendingDelete.day} por {usd(pendingDelete.amount)}?</p>
+        {deleteError && <p className="hf-notice" role="alert">{deleteError}</p>}
+        <div className="hf-actions">
+          <button type="button" autoFocus disabled={deleting} onClick={closeDelete}>Cancelar</button>
+          <button type="submit" className="hf-primary" disabled={deleting}>{deleting ? "Eliminando…" : "Eliminar"}</button>
+        </div>
+      </form>
+    </dialog>}
   </section>;
 }
 
@@ -421,8 +457,7 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     const amount = payout != null && rate ? usd(payout) : !eligible || !rate ? "—"
       : rate.basis === "employee_sales" && !row.agencykey_id ? "Pendiente de vincular" : "Pendiente de sincronizar";
     return [recipient, [active ? row.name : <>{row.name} <small className="hf-employee-status">Inactivo</small></>, row.role,
-      rate ? [percentLabel(rate.percent),
-        Number(rate.chatter_percent) > 0 && `${percentLabel(rate.chatter_percent)} chatters`].filter(Boolean).join(" + ") : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
+      rate ? memberRateLabel(rate, percentLabel) : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
       <div className="hf-actions">
         <button type="button" onClick={() => onPayments({ type, person: row, recipient })}>Pagos</button>
       </div>]];
@@ -449,6 +484,12 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
       <h2 id="hf-other-employees-title">Otros empleados</h2>
       <Table labelledBy="hf-other-employees-title" headings={headings} rows={otherEmployees} emptyText="Sin otros empleados registrados" />
     </section>
+    {data.deletedEmployees.length > 0 && <section className="hf-section" aria-labelledby="hf-deleted-employees-title">
+      <h2 id="hf-deleted-employees-title">Pagos de empleados eliminados</h2>
+      <Table labelledBy="hf-deleted-employees-title" headings={["Nombre", "Acciones"]}
+        rows={data.deletedEmployees.map((person) => [person.id, [person.name,
+          <button type="button" onClick={() => onPayments({ type: "deletedMember", person })}>Pagos</button>]])} />
+    </section>}
     <section className="hf-section">
       <div className="hf-actions">
         <button type="button" onClick={() => onEdit("platform")}><Plus size={16} /> Agregar plataforma</button>
@@ -463,9 +504,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
   const rateDay = data.payPeriod?.day ?? today;
   const recipient = type === "modelShare" ? `model:${row.id}` : row && `chatter:${row.id}`;
   const share = effectiveShare(data.rates, recipient, rateDay);
-  const initialValues = { day: today, kind: "investment", percent: 0, creator_ids: [], chatter_percent: 0, chatter_ids: [],
-    ...row, ...(share && { percent: share.percent, creator_ids: share.creator_ids,
-      chatter_percent: share.chatter_percent ?? 0, chatter_ids: share.chatter_ids ?? [] }) };
+  const initialValues = { day: today, kind: "investment", ...row, ...memberRateInputs(share) };
   const [values, setValues] = useState(initialValues);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -476,7 +515,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
       (isActiveFinanceEntry(member) || values.chatter_ids.includes(member.id));
   });
   const memberShare = type === "member";
-  const byEmployee = memberShare && isChatter(values.role);
+  const byEmployee = memberShare && row?.agencykey_id && isChatter(values.role);
   const field = (label, key, props) => <label>{label}<input {...props} value={values[key] ?? ""} onChange={(e) => set(key, e.target.value)} /></label>;
   const select = (label, key, rows) =>
     <Choice label={label} value={values[key]} rows={rows} onChange={(value) => set(key, value)} />;
@@ -496,21 +535,19 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
           gross: kind === "income" ? row?.gross ?? null : null, net: kind === "income" ? row?.net ?? null : null };
         const table = supabase.from("finance_movements");
         request = row ? table.update(payload).eq("id", row.id).select("id").single() : table.insert(payload);
-      } else if (type === "archive") {
-        request = supabase.from("finance_members").update({ archived_on: today }).eq("id", row.id).select("id").single();
+      } else if (type === "deleteMember") {
+        request = supabase.rpc("finance_delete_manual_member", { p_member_id: row.id });
       } else if (memberShare || type === "modelShare") {
-        if (memberShare && !byEmployee && Number(values.percent) > 0 && !values.creator_ids.length) {
-          throw new Error("Selecciona al menos un modelo");
+        const percent = Number(values.percent);
+        const creatorIds = byEmployee ? [] : values.creator_ids;
+        if (memberShare && !byEmployee && percent > 0 && !creatorIds.length && !values.chatter_ids.length) {
+          throw new Error("Selecciona al menos un modelo o un chatter");
         }
-        if (memberShare && Number(values.chatter_percent) > 0 && !values.chatter_ids.length) {
-          throw new Error("Selecciona al menos un chatter");
-        }
-        const amount = { p_percent: Number(values.percent), p_creator_ids: memberShare && !byEmployee ? values.creator_ids : [] };
         request = memberShare ? supabase.rpc("finance_save_current_member_pay", {
-          ...amount, p_member_id: row?.id ?? null, p_name: values.name, p_role: values.role,
-          p_chatter_percent: Number(values.chatter_percent), p_chatter_ids: values.chatter_ids,
+          ...memberRateAllocation(percent, creatorIds, values.chatter_ids, byEmployee),
+          p_member_id: row?.id ?? null, p_name: values.name, p_role: values.role,
         }) : supabase.rpc("finance_save_current_pay_rate", {
-          ...amount, p_member_id: null, p_creator_id: row.id, p_name: null, p_role: null,
+          p_percent: percent, p_creator_ids: [], p_member_id: null, p_creator_id: row.id, p_name: null, p_role: null,
         });
       } else {
         request = supabase.from("finance_platforms").insert({ name: values.name.trim() });
@@ -525,7 +562,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
   };
 
   const title = { movement: row ? "Editar movimiento" : "Registrar movimiento", member: row ? "Editar empleado" : "Agregar empleado",
-    archive: "Eliminar empleado", modelShare: "Editar porcentaje del modelo" };
+    deleteMember: "Eliminar empleado", modelShare: "Editar porcentaje del modelo" };
   const kind = values.kind === "expense" ? "investment" : values.kind;
 
   return <dialog className="hf-dialog hf-finance-dialog" aria-labelledby="hf-editor-title" ref={(el) => { if (el && !el.open) el.showModal(); }} onCancel={(e) => { e.preventDefault(); if (!saving) onClose(); }}>
@@ -547,7 +584,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
               onChange={(event) => set("description", event.target.value)} />
           </label>
         </>}
-        {type === "archive" && <p>Retirar a {row.name} del listado de empleados y conservar su historial</p>}
+        {type === "deleteMember" && <p>¿Eliminar definitivamente a {row.name}? Se conservarán sus cortes y movimientos.</p>}
         {memberShare && !row?.agencykey_id && <fieldset className="hf-edit-group">
           <legend>Datos del empleado</legend>
           {field("Nombre", "name", { maxLength: 120, required: true })}
@@ -559,8 +596,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
           <legend>Porcentaje de pago</legend>
           {field("Porcentaje", "percent", { type: "number", min: 0, max: 100, step: "0.01", required: true })}
           <p className="hf-full-field">El porcentaje se aplica a toda la quincena actual.</p>
-          {byEmployee && <p className="hf-full-field">Ventas netas atribuidas en todas las cuentas de AgencyKey.
-            {!row?.agencykey_id && " Se necesita una cuenta de AgencyKey para atribuir ventas."}</p>}
+          {byEmployee && <p className="hf-full-field">Ventas netas atribuidas en todas las cuentas de AgencyKey.</p>}
         </fieldset>}
         {memberShare && !byEmployee && <fieldset className="hf-model-options"><legend>Modelos asignados</legend>
           {availableModels.map(({ id, name }) => <label key={id}>
@@ -571,8 +607,6 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
           {!availableModels.length && <p>Sin modelos disponibles</p>}
         </fieldset>}
         {memberShare && <fieldset className="hf-model-options"><legend>Chatters asignados</legend>
-          <div className="hf-full-field">{field("Porcentaje sobre ventas netas de los chatters", "chatter_percent",
-            { type: "number", min: 0, max: 100, step: "0.01", required: true })}</div>
           {availableChatters.map(({ id, name }) => <label key={id}>
             <input type="checkbox" checked={values.chatter_ids.includes(id)} onChange={(event) =>
               set("chatter_ids", event.target.checked ? [...values.chatter_ids, id] : values.chatter_ids.filter((value) => value !== id))} />
@@ -584,7 +618,7 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
       </div>
       {error && <p className="hf-notice" role="alert">{error}</p>}
       <div className="hf-actions"><button type="button" disabled={saving} onClick={onClose}>Cancelar</button>
-        <button type="submit" className="hf-primary" disabled={saving || Boolean(row?.archived_on && memberShare)}>{saving ? "Guardando…" : type === "archive" ? "Eliminar" : "Guardar"}</button></div>
+        <button type="submit" className="hf-primary" disabled={saving || Boolean(row?.archived_on && memberShare)}>{saving ? "Guardando…" : type === "deleteMember" ? "Eliminar" : "Guardar"}</button></div>
     </form>
   </dialog>;
 }

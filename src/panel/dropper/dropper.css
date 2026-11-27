@@ -82,6 +82,13 @@
 }
 .hers-dropper-recording { color: var(--hf-accent); }
 .hers-dropper-monthly { margin-top: 1.5rem; }
+.hers-dropper-monthly h3 { margin-bottom: .5rem; color: var(--hf-ink); }
+.hers-dropper-chart {
+  position: relative;
+  width: 100%;
+  height: clamp(220px, 34vh, 300px);
+  min-width: 0;
+}
 
 .hers-manual-form, .hers-manual-chains { display: grid; gap: 1rem; padding: 0; margin: 1rem 0 0; }
 .hers-manual-form fieldset { border: 1px solid var(--hf-line); border-radius: 10px; padding: .8rem; min-width: 0; }

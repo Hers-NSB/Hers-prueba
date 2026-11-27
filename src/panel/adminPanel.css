@@ -26,6 +26,10 @@
   box-sizing: border-box;
 }
 
+.admin-overlay :where(h1, h2, h3, h4) {
+  color: var(--adminink);
+}
+
 .admin-overlay .admin-panel {
   animation: admin-adminPanelReveal 0.48s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -233,9 +237,9 @@
 
 .admin-overlay .admin-dashboard-hero__mark {
   flex: 0 0 auto;
-  width: 74px;
-  height: 74px;
-  border-radius: 22px;
+  width: var(--admin-hero-action-size);
+  height: var(--admin-hero-action-size);
+  border-radius: var(--admin-hero-action-radius);
   font-size: 30px;
 }
 
@@ -325,10 +329,6 @@
 
   .admin-overlay .admin-dashboard-hero {
     padding: 23px;
-  }
-
-  .admin-overlay .admin-dashboard-hero__mark {
-    display: none;
   }
 }
 
@@ -650,6 +650,8 @@
   gap: 0;
 }
 
+.admin-overlay .admin-workspace-notice p { color: inherit; }
+
 .admin-overlay .admin-workspace-notice h2 {
   margin: 0 0 0.4rem;
   font-size: 1rem;
@@ -690,33 +692,52 @@
 @media (prefers-reduced-motion: reduce) { .hf-refreshing { animation: none; } }
 
 .admin-overlay .admin-dashboard-hero__actions {
+  --admin-hero-action-size: 74px;
+  --admin-hero-action-radius: 22px;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
+@media (max-width: 680px) {
+  .admin-overlay .admin-dashboard-hero__actions {
+    --admin-hero-action-size: 44px;
+    --admin-hero-action-radius: 13px;
+  }
+}
 .admin-overlay .admin-notifications-button {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 42px;
-  min-height: 42px;
-  justify-content: center;
-  padding: 6px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--admin-hero-action-size);
+  height: var(--admin-hero-action-size);
+  padding: 0;
   border: 1px solid var(--adminrose-200);
-  border-radius: 10px;
+  border-radius: var(--admin-hero-action-radius);
   background: #251c18;
   color: #f5ddc8;
   cursor: pointer;
 }
+.admin-overlay .admin-notifications-button svg {
+  width: 52%;
+  height: auto;
+}
+.admin-overlay .admin-notifications-button span {
+  position: absolute;
+  inset: 4px 5px auto auto;
+  color: var(--adminink);
+  font-size: .75rem;
+  font-weight: 700;
+}
 .admin-overlay dialog.admin-workspace-notice {
   position: fixed;
-  inset: 0 0 0 auto;
-  margin: 0;
-  width: min(100%, 26rem);
-  max-width: 100%;
-  max-height: 100%;
+  inset: 0;
+  margin: auto;
+  width: min(calc(100% - 2rem), 26rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
   box-sizing: border-box;
   padding: 1.25rem;
   background: #221a16;

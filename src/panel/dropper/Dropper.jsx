@@ -69,8 +69,9 @@ function DailyDrops({ revision, onLoaded }) {
     return () => { window.clearInterval(timer); controller?.abort(); };
   }, [date, revision, onLoaded]);
 
+  const selectedReport = report?.date === selected ? report : null;
   const models = new Map();
-  if (report && report.date === (date ?? report.today)) {
+  if (selectedReport) {
     for (const model of report.models ?? []) {
       models.set(model.creator_id, { name: model.creator_name, total: 0, lastAt: 0 });
     }
@@ -89,7 +90,7 @@ function DailyDrops({ revision, onLoaded }) {
     </div>
     <PeriodPicker label="Fecha" value={{ from: selected }} single onChange={({ from }) => setDate(from)} />
     <AdminError id="dropper-daily" section="Dropper" message={error} />
-    {report && report.date === (date ?? report.today) ? models.size ? <div className="hers-dropper-models">
+    {selectedReport ? models.size ? <div className="hers-dropper-models">
       {[...models].map(([id, model]) => <article key={id} className="hers-dropper-model">
         <h3>{model.name}</h3>
         <span>{model.lastAt ? timeFormat.format(new Date(model.lastAt * 1000)) : "—"}</span>
@@ -101,7 +102,7 @@ function DailyDrops({ revision, onLoaded }) {
       </article>)}
     </div> : <p className="hf-empty">No hay modelos configuradas</p> :
       !error && <AdminLoading>Cargando el resumen diario…</AdminLoading>}
-    {report?.monthly && <MonthlyDrops today={report.today} monthly={report.monthly} />}
+    {selectedReport?.monthly && <MonthlyDrops today={selectedReport.today} monthly={selectedReport.monthly} />}
     <dialog ref={history} className="hf-dialog hers-dropper-history" aria-labelledby="dropper-history-title">
       <div className="hf-summary-head">
         <h2 id="dropper-history-title">Historial de {models.get(historyModel)?.name}</h2>
@@ -139,7 +140,7 @@ function MonthlyDrops({ today, monthly }) {
   const axis = { fill: "var(--hf-muted)", fontSize: 11 };
   return <div className="hers-dropper-monthly">
     <h3>Drops por día · {label}</h3>
-    <div className="hf-chart">
+    <div className="hf-chart hers-dropper-chart">
       <ResponsiveContainer width="100%" height="100%" minWidth={0}>
         <BarChart data={points} accessibilityLayer aria-label={`Drops por día de ${label}`}>
           <CartesianGrid stroke="var(--hf-line)" vertical={false} />
