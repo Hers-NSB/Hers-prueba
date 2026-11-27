@@ -18,8 +18,8 @@
   "d1_databases": [
     {
       "binding": "DROPPER_DB",
-      "database_name": "hers-prueba-dropper",
-      "database_id": "81b417fc-cc2b-4d52-8f94-49bc7a6c2091",
+      "database_name": "hers-prueba",
+      "database_id": "6b7b6025-e9cd-4bb4-b758-a8578ad6ccb2",
       "migrations_dir": "dropper/cloudflare/migrations"
     }
   ],
