@@ -4,7 +4,7 @@ Verificado el 24 de noviembre de 2026. El [PR #22](https://github.com/Hers-NSB/H
 
 ## Integración en revisión
 
-El [PR #24](https://github.com/Hers-NSB/Hers-prueba/pull/24) integra Dropper en `hers-prueba`. La administración usa la sesión verificada de HERS y la contraseña de conexión de Windows se administra en **Conectores → Bots**. La nueva D1 `hers-prueba` usa credenciales recién creadas. Los cuatro perfiles conservan su identidad y requieren registrar los tokens de Telegram. Se verificaron 2.738 publicaciones únicas en la nueva D1. Las migraciones de Finanzas y el bucket privado de fotos ya están aplicados en Supabase. La publicación del Worker queda pendiente de la clave de fotos y la verificación del ejecutable con el nuevo destino.
+El [PR #24](https://github.com/Hers-NSB/Hers-prueba/pull/24) integra Dropper en `hers-prueba`. La administración usa la sesión verificada de HERS y la contraseña de conexión de Windows se administra en **Conectores → Bots**. La nueva D1 `hers-prueba` usa credenciales recién creadas. Los cuatro perfiles conservan su identidad y requieren registrar los tokens de Telegram. Se verificaron 2.738 publicaciones únicas en la nueva D1. Las migraciones de Finanzas y el bucket privado de fotos ya están aplicados en Supabase. La función privada `manual-drop-photo` autentica al Worker antes de leer las fotos de drops manuales. La publicación del Worker y la verificación del ejecutable se registran al completar el despliegue.
 
 ## Despliegue verificado
 

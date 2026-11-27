@@ -650,7 +650,7 @@ test('manual chains run daily in order with private photos and no duplicate deli
  const fail=(status,message)=>Object.assign(new Error(message),{status});
  const initial=new Date('2026-11-27T11:00:00Z');
  env.SUPABASE_URL='https://hers-storage.example';
- env.SUPABASE_STORAGE_SERVICE_ROLE='worker-only-fixture';
+ env.DROPPER_PHOTO_TOKEN='worker-only-fixture';
  const second={send_time:'09:01',text:'Foto',photo};
  const chain={id,creator_id:52,name:'Diaria',enabled:true,revision:0,steps:[
    {send_time:'09:00',text:'Primera',photo:null},second,
@@ -665,10 +665,10 @@ test('manual chains run daily in order with private photos and no duplicate deli
  const send=async(input,options)=>{
   const url=new URL(input);
   if(url.hostname==='hers-storage.example') {
-   assert.equal(options.headers.apikey,env.SUPABASE_STORAGE_SERVICE_ROLE);
-   assert.equal(options.headers.Authorization,env.SUPABASE_STORAGE_SERVICE_ROLE.startsWith('sb_secret_')
-     ? undefined : 'Bearer worker-only-fixture');
-   assert.equal(url.pathname,'/storage/v1/object/authenticated/manual-drop-photos/'+photo);
+   assert.equal(options.headers['X-HERS-Photo-Token'],env.DROPPER_PHOTO_TOKEN);
+   assert.equal(options.headers.Authorization,undefined);
+   assert.equal(url.pathname,'/functions/v1/manual-drop-photo');
+   assert.equal(url.searchParams.get('path'),photo);
    return new Response(Uint8Array.of(255,216,255));
   }
   if(url.hostname==='of2transcoder.s3-accelerate.amazonaws.com') {
@@ -702,7 +702,6 @@ test('manual chains run daily in order with private photos and no duplicate deli
  assert.equal(posts[1].mediaFiles[0].processId,'photo');
  await run('28','00');
  assert.equal(posts[2].text,'Primera');
- env.SUPABASE_STORAGE_SERVICE_ROLE='sb_secret_worker_fixture';
  await run('28','01');
  assert.equal(posts[3].mediaFiles[0].processId,'photo');
  assert.equal(db.prepare('SELECT count(*) AS total FROM drop_publications WHERE manual=1').get().total,4);

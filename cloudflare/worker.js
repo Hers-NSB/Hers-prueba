@@ -303,7 +303,7 @@ export default {
     if (event.cron === manualDropsCron) {
       return runManualDrops({
         DB: env.DROPPER_DB, SUPABASE_URL: project,
-        SUPABASE_STORAGE_SERVICE_ROLE: env.SUPABASE_STORAGE_SERVICE_ROLE,
+        DROPPER_PHOTO_TOKEN: env.DROPPER_PHOTO_TOKEN,
       }, new Date(event.scheduledTime), () => storedAgencyKey(project, env));
     }
     const report_zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";

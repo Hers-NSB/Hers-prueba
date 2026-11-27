@@ -12,7 +12,7 @@ const photoPattern = /^[a-f0-9-]{36}\/[a-f0-9-]{36}\.(?:jpg|png)$/;
 const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 
 function configured(env) {
-  return Boolean(env.SUPABASE_STORAGE_SERVICE_ROLE && env.SUPABASE_URL);
+  return Boolean(env.DROPPER_PHOTO_TOKEN && env.SUPABASE_URL);
 }
 
 export async function listManualDrops(env) {
@@ -88,12 +88,10 @@ class DeliveryError extends Error {
 async function preparePhoto(step, base, env, ask, send) {
   const type = step.photo.endsWith('.png') ? 'image/png' : 'image/jpeg';
   const extension = type === 'image/png' ? 'png' : 'jpg';
-  const storageKey = step.photo.split('/').map(encodeURIComponent).join('/');
-  const storageCredential = env.SUPABASE_STORAGE_SERVICE_ROLE;
-  const headers = {apikey:storageCredential};
-  if (!storageCredential.startsWith('sb_secret_')) headers.Authorization = 'Bearer '+storageCredential;
-  const photo = await send(`${env.SUPABASE_URL}/storage/v1/object/authenticated/manual-drop-photos/${storageKey}`, {
-    redirect:'error', signal:AbortSignal.timeout(30_000), headers,
+  const query = new URLSearchParams({path:step.photo});
+  const photo = await send(`${env.SUPABASE_URL}/functions/v1/manual-drop-photo?${query}`, {
+    redirect:'error', signal:AbortSignal.timeout(40_000),
+    headers:{'X-HERS-Photo-Token':env.DROPPER_PHOTO_TOKEN},
   });
   if (!photo.ok) throw new DeliveryError('No se pudo descargar la foto privada');
   const bytes = await photo.arrayBuffer();
