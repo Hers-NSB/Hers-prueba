@@ -56,7 +56,7 @@ El formulario guarda las fotos en un bucket privado. El panel carga las postulac
 
 **Conectores → Servicios** administra la clave API común de AgencyKey y la sesión compartida que usa Windows para verificar perfiles y grabar. La autorización OAuth del directorio se mantiene para consultar empleados. **Conectores → Bots** administra los tokens de Telegram y las modelos asociadas.
 
-La contraseña de Windows se configura en **Dropper → Ajustes**. El ejecutable se descarga desde [GitHub Releases de Hers-prueba](https://github.com/Hers-NSB/Hers-prueba/releases).
+Dropper usa la sesión de administrador de HERS. La contraseña de conexión de Windows se configura en **Conectores → Bots → Acceso de las apps**. El ejecutable se descarga desde [GitHub Releases de Hers-prueba](https://github.com/Hers-NSB/Hers-prueba/releases).
 
 Si una cuenta necesita ajustes de carga de AgencyKey, guarda su `agencykey-perfiles.json` privado al lado del ejecutable. El instalador público lleva una plantilla vacía.
 
@@ -65,8 +65,8 @@ Si una cuenta necesita ajustes de carga de AgencyKey, guarda su `agencykey-perfi
 | Componente | Configuración y publicación |
 | --- | --- |
 | Web `hers-prueba` | [wrangler.jsonc](wrangler.jsonc). Cloudflare Builds compila y despliega desde `main`. El cron de importación se ejecuta a los minutos 5, 20, 35 y 50 en UTC. |
-| Dropper `hers-prueba-dropper` | [wrangler.jsonc de Dropper](dropper/cloudflare/wrangler.jsonc) y [esquema D1](dropper/cloudflare/schema.sql). Se despliega por separado. |
+| Dropper integrado | El Worker `hers-prueba` ejecuta las rutas de Dropper y el cron de drops manuales. La conexión `DROPPER_DB` y sus [migraciones D1](dropper/cloudflare/migrations/) se configuran en [wrangler.jsonc](wrangler.jsonc). |
 | Supabase | [Migraciones](supabase/migrations/) y [función team-login](supabase/functions/team-login/). |
 | Windows | [GitHub Actions](.github/workflows/dropper-windows.yml) compila, prueba y publica `HERS-Dropper.exe` al integrar cambios de Windows en `main` o al publicar un tag `hers-dropper-*`. El release incluye las fuentes del codificador. |
 
-La web consulta a Dropper con el binding `DROPPER` y Dropper verifica la sesión administrativa de Supabase. Dropper lee la clave de AgencyKey por medio del binding privado `HERS_AGENCY_KEY`, que apunta a `DropperAgencyKey` en el Worker web. `HERS_INTEGRATIONS_SECRET` se configura únicamente en `hers-prueba`. En un entorno nuevo, aplica el esquema de D1 y habilita ese punto de entrada web antes de desplegar el Worker de Dropper con el binding.
+Dropper verifica la sesión administrativa de Supabase y lee la clave de AgencyKey que HERS guarda en Conectores. En `hers-prueba`, configura `DROPPER_ACCESS_TOKEN` para Windows y `DROPPER_ENCRYPTION_KEY` para las configuraciones cifradas. Los drops con fotos usan el bucket privado `manual-drop-photos` y el secreto `SUPABASE_STORAGE_SERVICE_ROLE`. El punto de entrada `DropperAgencyKey` sigue disponible durante la transición del Worker anterior. Consulta [STATUS.md](STATUS.md) para conocer el estado del despliegue.

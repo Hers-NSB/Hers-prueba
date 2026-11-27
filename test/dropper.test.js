@@ -52,9 +52,17 @@ test("HERS serves Dropper directly and rejects standalone admin routes", async (
     ASSETS: { fetch: () => new Response("HERS", { status: 418 }) },
     DROPPER: { fetch: () => { throw new Error("Unexpected service binding"); } },
   };
-  const view = await worker.fetch(new Request(root + "/view/bots"), env);
-  assert.equal(view.status, 200);
-  assert.match(await view.text(), /Bots configurados/);
+  for (const name of ["bots", "operations", "session"]) {
+    const view = await worker.fetch(new Request(root + "/view/" + name), env);
+    assert.equal(view.status, 200);
+    const html = await view.text();
+    assert.match(html, /Bots configurados/);
+    assert.doesNotMatch(html, /Introduce tu contraseña de administrador|id="(?:login-form|admin-password-form)"/);
+  }
+  const login = await worker.fetch(new Request(root + "/api/login", {
+    method: "POST", headers: { Origin: origin, Authorization: "Bearer fixture" },
+  }), env);
+  assert.equal(login.status, 404);
   const desktop = await worker.fetch(new Request(origin + "/v1/profiles"), env);
   assert.equal(desktop.status, 503);
   const unauthorized = await worker.fetch(new Request(origin + "/v1/admin/profiles"), env);

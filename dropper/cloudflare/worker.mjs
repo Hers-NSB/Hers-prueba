@@ -756,7 +756,7 @@ async function adminHandle(request, env, path, hersOwner) {
     const input = await body(request);
     const code = input.code ? text(input.code, 'Código', 256) : base64url(crypto.getRandomValues(new Uint8Array(32)));
     if (code.length < 8) throw new ApiError(400, 'Usa una contraseña de al menos 8 caracteres');
-    if ((!hersOwner || env.ADMIN_TOKEN) && await matchesAdmin(code,env)) throw new ApiError(400,'Usa una contraseña distinta de la contraseña de administrador');
+    if (!hersOwner && await matchesAdmin(code,env)) throw new ApiError(400,'Usa una contraseña distinta de la contraseña de administrador');
     const salt = encode(crypto.getRandomValues(new Uint8Array(16)));
     const value = JSON.stringify({kind:'pbkdf2', source:encode(await digest(env.ACCESS_TOKEN)), salt, hash:await passwordHash(code,salt)});
     await env.DB.prepare("INSERT INTO settings(key, value) VALUES ('app_access', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(value).run();

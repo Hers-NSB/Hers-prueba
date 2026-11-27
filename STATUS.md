@@ -2,6 +2,10 @@
 
 Verificado el 24 de noviembre de 2026. El [PR #22](https://github.com/Hers-NSB/Hers-prueba/pull/22) publicó la actualización de los paneles, Finanzas y Dropper desde el commit `b449922`.
 
+## Integración en revisión
+
+El [PR #24](https://github.com/Hers-NSB/Hers-prueba/pull/24) integra Dropper en `hers-prueba`. La administración usa la sesión verificada de HERS y la contraseña de conexión de Windows se administra en **Conectores → Bots**. La prueba de importación sobre los tres respaldos D1 produjo 2.738 publicaciones únicas. El cambio de destino sigue pendiente de las migraciones remotas, los secretos y la validación del ejecutable de Windows.
+
 ## Despliegue verificado
 
 | Componente | Estado |

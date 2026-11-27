@@ -36,6 +36,7 @@ test('HERS uses the same history and bot settings with a verified Supabase admin
   assert.equal((await call('GET','/profiles',undefined,{Authorization:'Bearer invalid'})).status,401);
   assert.equal((await call('GET','/drops',undefined,{Authorization:'Bearer self-reported'})).status,403);
   assert.equal((await call('PUT','/profiles/'+firstId,input,{Origin:'https://other.test'})).status,403);
+  assert.equal((await call('POST','/login',{})).status,404);
   assert.equal((await call('POST','/setup',{})).status,404);
   assert.equal((await call('POST','/logout',{})).status,404);
   assert.equal((await call('PUT','/password',{})).status,404);
@@ -63,6 +64,11 @@ test('HERS uses the same history and bot settings with a verified Supabase admin
   assert.equal(connect.status,202);
   const {job}=await (await desktop(env,'POST','/v1/recording-desktop-job')).json();
   assert.equal(job.id,(await connect.json()).id);
+  delete env.ADMIN_TOKEN;
+  const newAppCode = 'hers-desktop-new-code';
+  assert.equal((await call('POST','/access',{code:newAppCode},{Authorization:'Bearer self-reported'})).status,403);
+  assert.equal((await call('POST','/access',{code:newAppCode})).status,200);
+  assert.equal((await desktop(env,'GET','/v1/profiles',undefined,newAppCode)).status,200);
  }finally{globalThis.fetch=originalFetch;}
 });
 test('only embedded views allow same-origin framing',async()=>{
