@@ -208,8 +208,8 @@
 .hf-updated { display: inline-flex; align-self: center; color: var(--hf-profit); }
 .hf-model-options { display: grid; gap: .45rem .8rem; margin: 0; padding: .65rem;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); border: 1px solid var(--hf-line); border-radius: 8px; color: var(--hf-muted); }
-.hf-dialog .hf-model-options label { display: flex; align-items: start; overflow-wrap: anywhere; }
-.hf-dialog .hf-model-options input { flex: none; width: 1rem; min-height: 1rem; accent-color: var(--hf-accent); }
+.hf-dialog .hf-model-options > label { display: flex; align-items: start; overflow-wrap: anywhere; }
+.hf-dialog .hf-model-options input[type="checkbox"] { flex: none; width: 1rem; min-height: 1rem; accent-color: var(--hf-accent); }
 
 .hf-finance h1 { display: flex; align-items: center; gap: .55rem; }
 .hf-choice { position: relative; display: block; }

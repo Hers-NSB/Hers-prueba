@@ -11,3 +11,12 @@ export default function AdminLoading({ children, fullscreen = false }) {
     </div>
   );
 }
+
+export function AdminInitialContent({ children, loading, label }) {
+  return <div className="admin-initial-content" aria-busy={loading}>
+    {loading && <AdminLoading>Cargando {label}…</AdminLoading>}
+    <div className={loading ? "admin-initial-content__pending" : undefined} aria-hidden={loading || undefined}>
+      {children}
+    </div>
+  </div>;
+}

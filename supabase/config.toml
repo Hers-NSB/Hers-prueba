@@ -2,3 +2,6 @@ project_id = "hers-prueba"
 
 [functions.team-login]
 verify_jwt = false
+
+[functions.manual-drop-photo]
+verify_jwt = false

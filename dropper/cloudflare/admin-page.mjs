@@ -22,8 +22,7 @@ const PAGE = String.raw`<!doctype html>
 [data-embedded="operations"] .nav{flex-direction:row;padding:0 0 12px}
 #embed-error{padding:0 16px}
 </style></head><body data-embedded="__EMBEDDED__">
-<header class="top"><div><span class="brand">Dropper</span><span class="muted"> / Administración</span></div><div class="top-right"><button id="logout" hidden>Cerrar sesión</button></div></header>
-<div id="login-view" class="login-wrap" hidden><form id="login-form" class="login-form"><h1 id="login-title">Entrar a Dropper</h1><p id="login-help" class="muted">Introduce tu contraseña de administrador</p><label class="field">Contraseña<input id="admin-password" type="password" autocomplete="current-password" maxlength="256" required></label><label class="field" id="confirm-field" hidden>Repite la contraseña<input id="admin-confirm" type="password" autocomplete="new-password" maxlength="256"></label><button class="primary" id="login-button" type="submit">Entrar</button><div class="error" id="login-error" role="alert"></div></form></div>
+__STANDALONE_HEADER__
 <div class="shell" id="app-view" hidden><nav class="nav" aria-label="Administración"><button id="nav-profiles" aria-selected="true">Bots</button><button id="nav-drops" aria-selected="false">Drops</button><button id="nav-access" aria-selected="false">Ajustes</button></nav><main>
 <section id="profiles-section"><div class="heading"><h1>Bots</h1><div class="actions"><button id="reload">Actualizar</button><button class="primary" id="add">Añadir bot</button></div></div><div class="bot-row" id="recording-settings"><div><h3>Sesión compartida de AgencyKey</h3><span class="muted" id="recording-session-status">Consultando sesión…</span></div><button id="connect-recording">Conectar AgencyKey</button></div><div id="profiles-error" class="error" role="alert"></div><div id="profiles-body" aria-label="Bots configurados"></div><div class="empty" id="empty" hidden>No hay bots configurados</div></section>
 <section id="drops-section" hidden>
@@ -33,7 +32,7 @@ const PAGE = String.raw`<!doctype html>
 </section>
 <section id="access-section" hidden><h1>Ajustes</h1><form id="agency-form" class="settings-form"><h3>AgencyKey para los bots</h3><label class="field">Clave API<input id="agency-key" type="password" autocomplete="new-password" maxlength="512" placeholder="API para todos los bots"></label><div class="actions"><button class="primary" id="save-api" type="submit">Guardar API y cargar modelos</button></div><div class="error" id="api-error" role="alert"></div><div class="status" id="api-status" aria-live="polite"></div></form>
 <form id="access-form" class="settings-form"><h3>Acceso de las apps</h3><label class="field">Nueva contraseña<input id="access-input" type="password" autocomplete="new-password" minlength="8" maxlength="256" required></label><div class="actions"><button class="primary" id="rotate" type="submit">Cambiar contraseña</button></div><p>Se pedirá la nueva contraseña en la próxima descarga de configuraciones.</p><div class="error" id="access-error" role="alert"></div><div class="status" id="access-status" aria-live="polite"></div></form>
-<form id="admin-password-form" class="settings-form"><h3>Acceso de administrador</h3><label class="field">Contraseña actual<input id="admin-current" type="password" autocomplete="current-password" maxlength="256" required></label><label class="field">Nueva contraseña<input id="admin-next" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label><div class="actions"><button class="primary" id="save-admin-password" type="submit">Cambiar mi contraseña</button></div><div class="error" id="admin-password-error" role="alert"></div><div class="status" id="admin-password-status" aria-live="polite"></div></form></section>
+__STANDALONE_PASSWORD_FORM__</section>
 <div class="status" id="status" aria-live="polite"></div></main></div>
 <p id="embed-error" class="error" role="alert"></p>
 <dialog class="dialog" id="profile-dialog"><form id="profile-form"><h2 id="dialog-title">Añadir bot</h2><label class="field">Token de Telegram<input id="telegram-token" type="password" autocomplete="new-password" maxlength="256"></label><span class="keep" id="keep-hint" hidden>Vacío para conservar el token actual</span><label class="field">Modelo<select id="creator-id" required><option value="">Selecciona una modelo</option></select></label><label class="field">Usuarios de Telegram autorizados<input id="telegram-users" placeholder="@usuario1, @usuario2" maxlength="1750"></label><label class="field">Nombre de OnlyFans<input id="creator-name" readonly></label><div class="error" id="form-error" role="alert"></div><div class="actions"><button type="button" id="cancel">Cancelar</button><button type="submit" class="primary" id="save">Guardar</button></div></form></dialog>
@@ -52,8 +51,6 @@ let profiles=[],creators=[],editing=null,saving=false,checking=false,resolveRequ
 let confirmResolve=null,recordingTimer=null,recordingBusy=false,recordingGeneration=0,recordingJob=null,feedBusy=false,feedCancel=false,activeFeed=null;
 const feedRows=new Map();
 let renderPending=false;
-let setupToken=new URLSearchParams(location.hash.slice(1)).get('configurar')||'';
-if(location.hash)history.replaceState(null,'',location.pathname);
 function hersSession(){
  return new Promise((resolve,reject)=>{
   const {port1,port2}=new MessageChannel();
@@ -83,15 +80,17 @@ function showLogin(){
  dropsRequest++;followToday=true;$('drops-date').value='';$('drops-body').replaceChildren();
  currentWebReport=null;$('web-report-image').removeAttribute('src');$('web-report-image').hidden=true;$('web-report-detail').textContent='';$('web-report-dialog').close();
  stopRecordingPoll();$('recording-dialog').close();if(confirmResolve)finishConfirm(false);
- profiles=[];creators=[];feedRows.clear();renderPending=false;resolveRequest++;$('profiles-body').replaceChildren();$('profile-form').reset();$('agency-form').reset();$('access-form').reset();$('admin-password-form').reset();$('admin-password').value='';$('admin-confirm').value='';
- if($('profile-dialog').open)$('profile-dialog').close();$('app-view').hidden=true;$('logout').hidden=true;$('login-view').hidden=false;
+ profiles=[];creators=[];feedRows.clear();renderPending=false;resolveRequest++;$('profiles-body').replaceChildren();$('profile-form').reset();$('agency-form').reset();$('access-form').reset();
+ if($('profile-dialog').open)$('profile-dialog').close();
+ $('app-view').hidden=true;
  if(embedded){$('embed-error').textContent='Vuelve a iniciar sesión en HERS';return;}
- const setup=Boolean(setupToken);$('login-title').textContent=setup?'Crea tu contraseña':'Entrar a Dropper';$('login-help').textContent=setup?'Esta contraseña privada será solo para administrar la web':'Introduce tu contraseña de administrador';$('confirm-field').hidden=!setup;$('admin-confirm').required=setup;$('admin-password').minLength=setup?12:1;$('admin-password').autocomplete=setup?'new-password':'current-password';$('login-button').textContent=setup?'Crear contraseña y entrar':'Entrar';
+ showStandaloneLogin();
 }
 async function showApp(){
- $('login-view').hidden=true;$('app-view').hidden=false;$('logout').hidden=Boolean(embedded);$('admin-password').value='';$('admin-confirm').value='';
+ $('app-view').hidden=false;
+ if(!embedded)showStandaloneApp();
  if(embedded){
-  $('nav-profiles').hidden=true;$('admin-password-form').hidden=true;
+  $('nav-profiles').hidden=true;
   if(embedded==='bots'){
    $('app-view').querySelector('nav').hidden=true;
    $('agency-form').hidden=true;
@@ -115,9 +114,7 @@ async function agencyStatus(){
  $('api-error').textContent='';
  try{const data=await api('/settings');$('api-status').textContent=data.api_configured?'API de Dropper configurada':'API de Dropper sin configurar';}catch(error){$('api-error').textContent=error.message;}
 }
-$('login-form').addEventListener('submit',async event=>{event.preventDefault();$('login-error').textContent='';if(setupToken&&$('admin-password').value!==$('admin-confirm').value){$('login-error').textContent='Las contraseñas no coinciden';return;}$('login-button').disabled=true;try{await api(setupToken?'/setup':'/login',{method:'POST',body:JSON.stringify({password:$('admin-password').value,...(setupToken?{token:setupToken}:{})})});setupToken='';await showApp();}catch(error){$('login-error').textContent=error.message;}finally{$('login-button').disabled=false;}});
-$('logout').addEventListener('click',async()=>{if(!await askConfirm('¿Cerrar sesión?','Tendrás que entrar de nuevo para administrar tus bots.','Cerrar sesión'))return;try{await api('/logout',{method:'POST',body:'{}'});showLogin();}catch(error){$('profiles-error').textContent=error.message;}});
-$('admin-password-form').addEventListener('submit',async event=>{event.preventDefault();if(!await askConfirm('¿Cambiar tu contraseña?','Las demás sesiones de administración tendrán que iniciar sesión de nuevo.','Cambiar contraseña'))return;$('save-admin-password').disabled=true;$('admin-password-error').textContent='';try{await api('/password',{method:'PUT',body:JSON.stringify({current_password:$('admin-current').value,password:$('admin-next').value})});$('admin-password-form').reset();$('admin-password-status').textContent='Contraseña de administrador cambiada';}catch(error){$('admin-password-error').textContent=error.message;}finally{$('save-admin-password').disabled=false;}});
+__STANDALONE_SCRIPT__
 function section(which){
  for(const name of ['profiles','drops','access']){
   $(name+'-section').hidden=name!==which;
@@ -380,9 +377,42 @@ if(embedded){
  if(parent!==window)api('/session').then(showApp).catch(error=>{$('embed-error').textContent=error.message;})
   .finally(()=>parent.postMessage({type:'hers-dropper-ready'},location.origin));
  else $('embed-error').textContent='Abre esta sección desde el Panel Administración de HERS';
-}else if(setupToken)showLogin();else api('/session').then(showApp).catch(showLogin);
+}else startStandalone();
 })();
 </script></body></html>`;
+const STANDALONE_HEADER = `<header class="top"><div><span class="brand">Dropper</span><span class="muted"> / Administración</span></div><div class="top-right"><button id="logout" hidden>Cerrar sesión</button></div></header>
+<div id="login-view" class="login-wrap" hidden><form id="login-form" class="login-form"><h1 id="login-title">Entrar a Dropper</h1><p id="login-help" class="muted">Introduce tu contraseña de administrador</p><label class="field">Contraseña<input id="admin-password" type="password" autocomplete="current-password" maxlength="256" required></label><label class="field" id="confirm-field" hidden>Repite la contraseña<input id="admin-confirm" type="password" autocomplete="new-password" maxlength="256"></label><button class="primary" id="login-button" type="submit">Entrar</button><div class="error" id="login-error" role="alert"></div></form></div>`;
+const STANDALONE_PASSWORD_FORM = `<form id="admin-password-form" class="settings-form"><h3>Acceso de administrador</h3><label class="field">Contraseña actual<input id="admin-current" type="password" autocomplete="current-password" maxlength="256" required></label><label class="field">Nueva contraseña<input id="admin-next" type="password" autocomplete="new-password" minlength="12" maxlength="256" required></label><div class="actions"><button class="primary" id="save-admin-password" type="submit">Cambiar mi contraseña</button></div><div class="error" id="admin-password-error" role="alert"></div><div class="status" id="admin-password-status" aria-live="polite"></div></form>`;
+
+const STANDALONE_SCRIPT = `let setupToken=new URLSearchParams(location.hash.slice(1)).get('configurar')||'';
+if(location.hash)history.replaceState(null,'',location.pathname);
+function showStandaloneLogin(){
+ $('admin-password-form').reset();$('admin-password').value='';$('admin-confirm').value='';
+ $('logout').hidden=true;$('login-view').hidden=false;
+ const setup=Boolean(setupToken);
+ $('login-title').textContent=setup?'Crea tu contraseña':'Entrar a Dropper';
+ $('login-help').textContent=setup?'Esta contraseña privada será solo para administrar la web':'Introduce tu contraseña de administrador';
+ $('confirm-field').hidden=!setup;$('admin-confirm').required=setup;
+ $('admin-password').minLength=setup?12:1;
+ $('admin-password').autocomplete=setup?'new-password':'current-password';
+ $('login-button').textContent=setup?'Crear contraseña y entrar':'Entrar';
+}
+function showStandaloneApp(){
+ $('login-view').hidden=true;$('logout').hidden=false;
+ $('admin-password').value='';$('admin-confirm').value='';
+}
+function startStandalone(){
+ if(setupToken)showLogin();else api('/session').then(showApp).catch(showLogin);
+}
+$('login-form').addEventListener('submit',async event=>{event.preventDefault();$('login-error').textContent='';if(setupToken&&$('admin-password').value!==$('admin-confirm').value){$('login-error').textContent='Las contraseñas no coinciden';return;}$('login-button').disabled=true;try{await api(setupToken?'/setup':'/login',{method:'POST',body:JSON.stringify({password:$('admin-password').value,...(setupToken?{token:setupToken}:{})})});setupToken='';await showApp();}catch(error){$('login-error').textContent=error.message;}finally{$('login-button').disabled=false;}});
+$('logout').addEventListener('click',async()=>{if(!await askConfirm('¿Cerrar sesión?','Tendrás que entrar de nuevo para administrar tus bots.','Cerrar sesión'))return;try{await api('/logout',{method:'POST',body:'{}'});showLogin();}catch(error){$('profiles-error').textContent=error.message;}});
+$('admin-password-form').addEventListener('submit',async event=>{event.preventDefault();if(!await askConfirm('¿Cambiar tu contraseña?','Las demás sesiones de administración tendrán que iniciar sesión de nuevo.','Cambiar contraseña'))return;$('save-admin-password').disabled=true;$('admin-password-error').textContent='';try{await api('/password',{method:'PUT',body:JSON.stringify({current_password:$('admin-current').value,password:$('admin-next').value})});$('admin-password-form').reset();$('admin-password-status').textContent='Contraseña de administrador cambiada';}catch(error){$('admin-password-error').textContent=error.message;}finally{$('save-admin-password').disabled=false;}});
+`;
+
 export function adminPage(nonce, embedded = ''){
- return PAGE.replaceAll('__NONCE__',nonce).replace('__EMBEDDED__',embedded).replace('__REPORT_ZIP__',reportZip.toString());
+ return PAGE.replaceAll('__NONCE__',nonce).replace('__EMBEDDED__',embedded)
+  .replace('__STANDALONE_HEADER__',() => embedded ? '' : STANDALONE_HEADER)
+  .replace('__STANDALONE_PASSWORD_FORM__',() => embedded ? '' : STANDALONE_PASSWORD_FORM)
+  .replace('__STANDALONE_SCRIPT__',() => embedded ? '' : STANDALONE_SCRIPT)
+  .replace('__REPORT_ZIP__',reportZip.toString());
 }

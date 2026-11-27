@@ -1,3 +1,4 @@
+import {listManualDrops, saveManualDrops} from './manual-drops.mjs';
 import {adminPage} from './admin-page.mjs';
 import {cleanStorageState} from './recording-session.mjs';
 import {cleanWebDiagnostic, reportZip} from './web-report.mjs';
@@ -669,6 +670,16 @@ async function reportDropPublications(request, env) {
   return json({accepted:true});
 }
 
+async function reportDropRecording(request, env) {
+  const input = await body(request, 2048);
+  if (typeof input?.drop_id !== 'string' || !/^[a-f0-9]{32}$/.test(input.drop_id) ||
+      typeof input.completed !== 'boolean') throw new ApiError(400, 'Estado de grabación inválido');
+  await env.DB.prepare(`INSERT INTO drop_recordings (creator_id, drop_id, completed) VALUES (?, ?, ?)
+    ON CONFLICT (creator_id, drop_id) DO UPDATE SET completed = MAX(completed, excluded.completed)`)
+    .bind(creatorId(input.creator_id), input.drop_id, Number(input.completed)).run();
+  return json({accepted:true});
+}
+
 async function dailyDrops(request, env) {
   const today = caracasDate.format(new Date());
   const day = new URL(request.url).searchParams.get('date') ?? today;
@@ -678,13 +689,20 @@ async function dailyDrops(request, env) {
     throw new ApiError(400, 'Introduce una fecha válida');
   const {results} = await env.DB.prepare(`SELECT d.creator_id,
     COALESCE(p.creator_name, MAX(d.creator_name)) AS creator_name, d.drop_id,
-    SUM(1 - d.manual) AS automatic, SUM(d.manual) AS manual, MAX(d.confirmed_at) AS last_at
+    SUM(1 - d.manual) AS automatic, SUM(d.manual) AS manual, MAX(d.confirmed_at) AS last_at, r.completed AS recording_completed,
+    (length(d.drop_id) > 32) AS scheduled
     FROM drop_publications d LEFT JOIN profiles p ON p.creator_id = d.creator_id
+    LEFT JOIN drop_recordings r ON r.creator_id = d.creator_id AND r.drop_id = d.drop_id
     WHERE d.local_date = ? GROUP BY d.creator_id, d.drop_id
     ORDER BY creator_name COLLATE NOCASE, d.creator_id, last_at DESC, d.drop_id`).bind(day).all();
   const {results:models} = await env.DB.prepare(`SELECT creator_id, creator_name FROM profiles
     ORDER BY creator_name COLLATE NOCASE, creator_id`).all();
-  return json({date:day,today,models,drops:results});
+  const monthStart = today.slice(0, 7) + '-01';
+  const {results:monthly} = await env.DB.prepare(`SELECT local_date AS date, COUNT(*) AS total FROM (
+    SELECT local_date, creator_id, drop_id FROM drop_publications
+    WHERE local_date >= ? AND local_date <= ? GROUP BY local_date, creator_id, drop_id
+  ) GROUP BY local_date ORDER BY local_date`).bind(monthStart, today).all();
+  return json({date:day,today,models,drops:results,monthly});
 }
 
 async function adminHandle(request, env, path, hersOwner) {
@@ -695,6 +713,15 @@ async function adminHandle(request, env, path, hersOwner) {
   }
   if (request.method !== 'GET') originCheck(request);
   if (path === '/v1/admin/drops' && request.method === 'GET') return dailyDrops(request,env);
+  if (hersOwner && path === '/v1/admin/manual-drops') {
+    if (request.method === 'GET') return json(await listManualDrops(env));
+    if (request.method === 'PUT') {
+      await saveManualDrops(env, await body(request, 1_500_000),
+        async () => listCreators(await globalApi(env)), (status, message) => new ApiError(status, message));
+      return json({saved:true});
+    }
+    throw new ApiError(405, 'Método no permitido');
+  }
   if (path.startsWith('/v1/admin/recording-session')) return recordingAdmin(request,env,path,hersOwner);
   if (path === '/v1/admin/logout' && request.method === 'POST') {
     await env.DB.prepare('DELETE FROM settings WHERE key = ?').bind(await sessionId(sessionToken(request))).run();
@@ -729,7 +756,7 @@ async function adminHandle(request, env, path, hersOwner) {
     const input = await body(request);
     const code = input.code ? text(input.code, 'Código', 256) : base64url(crypto.getRandomValues(new Uint8Array(32)));
     if (code.length < 8) throw new ApiError(400, 'Usa una contraseña de al menos 8 caracteres');
-    if (await matchesAdmin(code,env)) throw new ApiError(400,'Usa una contraseña distinta de la contraseña de administrador');
+    if (!hersOwner && await matchesAdmin(code,env)) throw new ApiError(400,'Usa una contraseña distinta de la contraseña de administrador');
     const salt = encode(crypto.getRandomValues(new Uint8Array(16)));
     const value = JSON.stringify({kind:'pbkdf2', source:encode(await digest(env.ACCESS_TOKEN)), salt, hash:await passwordHash(code,salt)});
     await env.DB.prepare("INSERT INTO settings(key, value) VALUES ('app_access', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(value).run();
@@ -793,7 +820,7 @@ async function adminHandle(request, env, path, hersOwner) {
   return json({id, name: creator.name, bot_id: botId, creator, revision: revision+1, updated_at: now});
 }
 
-const hersActions = /^\/(?:session|drops|active-bots|settings|agencykey|creators|access|resolve|profiles(?:\/[a-f0-9-]{36})?|recording-session(?:\/(?:active|connect|check|cancel|feed\/[a-f0-9-]{36}(?:\/(?:diagnostic|report))?))?)$/;
+const hersActions = /^\/(?:session|drops|manual-drops|active-bots|settings|agencykey|creators|access|resolve|profiles(?:\/[a-f0-9-]{36})?|recording-session(?:\/(?:active|connect|check|cancel|feed\/[a-f0-9-]{36}(?:\/(?:diagnostic|report))?))?)$/;
 
 async function hersAdmin(request, env, action) {
   if (!hersActions.test(action)) throw new ApiError(404, 'Operación de Dropper no disponible');
@@ -887,6 +914,7 @@ async function handle(request, env) {
   if (path === '/health' && request.method === 'GET') return json({service: 'dropper', version: 9});
   if (path.startsWith('/v1/admin/')) return adminHandle(request, env, path);
   await authorize(request, env);
+  if (path==='/v1/drop-recording' && request.method==='POST') return reportDropRecording(request,env);
   if (path==='/v1/drop-publications' && request.method==='POST') return reportDropPublications(request,env);
   if (path==='/v1/recording-desktop-job') return desktopRecordingJob(request,env);
   if (path==='/v1/recording-session') {

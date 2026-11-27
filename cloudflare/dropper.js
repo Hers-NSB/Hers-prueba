@@ -1,4 +1,26 @@
+import worker from "../dropper/cloudflare/worker.mjs";
+
 export const dropperPath = "/api/admin/dropper/";
+
+const desktop = /^\/v1\/(?:profiles(?:\/[a-f0-9-]{36}\/(?:lease|credentials))?|profile-revisions|bot-activity|drop-publications|drop-recording|recording-desktop-job|recording-session)$/;
+
+export function desktopDropperPath(path) {
+  return desktop.test(path);
+}
+
+export function localDropper(env, readAgencyKey) {
+  if (!env.DROPPER_DB) return null;
+  const dropperEnv = {
+    DB: env.DROPPER_DB,
+    ACCESS_TOKEN: env.DROPPER_ACCESS_TOKEN,
+    DROPPER_PHOTO_TOKEN: env.DROPPER_PHOTO_TOKEN,
+    SUPABASE_URL: env.SUPABASE_URL,
+    ENCRYPTION_KEY: env.DROPPER_ENCRYPTION_KEY,
+    HERS_SUPABASE_PUBLISHABLE_KEY: env.SUPABASE_PUBLISHABLE_KEY,
+    HERS_AGENCY_KEY: { read: readAgencyKey },
+  };
+  return { fetch: (request) => worker.fetch(request, dropperEnv) };
+}
 
 export async function handleDropper(request, service) {
   const url = new URL(request.url);

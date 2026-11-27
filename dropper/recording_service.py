@@ -284,10 +284,11 @@ class BrowserPreparation:
 
 
 class RecordingCoordinator:
-    def __init__(self, creator, *, events=None, stop_event=None, session_client=None):
+    def __init__(self, creator, *, events=None, stop_event=None, session_client=None, journal=None):
         self.creator, self.events, self.stop_event = creator, events, stop_event
         self.busy = False
         self.session_client = session_client
+        self.journal = journal
         self.completion_markup = None
         self.last_recording_step = None
         self.active_photo_wait = None
@@ -475,6 +476,12 @@ class RecordingCoordinator:
                     on_progress=self.progress, stop_event=self.stop_event, photo_wait=photo_wait, **options)
                 job['report'] = str(report_path)
             report, video = recorder.verified_video(report_path)
+            if self.journal:
+                completed = len(report['seen']) == total and not report.get('drm_photo_ids')
+                try:
+                    self.journal.queue_recording(batch, completed=completed)
+                except OSError:
+                    log.warning('No se pudo guardar el estado de la grabación para sincronizar')
             self.progress({'stage': 'enviando video', 'completed': len(report['seen']), 'total': len(report['seen'])})
             job['status'] = 'sending'
             recorder.save_json(path, job)

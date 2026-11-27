@@ -1,17 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import worker from "../cloudflare/worker.js";
+import { handleDropper } from "../cloudflare/dropper.js";
 
 const origin = "https://hers.example";
 const root = `${origin}/api/admin/dropper`;
 
 test("Dropper routes only forward the embedded views and authorized API requests", async () => {
   const requests = [];
-  const env = { DROPPER: { async fetch(request) {
+  const local = { async fetch(request) {
     requests.push(request);
     return new Response("from Dropper", { status: 202 });
-  } } };
-  const call = (path, init) => worker.fetch(new Request(root + path, init), env);
+  } };
+  const call = (path, init) => handleDropper(new Request(root + path, init), local);
 
   assert.equal((await call("/unknown")).status, 404);
   assert.equal((await call("/download/windows")).status, 404);
@@ -39,8 +40,31 @@ test("Dropper routes only forward the embedded views and authorized API requests
 test("missing or unavailable Dropper is reported without using the public page fallback", async () => {
   const request = new Request(`${root}/view/operations`);
   assert.equal((await worker.fetch(request, {})).status, 503);
-  const env = { DROPPER: { fetch() { throw new Error("private upstream error"); } } };
-  const response = await worker.fetch(request, env);
+  const local = { fetch() { throw new Error("private upstream error"); } };
+  const response = await handleDropper(request, local);
   assert.equal(response.status, 502);
   assert.doesNotMatch(await response.text(), /private upstream error/);
+});
+
+test("HERS serves Dropper directly and rejects standalone admin routes", async () => {
+  const env = {
+    DROPPER_DB: {},
+    ASSETS: { fetch: () => new Response("HERS", { status: 418 }) },
+    DROPPER: { fetch: () => { throw new Error("Unexpected service binding"); } },
+  };
+  for (const name of ["bots", "operations", "session"]) {
+    const view = await worker.fetch(new Request(root + "/view/" + name), env);
+    assert.equal(view.status, 200);
+    const html = await view.text();
+    assert.match(html, /Bots configurados/);
+    assert.doesNotMatch(html, /Introduce tu contraseña de administrador|id="(?:login-form|admin-password-form)"/);
+  }
+  const login = await worker.fetch(new Request(root + "/api/login", {
+    method: "POST", headers: { Origin: origin, Authorization: "Bearer fixture" },
+  }), env);
+  assert.equal(login.status, 404);
+  const desktop = await worker.fetch(new Request(origin + "/v1/profiles"), env);
+  assert.equal(desktop.status, 503);
+  const unauthorized = await worker.fetch(new Request(origin + "/v1/admin/profiles"), env);
+  assert.equal(unauthorized.status, 418);
 });

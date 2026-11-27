@@ -12,7 +12,6 @@ import {
   PanelLeftOpen,
   Plug,
   RefreshCw,
-  X,
 } from "lucide-react";
 import { adminLogout } from "../lib/supabase";
 import { AdminActions } from "./adminActions";
@@ -136,19 +135,12 @@ export default function AdminPanel({ onClose }) {
         </aside>
 
         <main className="admin-workspace">
-          {Object.keys(errors).length > 0 && <section className="admin-workspace-notice" aria-label="Notificaciones de errores">
-            <h2>Notificaciones de errores</h2>
-            <ul aria-live="polite">{Object.entries(errors).map(([id, { section, message }]) => <li key={id}>
-              <span><strong>{section}</strong> · {message}</span>
-              <button type="button" aria-label={`Descartar aviso de ${section}`} onClick={() => setErrors((current) => {
-                const next = { ...current };
-                delete next[id];
-                return next;
-              })}><X size={17} aria-hidden="true" /></button>
-            </li>)}</ul>
-          </section>}
           <Suspense fallback={<AdminLoading>Cargando {sectionName}…</AdminLoading>}>
-            {activeSection === "dashboard" ? <AdminDashboardHome revision={revision} /> :
+            {activeSection === "dashboard" ? <AdminDashboardHome revision={revision} notices={errors} onDismiss={(id) => setErrors((current) => {
+              const next = { ...current };
+              delete next[id];
+              return next;
+            })} /> :
               <div className="admin-module-view">
                 {activeSection === "applications" && <Postulaciones revision={revision} />}
                 {activeSection === "finance" && <Finanzas refreshRequested={financeRequested} clearRefresh={setFinanceRequested} />}
