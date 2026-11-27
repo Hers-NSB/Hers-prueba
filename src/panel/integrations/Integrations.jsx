@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { KeyRound, Plus, Save, ShieldCheck } from "lucide-react";
-import { AdminError } from "../adminActions";
-import AdminLoading from "../AdminLoading.jsx";
+import { AdminError, AdminNotice } from "../adminActions";
+import { AdminInitialContent } from "../AdminLoading.jsx";
+import DesktopAccess from "./DesktopAccess";
 import DropperFrame from "../dropper/DropperFrame.jsx";
 import callApi from "./connectorApi";
 import AdminRefresh from "../AdminRefresh";
@@ -14,10 +15,12 @@ const dateTime = (date) => new Date(date).toLocaleString("es-VE");
 
 export default function Integrations({ revision }) {
   const [bots, setBots] = useState(false);
-  const [completed, setCompleted] = useState(0);
-  const [sessionCompleted, setSessionCompleted] = useState(0);
-  const refreshing = completed !== revision || (!bots && sessionCompleted !== revision);
-  return <section className="hf hers-integrations" aria-labelledby="hers-integrations-title">
+  const [completed, setCompleted] = useState(null);
+  const [sessionCompleted, setSessionCompleted] = useState(null);
+  const [botsCompleted, setBotsCompleted] = useState(null);
+  const refreshing = bots ? botsCompleted !== revision : completed !== revision || sessionCompleted !== revision;
+  return <AdminInitialContent loading={completed === null || sessionCompleted === null} label="Conectores">
+  <section className="hf hers-integrations" aria-labelledby="hers-integrations-title">
     <header className="hf-header">
       <div><h1 id="hers-integrations-title">Conectores <AdminRefresh busy={refreshing} section="Conectores" /></h1><p>Conexiones y credenciales de HERS</p></div>
     </header>
@@ -25,9 +28,15 @@ export default function Integrations({ revision }) {
       <button type="button" aria-pressed={!bots} onClick={() => setBots(false)}>Servicios</button>
       <button type="button" aria-pressed={bots} onClick={() => setBots(true)}>Bots</button>
     </nav>
-    {bots ? <DropperFrame view="bots" title="Bots de Dropper" revision={revision} onLoaded={setCompleted} /> :
+    {bots ? <AdminInitialContent loading={botsCompleted === null} label="Bots">
+      <div className="hers-integration-stack">
+        <DropperFrame view="bots" title="Bots de Dropper" revision={revision} onLoaded={setBotsCompleted} />
+        <DesktopAccess />
+      </div>
+    </AdminInitialContent> :
       <Services revision={revision} onLoaded={setCompleted} onSessionLoaded={setSessionCompleted} />}
-  </section>;
+  </section>
+  </AdminInitialContent>;
 }
 
 function Services({ revision, onLoaded, onSessionLoaded }) {
@@ -113,10 +122,9 @@ function Services({ revision, onLoaded, onSessionLoaded }) {
   };
   const close = () => { if (!busy) setForm(null); };
 
-  return <section aria-label="Servicios">
+  return <section className="hers-integration-stack" aria-label="Servicios">
     <AdminError id="connector-services" section="Conectores" message={notice?.error} />
-    {notice?.success && <p className="hf-notice" role="status">{notice.success}</p>}
-    {!data && !notice && <AdminLoading>Cargando Conectores…</AdminLoading>}
+    <AdminNotice id="connector-success" section="Conectores" message={notice?.success} />
     {data && <>
       <section className="hf-section hers-integration-card">
         <div className="hf-summary-head">

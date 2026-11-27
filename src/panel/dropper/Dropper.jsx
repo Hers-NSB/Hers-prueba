@@ -1,7 +1,7 @@
 import AdminRefresh from "../AdminRefresh";
 import { useEffect, useState } from "react";
 import { AdminError } from "../adminActions";
-import AdminLoading from "../AdminLoading";
+import AdminLoading, { AdminInitialContent } from "../AdminLoading";
 import PeriodPicker from "../finanzas/PeriodPicker";
 import ActiveBots from "./ActiveBots";
 import dropperApi from "./dropperApi";
@@ -13,21 +13,18 @@ const dateFormat = new Intl.DateTimeFormat("sv-SE", { ...caracas, dateStyle: "sh
 const timeFormat = new Intl.DateTimeFormat("es-VE", { ...caracas, hour: "2-digit", minute: "2-digit" });
 
 export default function Dropper({ revision }) {
-  const [tab, setTab] = useState("Drops");
-  const [botsCompleted, setBotsCompleted] = useState(0);
-  const [dropsCompleted, setDropsCompleted] = useState(0);
-  const refreshing = botsCompleted !== revision || (tab === "Drops" && dropsCompleted !== revision);
-  return <section className="hf hers-dropper" aria-labelledby="hers-dropper-title">
+  const [botsCompleted, setBotsCompleted] = useState(null);
+  const [dropsCompleted, setDropsCompleted] = useState(null);
+  const refreshing = botsCompleted !== revision || dropsCompleted !== revision;
+  return <AdminInitialContent loading={botsCompleted === null || dropsCompleted === null} label="Dropper">
+  <section className="hf hers-dropper" aria-labelledby="hers-dropper-title">
     <header className="hers-dropper__header">
       <h1 id="hers-dropper-title">Dropper <AdminRefresh busy={refreshing} section="Dropper" /></h1>
     </header>
     <ActiveBots revision={revision} section="Dropper" onLoaded={setBotsCompleted} />
-    <nav className="hf-tabs" aria-label="Secciones de Dropper">
-      {["Drops", "Ajustes"].map((name) => <button type="button" key={name}
-        aria-pressed={name === tab} onClick={() => setTab(name)}>{name}</button>)}
-    </nav>
-    {tab === "Drops" ? <DailyDrops revision={revision} onLoaded={setDropsCompleted} /> : <DesktopAccess />}
-  </section>;
+    <DailyDrops revision={revision} onLoaded={setDropsCompleted} />
+  </section>
+  </AdminInitialContent>;
 }
 
 function DailyDrops({ revision, onLoaded }) {
@@ -90,40 +87,5 @@ function DailyDrops({ revision, onLoaded }) {
       </article>)}
     </div> : <p className="hf-empty">No hay modelos configuradas</p> :
       !error && <AdminLoading>Cargando el resumen diario…</AdminLoading>}
-  </section>;
-}
-
-function DesktopAccess() {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [saved, setSaved] = useState(false);
-
-  async function change(event) {
-    event.preventDefault();
-    if (busy || !window.confirm("¿Cambiar la contraseña de las apps? Se pedirá al volver a descargar las configuraciones.")) return;
-    const form = event.currentTarget;
-    const code = new FormData(form).get("code");
-    setBusy(true);
-    setError("");
-    setSaved(false);
-    try {
-      await dropperApi("/access", "POST", { code });
-      form.reset();
-      setSaved(true);
-    } catch (failure) {
-      setError(failure.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <section className="hf-section">
-    <h2>Acceso de las apps</h2>
-    <form className="hf-form" onSubmit={change}>
-      <label>Nueva contraseña<input name="code" type="password" required minLength={8} maxLength={256} autoComplete="new-password" /></label>
-      <div className="hf-actions"><button type="submit" className="hf-primary" disabled={busy}>Cambiar contraseña</button></div>
-    </form>
-    {saved && <p role="status">Contraseña cambiada</p>}
-    <AdminError id="dropper-access" section="Dropper" message={error} />
   </section>;
 }

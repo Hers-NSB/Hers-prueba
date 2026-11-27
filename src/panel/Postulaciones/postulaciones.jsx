@@ -174,6 +174,8 @@ export default function Postulaciones({ revision = 0 }) {
     }
   };
 
+  if (completed === null) return <AdminLoading>Cargando Postulaciones…</AdminLoading>;
+
   return (
     <div className="postulaciones-module">
       <div className="postulaciones-panel">

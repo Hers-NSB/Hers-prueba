@@ -1,16 +1,17 @@
-import { useEffect, useState } from "react";
+import { Bell, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { supabase, APPLICATIONS_TABLE } from "../lib/supabase";
 import AdminRefresh from "./AdminRefresh";
-import AdminLoading from "./AdminLoading";
+import { AdminInitialContent } from "./AdminLoading";
 import { AdminError } from "./adminActions";
 import { monthRange } from "./finanzas/finance";
 import { loadOverview } from "./finanzas/financeData";
 import Overview from "./finanzas/Overview";
 import ActiveBots from "./dropper/ActiveBots";
 
-export default function AdminDashboardHome({ revision }) {
-  const [completed, setCompleted] = useState(0);
-  const [botsCompleted, setBotsCompleted] = useState(0);
+export default function AdminDashboardHome({ revision, notices, onDismiss }) {
+  const [completed, setCompleted] = useState(null);
+  const [botsCompleted, setBotsCompleted] = useState(null);
   const [report, setReport] = useState(null);
   const [count, setCount] = useState(null);
   const [financeError, setFinanceError] = useState("");
@@ -43,10 +44,20 @@ export default function AdminDashboardHome({ revision }) {
     return () => controller.abort();
   }, [revision]);
 
-  return <section className="admin-dashboard-home">
+  const dialog = useRef(null);
+  const notifications = Object.entries(notices);
+  return <AdminInitialContent loading={completed === null || botsCompleted === null} label="Inicio">
+  <section className="admin-dashboard-home">
     <div className="admin-dashboard-hero">
       <div><h1>Centro de Administración <AdminRefresh busy={completed !== revision || botsCompleted !== revision} section="Centro de Administración" /></h1></div>
-      <div className="admin-dashboard-hero__mark"><img src="/HERSl.jpg" alt="HERS" /></div>
+      <div className="admin-dashboard-hero__actions">
+        <div className="admin-dashboard-hero__mark"><img src="/HERSl.jpg" alt="HERS" /></div>
+        <button type="button" className="admin-notifications-button" aria-haspopup="dialog"
+          aria-label={`Notificaciones (${notifications.length})`} onClick={() => dialog.current.showModal()}>
+          <Bell size={21} aria-hidden="true" />
+          {notifications.length > 0 && <span aria-hidden="true">{notifications.length}</span>}
+        </button>
+      </div>
     </div>
     <AdminError id="home-finance" section="Inicio" message={financeError} />
     <AdminError id="home-applications" section="Inicio" message={applicationsError} />
@@ -59,7 +70,22 @@ export default function AdminDashboardHome({ revision }) {
       <ActiveBots revision={revision} section="Inicio" onLoaded={setBotsCompleted} />
     </div>
     <div className="hf admin-month-overview">
-      {report ? <Overview {...report} monthly /> : financeError ? null : <AdminLoading>Cargando el resumen del mes…</AdminLoading>}
+      {report && <Overview {...report} monthly />}
     </div>
-  </section>;
+    <dialog ref={dialog} className="admin-workspace-notice" aria-labelledby="admin-notifications-title">
+      <header>
+        <h2 id="admin-notifications-title">Notificaciones</h2>
+        <form method="dialog"><button type="submit" aria-label="Cerrar notificaciones"><X size={18} /></button></form>
+      </header>
+      <div aria-live="polite">
+        {notifications.length ? <ul>{notifications.map(([id, { section, message }]) => <li key={id}>
+          <span><strong>{section}</strong> · {message}</span>
+          <button type="button" aria-label={`Descartar aviso de ${section}`} onClick={() => onDismiss(id)}>
+            <X size={17} aria-hidden="true" />
+          </button>
+        </li>)}</ul> : <p>Sin notificaciones</p>}
+      </div>
+    </dialog>
+  </section>
+  </AdminInitialContent>;
 }

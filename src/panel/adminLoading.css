@@ -34,3 +34,10 @@
 @media (prefers-reduced-motion: reduce) {
   .admin-loading__spinner { animation: none; }
 }
+
+.admin-initial-content { position: relative; }
+.admin-initial-content__pending {
+  position: absolute;
+  inset: 0 0 auto;
+  visibility: hidden;
+}

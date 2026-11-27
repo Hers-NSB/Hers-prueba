@@ -17,7 +17,9 @@ export function useAdminRefresh(section, refresh, requested, clear, busy) {
   }, [requested, busy, clear, refresh]);
 }
 
-export function AdminError({ id, section, message }) {
+export const AdminError = AdminNotice;
+
+export function AdminNotice({ id, section, message }) {
   const setErrors = useContext(AdminActions)?.setErrors;
   useEffect(() => {
     setErrors?.((current) => {
