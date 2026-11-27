@@ -20,10 +20,11 @@ def main(stop_event=None, on_ready=None, credentials=None, creator=None, recordi
     from telegram.request import HTTPXRequest
     options = telegram_connection_options()
     proxy = options.pop('proxy', None)
-    recording = RecordingCoordinator(creator, events=recording_events, stop_event=stop_event,
-                                     session_client=recording_session_client)
     from batch_journal import BatchJournal
     journal = BatchJournal(token.split(':', 1)[0])
+    recording = RecordingCoordinator(creator, events=recording_events, stop_event=stop_event,
+                                     session_client=recording_session_client,
+                                     journal=journal if recording_session_client is not None else None)
     agencykey = AgencyKey(api_key)
     if stop_event is not None:
         agencykey.stop_requested = stop_event.is_set

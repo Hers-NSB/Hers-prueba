@@ -6,7 +6,7 @@ import httpx
 from config import register_secrets
 from connection import tls_context, system_proxy, network_message
 
-DEFAULT_URL = 'https://hers-prueba-dropper.datosenviados07.workers.dev'
+DEFAULT_URL = 'https://hers-prueba.datosenviados07.workers.dev'
 
 
 class CloudError(Exception):
@@ -97,6 +97,10 @@ class CloudClient:
 
     def report_publications(self, records):
         return self.request('POST', '/v1/drop-publications', json={'posts': records})
+
+    def report_drop_recording(self, creator_id, drop_id, *, completed):
+        return self.request('POST', '/v1/drop-recording',
+                            json={'creator_id': creator_id, 'drop_id': drop_id, 'completed': completed})
 
     def claim_recording_job(self):
         return self.request('POST', '/v1/recording-desktop-job').get('job')

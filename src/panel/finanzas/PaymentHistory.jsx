@@ -122,14 +122,13 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     setBusy(true);
     setRateError("");
     try {
-      const { error } = await supabase.rpc("finance_save_current_pay_rate", {
-        p_member_id: model ? null : person.id,
-        p_creator_id: model ? person.id : null,
-        p_name: model ? null : person.name,
-        p_role: model ? null : person.role,
-        p_percent: Number(rateInput),
-        p_creator_ids: creatorIds,
-      });
+      const base = { p_percent: Number(rateInput), p_creator_ids: creatorIds };
+      const { error } = await (model ? supabase.rpc("finance_save_current_pay_rate", {
+        ...base, p_member_id: null, p_creator_id: person.id, p_name: null, p_role: null,
+      }) : supabase.rpc("finance_save_current_member_pay", {
+        ...base, p_member_id: person.id, p_name: person.name, p_role: person.role,
+        p_chatter_percent: rate?.chatter_percent ?? 0, p_chatter_ids: rate?.chatter_ids ?? [],
+      }));
       if (error) throw error;
       setRateInput(null);
       onConfirmed();
@@ -162,6 +161,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
           Porcentaje de pago de la quincena {person.archived_on ? activeRate :
             <button type="button" className="hf-payment-rate-value" aria-label={`Porcentaje de pago de la quincena ${activeRate}`}
               disabled={busy} onClick={() => setRateInput(String(rate?.percent ?? 0))}>{activeRate}</button>}
+          {Number(rate?.chatter_percent) > 0 && <span> + {percent(rate.chatter_percent)} chatters</span>}
         </p> : <form className="hf-payment-rate" onSubmit={saveRate}>
           <label htmlFor={`${id}-rate`}>Porcentaje de pago de la quincena</label>
           <input id={`${id}-rate`} type="number" min="0" max="100" step="0.01" required autoFocus

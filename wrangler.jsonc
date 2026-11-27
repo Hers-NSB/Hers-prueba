@@ -10,19 +10,23 @@
       "/api/admin/integrations",
       "/api/admin/integrations/*",
       "/api/admin/dropper/*",
+      "/v1/*",
       "/restablecer-contrasena",
       "/restablecer-contrasena/"
     ]
   },
-  "services": [
+  "d1_databases": [
     {
-      "binding": "DROPPER",
-      "service": "hers-prueba-dropper"
+      "binding": "DROPPER_DB",
+      "database_name": "hers-prueba-dropper",
+      "database_id": "81b417fc-cc2b-4d52-8f94-49bc7a6c2091",
+      "migrations_dir": "dropper/cloudflare/migrations"
     }
   ],
   "triggers": {
     "crons": [
-      "5,20,35,50 * * * *"
+      "5,20,35,50 * * * *",
+      "* * * * *"
     ]
   },
   "observability": {

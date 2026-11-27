@@ -80,6 +80,16 @@ begin
     raise exception 'El chatter inactivo conserva la comisión sobre ventas atribuidas con porcentaje vigente';
   end if;
 
+  perform public.finance_save_current_member_pay(staff, 'Empleado manual de pruebas', 'Dropper',
+    20, array[first_model, second_model], 10, array[current_setting('hers.test.inactive_chatter')::uuid]);
+  current_pay := public.finance_current_pay();
+  if (current_pay->'sales'->>recipient)::numeric is distinct from 359.26
+     or (current_pay->'amounts'->>recipient)::numeric is distinct from 51 then
+    raise exception 'El pago debe acumular el porcentaje de modelos y el de chatters';
+  end if;
+
+  perform public.finance_save_current_member_pay(staff, 'Empleado manual de pruebas', 'Dropper',
+    20, array[first_model, second_model], 0, '{}'::uuid[]);
   perform public.finance_save_current_pay_rate(staff, null, 'Empleado manual de pruebas', 'Dropper', 50, array[first_model, second_model]);
   current_pay := public.finance_current_pay();
   if (current_pay->'sales'->>recipient)::numeric is distinct from 150.10

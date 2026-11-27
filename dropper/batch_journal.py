@@ -53,9 +53,17 @@ class BatchJournal:
                 'confirmed_at': int(time()),
             })
 
+    def queue_recording(self, batch, *, completed):
+        state = 'complete' if completed else 'incomplete'
+        path = self.root / 'recordings' / f'{batch.id}-{state}.json'
+        recorder.save_json(path, {'creator_id': int(batch.creator.external_id),
+                                  'drop_id': batch.id, 'completed': completed})
+
     def sync_publications(self, client, stop):
         directory = self.root / 'publications'
+        recordings = self.root / 'recordings'
         while not stop.is_set():
+            sent = False
             try:
                 paths = sorted(directory.glob('*.json'))[:50]
                 if paths:
@@ -63,10 +71,20 @@ class BatchJournal:
                     client.report_publications(records)
                     for path in paths:
                         path.unlink(missing_ok=True)
-                    continue
+                    sent = True
             except (CloudError, OSError, ValueError) as error:
                 log.warning('Resumen de Drops pendiente de sincronizar (%s)', type(error).__name__)
-            stop.wait(15)
+            try:
+                path = next(iter(sorted(recordings.glob('*.json'))), None)
+                if path:
+                    record = json.loads(path.read_text(encoding='utf-8'))
+                    client.report_drop_recording(**record)
+                    path.unlink(missing_ok=True)
+                    sent = True
+            except (CloudError, OSError, ValueError) as error:
+                log.warning('Grabación de Drop pendiente de sincronizar (%s)', type(error).__name__)
+            if not sent:
+                stop.wait(15)
 
     def load(self, chat_id, creator):
         path = self.path(chat_id, creator.external_id)

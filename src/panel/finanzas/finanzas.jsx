@@ -421,7 +421,8 @@ function Employees({ data, directoryError, onEdit, onPayments }) {
     const amount = payout != null && rate ? usd(payout) : !eligible || !rate ? "—"
       : rate.basis === "employee_sales" && !row.agencykey_id ? "Pendiente de vincular" : "Pendiente de sincronizar";
     return [recipient, [active ? row.name : <>{row.name} <small className="hf-employee-status">Inactivo</small></>, row.role,
-      rate ? percentLabel(rate.percent) : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
+      rate ? [percentLabel(rate.percent),
+        Number(rate.chatter_percent) > 0 && `${percentLabel(rate.chatter_percent)} chatters`].filter(Boolean).join(" + ") : "—", eligible ? usd(data.currentPaySales[recipient]) : "—", amount,
       <div className="hf-actions">
         <button type="button" onClick={() => onPayments({ type, person: row, recipient })}>Pagos</button>
       </div>]];
@@ -462,13 +463,18 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
   const rateDay = data.payPeriod?.day ?? today;
   const recipient = type === "modelShare" ? `model:${row.id}` : row && `chatter:${row.id}`;
   const share = effectiveShare(data.rates, recipient, rateDay);
-  const initialValues = { day: today, kind: "investment", percent: 0, creator_ids: [],
-    ...row, ...(share && { percent: share.percent, creator_ids: share.creator_ids }) };
+  const initialValues = { day: today, kind: "investment", percent: 0, creator_ids: [], chatter_percent: 0, chatter_ids: [],
+    ...row, ...(share && { percent: share.percent, creator_ids: share.creator_ids,
+      chatter_percent: share.chatter_percent ?? 0, chatter_ids: share.chatter_ids ?? [] }) };
   const [values, setValues] = useState(initialValues);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const set = (key, value) => setValues((current) => ({ ...current, [key]: value }));
   const availableModels = data.creators.filter((creator) => isActiveFinanceEntry(creator) || values.creator_ids.includes(creator.id));
+  const availableChatters = data.members.filter((member) => {
+    return member.id !== row?.id && member.agencykey_id && isChatter(member.role) &&
+      (isActiveFinanceEntry(member) || values.chatter_ids.includes(member.id));
+  });
   const memberShare = type === "member";
   const byEmployee = memberShare && isChatter(values.role);
   const field = (label, key, props) => <label>{label}<input {...props} value={values[key] ?? ""} onChange={(e) => set(key, e.target.value)} /></label>;
@@ -496,10 +502,15 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
         if (memberShare && !byEmployee && Number(values.percent) > 0 && !values.creator_ids.length) {
           throw new Error("Selecciona al menos un modelo");
         }
-        request = supabase.rpc("finance_save_current_pay_rate", {
-          p_member_id: memberShare ? row?.id ?? null : null, p_creator_id: type === "modelShare" ? row.id : null,
-          p_name: memberShare ? values.name : null, p_role: memberShare ? values.role : null,
-          p_percent: Number(values.percent), p_creator_ids: memberShare && !byEmployee ? values.creator_ids : [],
+        if (memberShare && Number(values.chatter_percent) > 0 && !values.chatter_ids.length) {
+          throw new Error("Selecciona al menos un chatter");
+        }
+        const amount = { p_percent: Number(values.percent), p_creator_ids: memberShare && !byEmployee ? values.creator_ids : [] };
+        request = memberShare ? supabase.rpc("finance_save_current_member_pay", {
+          ...amount, p_member_id: row?.id ?? null, p_name: values.name, p_role: values.role,
+          p_chatter_percent: Number(values.chatter_percent), p_chatter_ids: values.chatter_ids,
+        }) : supabase.rpc("finance_save_current_pay_rate", {
+          ...amount, p_member_id: null, p_creator_id: row.id, p_name: null, p_role: null,
         });
       } else {
         request = supabase.from("finance_platforms").insert({ name: values.name.trim() });
@@ -558,6 +569,16 @@ function Editor({ editor: { type, row }, data, onClose, onSaved, onChange }) {
             {name}
           </label>)}
           {!availableModels.length && <p>Sin modelos disponibles</p>}
+        </fieldset>}
+        {memberShare && <fieldset className="hf-model-options"><legend>Chatters asignados</legend>
+          <div className="hf-full-field">{field("Porcentaje sobre ventas netas de los chatters", "chatter_percent",
+            { type: "number", min: 0, max: 100, step: "0.01", required: true })}</div>
+          {availableChatters.map(({ id, name }) => <label key={id}>
+            <input type="checkbox" checked={values.chatter_ids.includes(id)} onChange={(event) =>
+              set("chatter_ids", event.target.checked ? [...values.chatter_ids, id] : values.chatter_ids.filter((value) => value !== id))} />
+            {name}
+          </label>)}
+          {!availableChatters.length && <p>Sin chatters vinculados disponibles</p>}
         </fieldset>}
         {catalog[type] && field("Nombre", "name", { maxLength: 120, required: true })}
       </div>

@@ -1,3 +1,4 @@
+import {listManualDrops, runManualDrops, saveManualDrops} from './manual-drops.mjs';
 import {test,beforeEach} from 'node:test';
 import assert from 'node:assert/strict';
 import {makeEnvironment,installUpstream,request,admin,desktop,firstId,secondId,firstToken,secondToken,input} from './test-support.mjs';
@@ -610,6 +611,13 @@ test('only one desktop instance can reserve a bot, with status and daily totals'
   const posts=[{creator_id:52,creator_name:'Lilith',drop_id:'a'.repeat(32),position:1,
     post_id:'501',confirmed_at:Date.parse(today+'T12:00:00Z')/1000,manual:false}];
   assert.equal((await desktop(env,'POST','/v1/drop-publications',{posts})).status,200);
+  const recording = {creator_id:52,drop_id:posts[0].drop_id,completed:true};
+  assert.equal((await request(env,'POST','/v1/drop-recording',recording)).status,401);
+  assert.equal((await desktop(env,'POST','/v1/drop-recording',recording)).status,200);
+  assert.equal((await desktop(env,'POST','/v1/drop-recording',{...recording,completed:false})).status,200);
+  const history=await (await admin(env,'GET','/v1/admin/drops')).json();
+  assert.equal(history.drops[0].recording_completed,1);
+  assert.deepEqual(history.monthly,[{date:today,total:1}]);
   const status=await (await call(other,'GET','/v1/profile-revisions')).json();
   assert.equal(status.profiles[0].active_elsewhere,1);
   assert.equal(status.profiles[0].published_today,1);
@@ -627,4 +635,79 @@ test('HERS Dropper reads the API key stored in Services once the shared backend 
   assert.equal((await (await desktop(env,'POST',credentials)).json()).api_key,key);
   key=null;
   assert.equal((await desktop(env,'POST',credentials)).status,409);
+});
+
+test('manual chains run daily in order with private photos and no duplicate delivery', async () => {
+ const id='ed729395-a728-42c1-80b2-136013383b41';
+ const photo=id+'/ed729395-a728-42c1-80b2-136013383b42.jpg';
+ const creators=async()=>[{external_id:52,name:'Lilith'}];
+ const fail=(status,message)=>Object.assign(new Error(message),{status});
+ const initial=new Date('2026-11-27T11:00:00Z');
+ env.SUPABASE_URL='https://hers-storage.example';
+ env.SUPABASE_STORAGE_SERVICE_ROLE='worker-only-fixture';
+ const second={send_time:'09:01',text:'Foto',photo};
+ const chain={id,creator_id:52,name:'Diaria',enabled:true,revision:0,steps:[
+   {send_time:'09:00',text:'Primera',photo:null},second,
+ ]};
+ await saveManualDrops(env,chain,creators,fail,initial);
+ const stale={...chain,steps:[...chain.steps,{send_time:'10:00',text:'Duplicada',photo:null}]};
+ await assert.rejects(saveManualDrops(env,stale,creators,fail,initial),{status:409});
+ assert.equal((await listManualDrops(env)).chains[0].steps.length,2);
+ assert.equal(db.prepare('SELECT count(*) AS total FROM profiles').get().total,0);
+
+ const posts=[];
+ const send=async(input,options)=>{
+  const url=new URL(input);
+  if(url.hostname==='hers-storage.example') {
+   assert.equal(options.headers.Authorization,'Bearer worker-only-fixture');
+   assert.equal(url.pathname,'/storage/v1/object/authenticated/manual-drop-photos/'+photo);
+   return new Response(Uint8Array.of(255,216,255));
+  }
+  if(url.hostname==='of2transcoder.s3-accelerate.amazonaws.com') {
+   assert.equal(options.headers.Authorization,undefined);
+   return new Response('',{headers:{ETag:'test-etag'}});
+  }
+  if(url.hostname==='convert.onlyfans.com') {
+   assert.equal(options.body.get('file[ETag]'),'test-etag');
+   return Response.json({processId:'photo',host:'processor',extra:'fixture'});
+  }
+  assert.equal(options.headers['x-public-api-key'],'test-key');
+  if(url.pathname.endsWith('/users/me')) return Response.json({id:52,upload:{geoUploadArgs:{
+    additional:{user:52},preset:'fixture',isDelay:false,needThumbs:true,
+  }}});
+  const body=JSON.parse(options.body);
+  if(url.pathname.endsWith('/upload/signed/create')) return Response.json({
+    key:body.key,putUrl:'https://of2transcoder.s3-accelerate.amazonaws.com/'+body.key+'?signed=true',uploadToken:'fixture',
+  });
+  assert.match(url.pathname,/\/52\/api2\/v2\/posts$/);
+  posts.push(body);
+  return Response.json({id:900+posts.length});
+ };
+ const run=(day,minute)=>runManualDrops(env,new Date(`2026-11-${day}T13:${minute}:00Z`),async()=>'test-key',send);
+ await Promise.all([run('27','00'),run('27','00')]);
+ assert.deepEqual(posts,[{text:'Primera',expireDays:1}]);
+ await run('27','01');
+ await run('27','02');
+ assert.equal(posts.length,2);
+ assert.equal(posts[1].text,'Foto');
+ assert.equal(posts[1].expireDays,1);
+ assert.equal(posts[1].mediaFiles[0].processId,'photo');
+ await run('28','00');
+ assert.equal(posts[2].text,'Primera');
+ assert.equal(db.prepare('SELECT count(*) AS total FROM drop_publications WHERE manual=1').get().total,3);
+});
+
+test('manual chain stops after an unconfirmed post without retrying it', async () => {
+ const id='ed729395-a728-42c1-80b2-136013383b99';
+ const initial=new Date('2026-11-27T11:00:00Z');
+ const steps=[{send_time:'09:00',text:'Primera',photo:null},{send_time:'09:01',text:'Segunda',photo:null}];
+ await saveManualDrops(env,{id,creator_id:52,name:'Diaria',enabled:true,revision:0,steps},
+  async()=>[{external_id:52,name:'Lilith'}],(_status,message)=>new Error(message),initial);
+ let calls=0;
+ const send=async()=>{calls+=1; throw new Error('network stopped');};
+ const run=()=>runManualDrops(env,new Date('2026-11-27T13:05:00Z'),async()=>'test-key',send);
+ await run();
+ await run();
+ assert.equal(calls,1);
+ assert.equal(db.prepare('SELECT state FROM manual_drop_deliveries').get().state,'uncertain');
 });

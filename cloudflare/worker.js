@@ -1,6 +1,7 @@
+import { manualDropsCron, runManualDrops } from "../dropper/cloudflare/manual-drops.mjs";
 import { beginDirectory, directoryStatus, finishDirectory, syncDirectory } from "./agencykey-directory.js";
 import { bridge, handleIntegrations, IntegrationError, storedAgencyKey, workerRpc } from "./integrations.js";
-import { dropperPath, handleDropper } from "./dropper.js";
+import { desktopDropperPath, dropperPath, handleDropper, localDropper } from "./dropper.js";
 
 export const project = "https://glpevkghlzzuwkxojpvc.supabase.co";
 const dayMs = 86_400_000;
@@ -299,6 +300,12 @@ async function fetchAgencyNet(day, currentDay, zone, instant, key, env, send, te
 
 export default {
   async scheduled(event, env) {
+    if (event.cron === manualDropsCron) {
+      return runManualDrops({
+        DB: env.DROPPER_DB, SUPABASE_URL: project,
+        SUPABASE_STORAGE_SERVICE_ROLE: env.SUPABASE_STORAGE_SERVICE_ROLE,
+      }, new Date(event.scheduledTime), () => storedAgencyKey(project, env));
+    }
     const report_zone = env.AGENCYKEY_REPORT_TIMEZONE || "America/Halifax";
     const scheduled = new Date(event.scheduledTime);
     if (scheduled.getUTCHours() === 6 && scheduled.getUTCMinutes() === 5) {
@@ -326,7 +333,13 @@ export default {
   },
   fetch(request, env) {
     const path = new URL(request.url).pathname;
-    if (path.startsWith(dropperPath)) return handleDropper(request, env.DROPPER);
+    const dropper = () => localDropper({ ...env, SUPABASE_URL: project }, () => storedAgencyKey(project, env));
+    if (path.startsWith(dropperPath)) return handleDropper(request, dropper());
+    if (desktopDropperPath(path)) {
+      return dropper()?.fetch(request) ?? Response.json({ error: "Dropper no está configurado" }, {
+        status: 503, headers: { "Cache-Control": "no-store" },
+      });
+    }
     if (path === "/restablecer-contrasena" || path === "/restablecer-contrasena/") {
       return new Response("El acceso de HERS se gestiona desde Supabase", {
         status: 410,

@@ -30,7 +30,12 @@ export function makeEnvironment() {
     return {bind(...values) {params = values; return this;},
       async first() {return sqlite.prepare(sql).get(...params)||null;},
       async all() {return {results: sqlite.prepare(sql).all(...params)};},
-      async run() {const result = sqlite.prepare(sql).run(...params); return {meta: {changes: Number(result.changes)}};}};
+      async run() {
+        const statement = sqlite.prepare(sql);
+        if (/^\s*SELECT\b/i.test(sql)) return {results: statement.all(...params), meta: {changes:0}};
+        const result = statement.run(...params);
+        return {meta: {changes: Number(result.changes)}};
+      }};
   }};
   return {env:{DB, ACCESS_TOKEN:'desktop-access-token', ADMIN_TOKEN:'admin-code-separate-from-app-code',
     ENCRYPTION_KEY:Buffer.alloc(32,29).toString('base64')},sqlite};
