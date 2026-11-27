@@ -89,9 +89,11 @@ async function preparePhoto(step, base, env, ask, send) {
   const type = step.photo.endsWith('.png') ? 'image/png' : 'image/jpeg';
   const extension = type === 'image/png' ? 'png' : 'jpg';
   const storageKey = step.photo.split('/').map(encodeURIComponent).join('/');
+  const storageCredential = env.SUPABASE_STORAGE_SERVICE_ROLE;
+  const headers = {apikey:storageCredential};
+  if (!storageCredential.startsWith('sb_secret_')) headers.Authorization = 'Bearer '+storageCredential;
   const photo = await send(`${env.SUPABASE_URL}/storage/v1/object/authenticated/manual-drop-photos/${storageKey}`, {
-    redirect:'error', signal:AbortSignal.timeout(30_000),
-    headers:{apikey:env.SUPABASE_STORAGE_SERVICE_ROLE, Authorization:'Bearer '+env.SUPABASE_STORAGE_SERVICE_ROLE},
+    redirect:'error', signal:AbortSignal.timeout(30_000), headers,
   });
   if (!photo.ok) throw new DeliveryError('No se pudo descargar la foto privada');
   const bytes = await photo.arrayBuffer();

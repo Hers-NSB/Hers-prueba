@@ -665,7 +665,9 @@ test('manual chains run daily in order with private photos and no duplicate deli
  const send=async(input,options)=>{
   const url=new URL(input);
   if(url.hostname==='hers-storage.example') {
-   assert.equal(options.headers.Authorization,'Bearer worker-only-fixture');
+   assert.equal(options.headers.apikey,env.SUPABASE_STORAGE_SERVICE_ROLE);
+   assert.equal(options.headers.Authorization,env.SUPABASE_STORAGE_SERVICE_ROLE.startsWith('sb_secret_')
+     ? undefined : 'Bearer worker-only-fixture');
    assert.equal(url.pathname,'/storage/v1/object/authenticated/manual-drop-photos/'+photo);
    return new Response(Uint8Array.of(255,216,255));
   }
@@ -700,7 +702,10 @@ test('manual chains run daily in order with private photos and no duplicate deli
  assert.equal(posts[1].mediaFiles[0].processId,'photo');
  await run('28','00');
  assert.equal(posts[2].text,'Primera');
- assert.equal(db.prepare('SELECT count(*) AS total FROM drop_publications WHERE manual=1').get().total,3);
+ env.SUPABASE_STORAGE_SERVICE_ROLE='sb_secret_worker_fixture';
+ await run('28','01');
+ assert.equal(posts[3].mediaFiles[0].processId,'photo');
+ assert.equal(db.prepare('SELECT count(*) AS total FROM drop_publications WHERE manual=1').get().total,4);
 });
 
 test('manual chain stops after an unconfirmed post without retrying it', async () => {
