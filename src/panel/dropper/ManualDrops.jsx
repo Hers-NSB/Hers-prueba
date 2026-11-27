@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { AdminError, AdminNotice } from "../adminActions";
-import AdminLoading from "../AdminLoading";
+import { AdminInitialContent } from "../AdminLoading";
 import dropperApi from "./dropperApi";
 
 const bucket = "manual-drop-photos";
@@ -84,7 +84,8 @@ export default function ManualDrops({ revision }) {
 
   const deliveryErrors = data?.deliveries.map(({ name, position, error }) =>
     `${name} · Publicación ${position}: ${error ?? "Envío sin confirmar. Revisa el feed."}`).join(" · ");
-  return <section className="hf-section hers-manual-drops" aria-labelledby="hers-manual-drops-title">
+  return <AdminInitialContent loading={!data && !error} label="drops manuales">
+  <section className="hf-section hers-manual-drops" aria-labelledby="hers-manual-drops-title">
     <AdminError id="manual-drops" section="Dropper" message={error} />
     <AdminError id="manual-deliveries" section="Dropper" message={deliveryErrors} />
     <AdminNotice id="manual-drops-saved" section="Dropper" message={notice} />
@@ -94,7 +95,6 @@ export default function ManualDrops({ revision }) {
         <Plus size={16} aria-hidden="true" /> Nueva cadena
       </button>}
     </div>
-    {!data && !error && <AdminLoading>Cargando drops manuales…</AdminLoading>}
     {data && !draft && (data.chains.length ? <ul className="hers-manual-chains">{data.chains.map((chain) =>
       <li key={chain.id}>
         <div><strong>{chain.name}</strong><span>{chain.creator_name} · {chain.steps.length} publicaciones</span></div>
@@ -139,5 +139,6 @@ export default function ManualDrops({ revision }) {
         <button type="submit" className="hf-primary" disabled={busy}>{busy ? "Guardando…" : "Guardar cadena"}</button>
       </div>
     </form>}
-  </section>;
+  </section>
+  </AdminInitialContent>;
 }

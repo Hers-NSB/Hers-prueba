@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { isActiveFinanceEntry, usd } from "./finance";
-import { isChatter } from "./distribution";
+import { isChatter, memberRateInputs, memberRateAllocation, memberRateLabel } from "./distribution";
 import PeriodPicker from "./PeriodPicker";
 
 const moneyDate = new Intl.DateTimeFormat("es-VE", { dateStyle: "short", timeZone: "UTC" });
@@ -46,7 +46,7 @@ function CurrentPeriod({ id, period, net, amount }) {
   </section>;
 }
 
-export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, onEdit, onArchive, onConfirmed, onClose }) {
+export default function PaymentHistory({ type, person, rate, currentPeriod, currentAmount, currentNet, financeRevision, onEdit, onDelete, onConfirmed, onClose }) {
   const id = useId();
   const [records, setRecords] = useState([]);
   const [loadError, setLoadError] = useState("");
@@ -59,12 +59,13 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
   const [loading, setLoading] = useState(true);
   const [rateInput, setRateInput] = useState(null);
   const [rateError, setRateError] = useState("");
+  const deleted = type === "deletedMember";
   const payrollDay = currentPeriod?.day;
   const importedDays = currentPeriod?.importedDays;
 
   useEffect(() => {
     const controller = new AbortController();
-    const field = type === "modelShare" ? "creator_id" : "member_id";
+    const field = type === "modelShare" ? "creator_id" : deleted ? "deleted_member_id" : "member_id";
     async function readHistory() {
       const rows = [];
       const pageSize = 500;
@@ -89,7 +90,7 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     }
     readHistory();
     return () => controller.abort();
-  }, [type, person.id, revision, financeRevision, payrollDay, importedDays]);
+  }, [type, deleted, person.id, revision, financeRevision, payrollDay, importedDays]);
 
   async function confirm() {
     if (busy) return;
@@ -113,21 +114,22 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     event.preventDefault();
     if (busy) return;
     const model = type === "modelShare";
-    const creatorIds = rate?.creator_ids ?? [];
-    if (!model && !isChatter(person.role) && Number(rateInput) > 0 && !creatorIds.length) {
-      setRateError("Abre Editar en este panel y asigna al menos un modelo.");
+    const { creator_ids: creatorIds, chatter_ids: chatterIds } = memberRateInputs(rate);
+    const ownSales = Boolean(person.agencykey_id) && isChatter(person.role);
+    if (!model && !ownSales && Number(rateInput) > 0 && !creatorIds.length && !chatterIds.length) {
+      setRateError("Abre Editar en este panel y asigna al menos un modelo o un chatter.");
       return;
     }
 
     setBusy(true);
     setRateError("");
     try {
-      const base = { p_percent: Number(rateInput), p_creator_ids: creatorIds };
+      const value = Number(rateInput);
       const { error } = await (model ? supabase.rpc("finance_save_current_pay_rate", {
-        ...base, p_member_id: null, p_creator_id: person.id, p_name: null, p_role: null,
+        p_percent: value, p_creator_ids: [], p_member_id: null, p_creator_id: person.id, p_name: null, p_role: null,
       }) : supabase.rpc("finance_save_current_member_pay", {
-        ...base, p_member_id: person.id, p_name: person.name, p_role: person.role,
-        p_chatter_percent: rate?.chatter_percent ?? 0, p_chatter_ids: rate?.chatter_ids ?? [],
+        ...memberRateAllocation(value, creatorIds, chatterIds, ownSales),
+        p_member_id: person.id, p_name: person.name, p_role: person.role,
       }));
       if (error) throw error;
       setRateInput(null);
@@ -147,8 +149,9 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
 
   const shown = records.filter((row) =>
     (!range.from || row.period_end >= range.from) && (!range.to || row.period_start <= range.to));
-  const activeRate = rate ? percent(rate.percent) : "—";
-  const editableManual = type === "member" && !person.agencykey_id && isActiveFinanceEntry(person);
+  const activeRate = rate ? memberRateLabel(rate, percent) : "—";
+  const manual = type === "member" && !person.agencykey_id;
+  const editableManual = manual && isActiveFinanceEntry(person);
 
   return <dialog className="hf-dialog hf-finance-dialog hf-payment-panel" aria-labelledby={id}
     ref={(node) => { if (node && !node.open) node.showModal(); }}
@@ -156,12 +159,11 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
     <header className="hf-payment-header">
       <div><h2 id={id}>Pagos de {person.name}</h2>
         {!isActiveFinanceEntry(person) && <small className="hf-employee-status">Inactivo</small>}
-        <p>{type === "modelShare" ? "Modelo" : "Empleado"}</p>
-        {rateInput === null ? <p className="hf-payment-rate">
+        <p>{type === "modelShare" ? "Modelo" : deleted ? "Empleado eliminado" : "Empleado"}</p>
+        {!deleted && (rateInput === null ? <p className="hf-payment-rate">
           Porcentaje de pago de la quincena {person.archived_on ? activeRate :
             <button type="button" className="hf-payment-rate-value" aria-label={`Porcentaje de pago de la quincena ${activeRate}`}
-              disabled={busy} onClick={() => setRateInput(String(rate?.percent ?? 0))}>{activeRate}</button>}
-          {Number(rate?.chatter_percent) > 0 && <span> + {percent(rate.chatter_percent)} chatters</span>}
+              disabled={busy} onClick={() => setRateInput(String(memberRateInputs(rate).percent))}>{activeRate}</button>}
         </p> : <form className="hf-payment-rate" onSubmit={saveRate}>
           <label htmlFor={`${id}-rate`}>Porcentaje de pago de la quincena</label>
           <input id={`${id}-rate`} type="number" min="0" max="100" step="0.01" required autoFocus
@@ -170,23 +172,21 @@ export default function PaymentHistory({ type, person, rate, currentPeriod, curr
           <button type="submit" disabled={busy}>{busy ? "Guardando…" : "Guardar"}</button>
           <button type="button" disabled={busy} onClick={() => { setRateError(""); setRateInput(null); }}>Cancelar</button>
           <AdminError id="finance-payment-rate" section="Finanzas" message={rateError} />
-        </form>}
+        </form>)}
       </div>
       <div className="hf-actions">
-        {editableManual && <>
-          <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onEdit}>Editar</button>
-          <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onArchive}>Eliminar</button>
-        </>}
+        {editableManual && <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onEdit}>Editar</button>}
+        {manual && <button type="button" aria-haspopup="dialog" disabled={busy} onClick={onDelete}>Eliminar</button>}
         <button type="button" aria-label="Cerrar pagos" disabled={busy} onClick={onClose}><X size={18} /></button>
       </div>
     </header>
     <div className="hf-payment-content" aria-busy={loading || busy}>
       {currentPeriod && <CurrentPeriod id={`${id}-current`} period={currentPeriod} net={currentNet} amount={currentAmount} />}
-      <div className="hf-kpis hf-payment-kpis">
-        <article><span>Pendiente</span><strong>{usd(total(shown.filter(canPay), "amount") ?? (loading ? null : 0))}</strong></article>
-        <article><span>Pagado</span><strong>{usd(total(shown.filter((row) => row.paid_at), "amount") ?? (loading ? null : 0))}</strong></article>
+      {!loading && !loadError && <div className="hf-kpis hf-payment-kpis">
+        <article><span>Pendiente</span><strong>{usd(total(shown.filter(canPay), "amount") ?? 0)}</strong></article>
+        <article><span>Pagado</span><strong>{usd(total(shown.filter((row) => row.paid_at), "amount") ?? 0)}</strong></article>
         <article><span>Ventas de cortes cerrados</span><strong>{usd(total(shown, "net_sales"))}</strong></article>
-      </div>
+      </div>}
       <div className="hf-payment-filters">
         <PeriodPicker label="Fechas" value={range} onChange={setRange} />
         <button type="button" onClick={() => setRange({})}>Limpiar filtros</button>

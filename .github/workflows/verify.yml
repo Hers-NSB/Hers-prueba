@@ -22,11 +22,10 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 3.3.0
-      - run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - run: supabase start
       - name: Ejecutar integraciones SQL
         run: |
           for test in test/*.integration.sql; do
-            psql --no-psqlrc --set ON_ERROR_STOP=1 \
-              --dbname=postgresql://postgres:postgres@127.0.0.1:54322/postgres --file="$test"
+            docker exec -i supabase_db_hers-prueba psql --username=postgres \
+              --dbname=postgres --no-psqlrc --set ON_ERROR_STOP=1 < "$test"
           done
